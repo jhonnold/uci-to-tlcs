@@ -70,14 +70,30 @@ npm run mock-client -- --server 127.0.0.1 --port 16066 --ephemeral
 (To emulate a strict TLCS client that binds the broadcast port instead, drop
 `--ephemeral` and run the client on a loopback alias, e.g. `--bind 127.0.0.2`.)
 
-**Faithful end-to-end with real node-tlcv** — two containers (real node-tlcv binds
-the port wildcard, so it needs its own IP):
+**Faithful end-to-end with real node-tlcv (single host, no Docker)** — node-tlcv now
+supports an *ephemeral* connection mode, so it runs alongside the bridge on one host (no
+container or loopback alias). Point its `config/config.json` at the bridge:
+
+```json
+{ "connections": [ { "connection": "127.0.0.1:16066", "ephemeral": true } ] }
+```
+
+Start the bridge **first** (it must be listening before node-tlcv boots — node-tlcv LOGONs
+once and never retries), start node-tlcv, then feed it a real game from fastchess:
 
 ```bash
-docker compose -f docker-compose.test.yml up --build
-# open http://localhost:8080/
+# 1) bridge — tails a transcript, broadcasts on 16066
+npm start -- --log /tmp/live.uci --port 16066 --bind 127.0.0.1 --white A --black B &
+# 2) node-tlcv (in ../node-tlcv): npm run dev-server   → http://127.0.0.1:8080/16066
+# 3) real game → stripped raw UCI → the transcript the bridge tails
+fastchess -engine cmd=<engineA> -engine cmd=<engineB> -each tc=10+0.1 \
+  -rounds 1 -games 1 -log file=/tmp/fc.log engine=true realtime=true &
+tail -F /tmp/fc.log | sed -u -E 's/.*(<--- |---> )//' >> /tmp/live.uci
 ```
-(Needs node-tlcv checked out at `../node-tlcv`; `e2e/config.json` points it here.)
+
+Use a real `tc=` (not `st=`/`movetime`) so the clocks tick, and run without fastchess
+adjudication so the game ends on the board (only mate/stalemate/draw yields a `result:`).
+Needs node-tlcv checked out at `../node-tlcv`.
 
 ## Scope (v1)
 

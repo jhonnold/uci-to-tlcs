@@ -61,9 +61,19 @@ sockets. Keep new conversion logic out of the server so it stays testable.
   receives (we reply to the source port), so no loopback alias is needed. To exercise
   the strict same-port client instead, drop `--ephemeral` and use an alias (server
   `--bind 127.0.0.1`, client `--bind 127.0.0.2`, same port).
-- **Faithful e2e**: two containers, `docker compose -f docker-compose.test.yml up --build`
-  (needs node-tlcv at `../node-tlcv`). Unaffected by the source-port reply: real
-  node-tlcv binds the broadcast port, so its source port *is* the broadcast port.
+- **Faithful e2e, single host (no Docker)**: real node-tlcv now supports an *ephemeral*
+  connection mode, so it coexists with the bridge on one host. Point its
+  `config/config.json` at the bridge —
+  `{ "connections": [ { "connection": "127.0.0.1:16066", "ephemeral": true } ] }` — so it
+  binds an OS port instead of the broadcast port (no same-host `EADDRINUSE`) and relies on
+  our source-port reply. Start the bridge first (`--bind 127.0.0.1 --port 16066`), then
+  `npm run dev-server` in `../node-tlcv`, then drive a real game with fastchess and tail its
+  *stripped* log into the transcript:
+  `fastchess -engine cmd=<sf> -engine cmd=<berserk> -each tc=10+0.1 -rounds 1 -games 1 -log file=/tmp/fc.log engine=true realtime=true`
+  +`tail -F /tmp/fc.log | sed -u -E 's/.*(<--- |---> )//' >> /tmp/live.uci`. Watch at
+  `http://127.0.0.1:8080/16066` (or `curl …/16066/pgn`). Use a real `tc=` (not `st=`/
+  `movetime`) for ticking clocks, and no fastchess adjudication so the game ends on the
+  board (only mate/stalemate/draw yields a `result:`). README has the full runbook.
 - **LOGON-race**: node-tlcv sends `LOGONv15` once at boot and never retries. Bring the
-  bridge up **before** node-tlcv (or `docker compose restart node-tlcv`), or it sits
-  connected-but-unregistered (PINGs PONGed, 0 moves).
+  bridge up **before** node-tlcv, or it sits connected-but-unregistered (PINGs PONGed,
+  0 moves).
