@@ -38,6 +38,16 @@ sockets. Keep new conversion logic out of the server so it stays testable.
     state-critical msgs: SITE / PLAYER / FEN / MOVE / FMR / result / user / chat.
   - *Unwrapped* (`broadcastUnwrapped`) — fire-and-forget, high frequency: WPV / BPV /
     WTIME / BTIME. Don't move a message between channels casually.
+- **Replies go to the source `ip:port`, not the broadcast port** (`tlcs/server.ts`).
+  Strict TLCS ignores the source port and streams to `clientIP:<broadcastPort>`; we
+  deliberately diverge so ephemeral-port clients work and several can share a host.
+  It stays compatible because compliant clients (node-tlcv, desktop TLCV) send *from*
+  the broadcast port, so source port == broadcast port. The client registry is keyed
+  by the `ip:port` "dest" token (`destKey`); `rawSend(ip, port)` is the low-level send
+  and `rawSendTo(dest)` splits a token. A client silent past `clientTimeoutMs` (30s ≈
+  three missed 10s PINGs) is reaped — idle-timeout only, *never* on a reliable ACK
+  timeout, because node-tlcv LOGONs once and never re-registers, so a false drop is
+  unrecoverable.
 - **Encoding invariants** (easy to regress, all enforced implicitly): 3-field
   truncated FEN (`board stm castling`); time ms→centiseconds (÷10); `score cp` is
   side-to-move POV → normalize to White; only `multipv 1` is the broadcast eval; mate
@@ -47,12 +57,13 @@ sockets. Keep new conversion logic out of the server so it stays testable.
 
 ## Testing the live path
 
-A TLCS client binds the **same** UDP port it sends to, so a server and client can't
-share a port on one host:
-- **Local**: `scripts/mock-client.ts` with loopback aliases — server `--bind 127.0.0.1`,
-  client `--bind 127.0.0.2`, same port (see README).
+- **Local**: `scripts/mock-client.ts --ephemeral` binds an OS-assigned port and still
+  receives (we reply to the source port), so no loopback alias is needed. To exercise
+  the strict same-port client instead, drop `--ephemeral` and use an alias (server
+  `--bind 127.0.0.1`, client `--bind 127.0.0.2`, same port).
 - **Faithful e2e**: two containers, `docker compose -f docker-compose.test.yml up --build`
-  (needs node-tlcv at `../node-tlcv`).
+  (needs node-tlcv at `../node-tlcv`). Unaffected by the source-port reply: real
+  node-tlcv binds the broadcast port, so its source port *is* the broadcast port.
 - **LOGON-race**: node-tlcv sends `LOGONv15` once at boot and never retries. Bring the
   bridge up **before** node-tlcv (or `docker compose restart node-tlcv`), or it sits
   connected-but-unregistered (PINGs PONGed, 0 moves).

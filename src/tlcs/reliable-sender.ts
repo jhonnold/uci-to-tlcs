@@ -1,11 +1,11 @@
 import { logger } from '../util/logger.js';
 
-type RawSend = (payload: string, ip: string) => void;
+type RawSend = (payload: string, dest: string) => void;
 type GetClients = () => string[];
 
 interface QueueItem {
   msg: string;
-  /** Single client IP to deliver to, or null to broadcast to all current clients. */
+  /** Single client dest (`ip:port`) to deliver to, or null to broadcast to all. */
   target: string | null;
 }
 
@@ -55,9 +55,9 @@ export class ReliableSender {
     this.pump();
   }
 
-  ack(id: number, ip: string): void {
+  ack(id: number, dest: string): void {
     if (!this.inFlight || this.inFlight.id !== id) return;
-    this.inFlight.acked.add(ip);
+    this.inFlight.acked.add(dest);
     if (this.inFlight.targets.every((t) => this.inFlight!.acked.has(t))) {
       this.complete();
     }
@@ -85,7 +85,7 @@ export class ReliableSender {
 
     this.inFlight = { id: this.id, msg: item.msg, targets, acked: new Set(), tries: 1 };
     const payload = `<${this.id}>${item.msg}`;
-    for (const ip of targets) this.rawSend(payload, ip);
+    for (const dest of targets) this.rawSend(payload, dest);
     this.armTimer();
   }
 
@@ -100,8 +100,8 @@ export class ReliableSender {
 
     this.inFlight.tries += 1;
     const payload = `<${this.inFlight.id}>${this.inFlight.msg}`;
-    for (const ip of this.inFlight.targets) {
-      if (!this.inFlight.acked.has(ip)) this.rawSend(payload, ip);
+    for (const dest of this.inFlight.targets) {
+      if (!this.inFlight.acked.has(dest)) this.rawSend(payload, dest);
     }
     this.armTimer();
   }

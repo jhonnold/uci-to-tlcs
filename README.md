@@ -29,6 +29,13 @@ Reliability matches node-tlcv's transport: state-critical messages are ID-wrappe
 (`<N>MSG`) and resent until `ACK: N`, in strict order; `WPV`/`BPV`/`WTIME`/`BTIME`
 are sent unwrapped. Late joiners get a unicast snapshot of current state.
 
+Each client is tracked by its source `ip:port`, and the server replies to that
+source port — not the fixed broadcast port that strict TLCS assumes. Compliant
+clients (node-tlcv, desktop TLCV) send from the broadcast port, so this is identical
+for them; it additionally lets clients on **ephemeral** ports receive the broadcast
+and lets several clients share one host. A client that goes silent (no PING/ACK for
+~30s) is reaped.
+
 ## Usage
 
 ```bash
@@ -50,15 +57,18 @@ Point node-tlcv at it via `config/config.json`:
 npm test                # unit tests (parser, encoder, pipeline) via node:test
 ```
 
-**Local loop with the mock client** — emulates node-tlcv. Because a TLCS client binds
-the same port it sends to, the server and client can't share a port on one host; use
-loopback aliases:
+**Local loop with the mock client** — emulates node-tlcv. Since the server replies to
+the client's source port, the client can bind an ephemeral port on the same host (no
+loopback alias needed):
 
 ```bash
 npm start -- --log fixtures/sample-game.uci --port 16066 --bind 127.0.0.1 &
-npm run mock-client -- --server 127.0.0.1 --port 16066 --bind 127.0.0.2
+npm run mock-client -- --server 127.0.0.1 --port 16066 --ephemeral
 # append lines to the log and watch them decode live
 ```
+
+(To emulate a strict TLCS client that binds the broadcast port instead, drop
+`--ephemeral` and run the client on a loopback alias, e.g. `--bind 127.0.0.2`.)
 
 **Faithful end-to-end with real node-tlcv** — two containers (real node-tlcv binds
 the port wildcard, so it needs its own IP):

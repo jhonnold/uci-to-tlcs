@@ -1,4 +1,5 @@
 import { createSocket, type Socket, type RemoteInfo } from 'node:dgram';
+import type { AddressInfo } from 'node:net';
 import { logger } from '../util/logger.js';
 import { ReliableSender } from './reliable-sender.js';
 import * as P from './protocol.js';
@@ -7,11 +8,26 @@ import type { ColorCode } from './protocol.js';
 export interface ServerOptions {
   port: number;
   bindAddr: string;
+  /**
+   * Drop a client that has sent nothing for this long. Defaults to 30s ≈ three
+   * missed 10s PINGs (node-tlcv's keepalive). Exposed mainly so tests can use a
+   * short timeout.
+   */
+  clientTimeoutMs?: number;
+  /** How often to scan for silent clients. Defaults to {@link REAP_INTERVAL_MS}. */
+  reapIntervalMs?: number;
 }
+
+/** How often the reaper scans for silent clients (matches node-tlcv's PING interval). */
+const REAP_INTERVAL_MS = 10_000;
+const DEFAULT_CLIENT_TIMEOUT_MS = 30_000;
 
 interface ClientInfo {
   ip: string;
+  port: number;
   user: string;
+  /** epoch ms of the last datagram received from this client (for the reaper). */
+  lastSeen: number;
 }
 
 /** Cached state replayed (unicast) to a client when it connects mid-game. */
@@ -34,15 +50,19 @@ interface Snapshot {
  */
 export class TlcsServer {
   private socket: Socket;
+  /** Keyed by the client's `ip:port` "dest" token, so two clients on one host differ. */
   private clients = new Map<string, ClientInfo>();
   private sender: ReliableSender;
   private snap: Snapshot = {};
   private closed = false;
+  private reaper: NodeJS.Timeout | null = null;
+  private readonly clientTimeoutMs: number;
 
   constructor(private opts: ServerOptions) {
+    this.clientTimeoutMs = opts.clientTimeoutMs ?? DEFAULT_CLIENT_TIMEOUT_MS;
     this.socket = createSocket('udp4');
     this.sender = new ReliableSender(
-      (payload, ip) => this.rawSend(payload, ip),
+      (payload, dest) => this.rawSendTo(payload, dest),
       () => Array.from(this.clients.keys()),
     );
 
@@ -54,12 +74,21 @@ export class TlcsServer {
     });
   }
 
-  start(): void {
+  start(onReady?: () => void): void {
+    if (onReady) this.socket.once('listening', onReady);
     this.socket.bind(this.opts.port, this.opts.bindAddr);
+    this.reaper = setInterval(() => this.reapStale(), this.opts.reapIntervalMs ?? REAP_INTERVAL_MS);
+    this.reaper.unref?.();
+  }
+
+  /** The actual bound socket address (useful when binding port 0 in tests). */
+  address(): AddressInfo {
+    return this.socket.address();
   }
 
   close(): void {
     this.closed = true;
+    if (this.reaper) clearInterval(this.reaper);
     this.sender.close();
     this.socket.close();
   }
@@ -125,95 +154,129 @@ export class TlcsServer {
     if (this.closed) return;
     const msg = buf.toString().trim();
     const ip = rinfo.address;
-    logger.debug(`<- ${ip}:${rinfo.port}  ${msg}`);
+    const port = rinfo.port;
+    const dest = destKey(ip, port);
+    logger.debug(`<- ${dest}  ${msg}`);
+
+    // Any datagram is proof of life for the reaper.
+    const known = this.clients.get(dest);
+    if (known) known.lastSeen = Date.now();
 
     if (msg.startsWith('LOGONv15')) {
       const user = msg.split(':')[1]?.trim() || 'unknown';
-      this.onLogon(ip, user);
+      this.onLogon(ip, port, user);
     } else if (msg === 'PING') {
-      this.rawSend(P.PONG, ip);
+      this.rawSend(P.PONG, ip, port);
     } else if (msg.startsWith('ACK')) {
       const id = parseInt(msg.replace(/^ACK[:\s]*/, '').trim(), 10);
-      if (!Number.isNaN(id)) this.sender.ack(id, ip);
+      if (!Number.isNaN(id)) this.sender.ack(id, dest);
     } else if (msg === 'RESULTTABLE') {
-      this.sendResultTable(ip);
+      this.sendResultTable(ip, port);
     } else if (msg.startsWith('CHAT')) {
-      this.onChat(ip, msg.replace(/^CHAT[:\s]*/, '').trim());
+      this.onChat(dest, msg.replace(/^CHAT[:\s]*/, '').trim());
     } else if (msg === 'LOGOFF') {
-      this.onLogoff(ip);
+      this.onLogoff(dest);
     } else {
-      logger.debug(`Unhandled client message from ${ip}: ${msg}`);
+      logger.debug(`Unhandled client message from ${dest}: ${msg}`);
     }
   }
 
-  private onLogon(ip: string, user: string): void {
-    const isNew = !this.clients.has(ip);
-    this.clients.set(ip, { ip, user });
-    logger.info(`LOGON ${user}@${ip} (${this.clients.size} client(s))`);
+  private onLogon(ip: string, port: number, user: string): void {
+    const dest = destKey(ip, port);
+    const isNew = !this.clients.has(dest);
+    this.clients.set(dest, { ip, port, user, lastSeen: Date.now() });
+    logger.info(`LOGON ${user}@${dest} (${this.clients.size} client(s))`);
 
-    this.rawSend(P.LOGON_SUCCESSFUL, ip);
+    this.rawSend(P.LOGON_SUCCESSFUL, ip, port);
 
     // Notify existing spectators of the new arrival.
     if (isNew) {
-      for (const otherIp of this.clients.keys()) {
-        if (otherIp !== ip) this.sender.enqueue(P.adduser(user), otherIp);
+      for (const other of this.clients.keys()) {
+        if (other !== dest) this.sender.enqueue(P.adduser(user), other);
       }
     }
 
-    this.sendSnapshot(ip);
+    this.sendSnapshot(dest);
   }
 
-  private onLogoff(ip: string): void {
-    const c = this.clients.get(ip);
-    this.clients.delete(ip);
+  private onLogoff(dest: string): void {
+    const c = this.clients.get(dest);
+    this.clients.delete(dest);
     if (c) {
-      logger.info(`LOGOFF ${c.user}@${ip}`);
+      logger.info(`LOGOFF ${c.user}@${dest}`);
       this.sender.enqueue(P.deluser(c.user));
     }
   }
 
-  private onChat(ip: string, text: string): void {
+  private onChat(dest: string, text: string): void {
     if (!text) return;
-    const name = this.clients.get(ip)?.user ?? 'unknown';
+    const name = this.clients.get(dest)?.user ?? 'unknown';
     this.sender.enqueue(P.chat(`${name}: ${text}`));
   }
 
   /** Minimal crosstable so node-tlcv's results parser terminates cleanly. */
-  private sendResultTable(ip: string): void {
-    this.rawSend(P.CTRESET, ip);
-    this.rawSend(P.ct('total games = 0'), ip);
+  private sendResultTable(ip: string, port: number): void {
+    this.rawSend(P.CTRESET, ip, port);
+    this.rawSend(P.ct('total games = 0'), ip, port);
   }
 
   /** Unicast current game state to a freshly-connected client. */
-  private sendSnapshot(ip: string): void {
+  private sendSnapshot(dest: string): void {
     const s = this.snap;
-    if (s.site) this.sender.enqueue(P.site(s.site), ip);
-    if (s.white) this.sender.enqueue(P.wplayer(s.white), ip);
-    if (s.black) this.sender.enqueue(P.bplayer(s.black), ip);
-    if (s.fenTruncated) this.sender.enqueue(P.fen(s.fenTruncated), ip);
-    if (s.fmr !== undefined) this.sender.enqueue(P.fmr(s.fmr), ip);
+    if (s.site) this.sender.enqueue(P.site(s.site), dest);
+    if (s.white) this.sender.enqueue(P.wplayer(s.white), dest);
+    if (s.black) this.sender.enqueue(P.bplayer(s.black), dest);
+    if (s.fenTruncated) this.sender.enqueue(P.fen(s.fenTruncated), dest);
+    if (s.fmr !== undefined) this.sender.enqueue(P.fmr(s.fmr), dest);
 
     if (s.whiteTimeCs !== undefined && s.blackTimeCs !== undefined) {
-      this.rawSend(P.time('w', s.whiteTimeCs, s.blackTimeCs), ip);
-      this.rawSend(P.time('b', s.blackTimeCs, s.whiteTimeCs), ip);
+      this.rawSendTo(P.time('w', s.whiteTimeCs, s.blackTimeCs), dest);
+      this.rawSendTo(P.time('b', s.blackTimeCs, s.whiteTimeCs), dest);
     }
-    if (s.lastWpv) this.rawSend(s.lastWpv, ip);
-    if (s.lastBpv) this.rawSend(s.lastBpv, ip);
+    if (s.lastWpv) this.rawSendTo(s.lastWpv, dest);
+    if (s.lastBpv) this.rawSendTo(s.lastBpv, dest);
+  }
+
+  /** Drop clients that have gone silent past the timeout (e.g. a crashed viewer). */
+  private reapStale(): void {
+    const cutoff = Date.now() - this.clientTimeoutMs;
+    for (const [dest, c] of this.clients) {
+      if (c.lastSeen < cutoff) {
+        this.clients.delete(dest);
+        logger.info(`Reaped silent client ${c.user}@${dest} (${this.clients.size} client(s))`);
+        this.sender.enqueue(P.deluser(c.user));
+      }
+    }
   }
 
   // ----------------------------------------------------------------- transport
 
-  private rawSend(payload: string, ip: string): void {
+  private rawSend(payload: string, ip: string, port: number): void {
     if (this.closed) return;
-    // Always stream to clientIP:<broadcastPort> — TLCS ignores the client's
-    // source port (see node-tlcv udp-transport.ts and tlcv-udp-broadcast-protocol).
-    this.socket.send(payload, this.opts.port, ip, (err) => {
-      if (err) logger.warn(`send to ${ip}:${this.opts.port} failed: ${err}`);
+    // Reply to the client's *source* ip:port. Strict TLCS streams to the broadcast
+    // port and ignores the source port, but compliant clients (node-tlcv, desktop
+    // TLCV) send from the broadcast port anyway, so this is identical for them — and
+    // it additionally lets clients on ephemeral ports receive the broadcast.
+    this.socket.send(payload, port, ip, (err) => {
+      if (err) logger.warn(`send to ${ip}:${port} failed: ${err}`);
     });
-    logger.debug(`-> ${ip}:${this.opts.port}  ${payload}`);
+    logger.debug(`-> ${ip}:${port}  ${payload}`);
+  }
+
+  /** Send to a client identified by its `ip:port` dest token. */
+  private rawSendTo(payload: string, dest: string): void {
+    const sep = dest.lastIndexOf(':');
+    const ip = dest.slice(0, sep);
+    const port = Number(dest.slice(sep + 1));
+    this.rawSend(payload, ip, port);
   }
 
   private broadcastUnwrapped(msg: string): void {
-    for (const ip of this.clients.keys()) this.rawSend(msg, ip);
+    for (const dest of this.clients.keys()) this.rawSendTo(msg, dest);
   }
+}
+
+/** The registry/addressing token for a client. udp4 ⇒ IPv4, so ':' splits cleanly. */
+function destKey(ip: string, port: number): string {
+  return `${ip}:${port}`;
 }
