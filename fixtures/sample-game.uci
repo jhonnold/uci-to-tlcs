@@ -1,0 +1,19 @@
+id name EngineWhite
+id name EngineBlack
+position startpos
+go wtime 300000 btime 300000 winc 2000 binc 2000
+info depth 1 score cp 18 nodes 200 nps 200000 time 5 pv e2e4
+info depth 20 multipv 1 score cp 35 nodes 1500000 nps 1200000 time 1200 pv e2e4 e7e5 g1f3 b8c6
+bestmove e2e4
+position startpos moves e2e4
+go wtime 300000 btime 300000 winc 2000 binc 2000
+info depth 20 multipv 1 score cp -28 nodes 1400000 nps 1150000 time 1100 pv e7e5 g1f3 b8c6 f1b5
+bestmove e7e5
+position startpos moves e2e4 e7e5
+go wtime 298000 btime 298000 winc 2000 binc 2000
+info depth 21 multipv 1 score cp 33 nodes 1600000 nps 1250000 time 1300 pv g1f3 b8c6 f1b5 a7a6
+bestmove g1f3
+position startpos moves e2e4 e7e5 g1f3
+go wtime 297000 btime 297000 winc 2000 binc 2000
+info depth 21 multipv 1 score cp -30 nodes 1550000 nps 1200000 time 1250 pv b8c6 f1b5 a7a6 b5a4
+bestmove b8c6

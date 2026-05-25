@@ -1,0 +1,28 @@
+{
+  "name": "uci-to-tlcs",
+  "version": "0.1.0",
+  "description": "A TLCS-compatible UDP broadcast server that reconstructs a live chess game from a raw UCI engine transcript, so node-tlcv (and the desktop TLCV) can watch it.",
+  "type": "module",
+  "engines": {
+    "node": ">= 18"
+  },
+  "bin": {
+    "uci-to-tlcs": "dist/src/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "tsx src/main.ts",
+    "dev": "tsx watch src/main.ts",
+    "mock-client": "tsx scripts/mock-client.ts",
+    "test": "node --import tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "chess.js": "^1.0.0-beta.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20.4.1",
+    "tsx": "^4.7.0",
+    "typescript": "^5.1.6"
+  }
+}
