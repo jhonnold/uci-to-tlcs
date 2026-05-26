@@ -2,6 +2,7 @@ import { parseConfig } from './config.js';
 import { FileTailer } from './tail.js';
 import { TlcsServer } from './tlcs/server.js';
 import { Pipeline } from './pipeline.js';
+import { makeSource } from './source/index.js';
 import { logger } from './util/logger.js';
 
 function main(): void {
@@ -11,11 +12,19 @@ function main(): void {
   server.start();
 
   const pipeline = new Pipeline(server, { white: cfg.white, black: cfg.black, site: cfg.site });
-  const tailer = new FileTailer(cfg.logPath, (line) => pipeline.handleLine(line), cfg.fromStart);
+  const source = makeSource(cfg.format);
+  const tailer = new FileTailer(
+    cfg.logPath,
+    (line) => {
+      const n = source.normalize(line);
+      if (n) pipeline.handleLine(n);
+    },
+    cfg.fromStart,
+  );
   tailer.start();
 
   logger.info(
-    `Broadcasting ${cfg.logPath} on UDP ${cfg.bindAddr}:${cfg.port} ` +
+    `Broadcasting ${cfg.logPath} (format=${cfg.format}) on UDP ${cfg.bindAddr}:${cfg.port} ` +
       `(white="${cfg.white}", black="${cfg.black}", site="${cfg.site}")`,
   );
 

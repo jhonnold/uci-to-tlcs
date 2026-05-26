@@ -1,8 +1,10 @@
 # uci-to-tlcs
 
-Broadcast a chess game reconstructed from a **raw UCI engine transcript** over UDP
-in a **TLCS-compatible** protocol, so [node-tlcv](https://github.com/jhonnold/node-tlcv)
-(and the desktop TLCV) can watch it live.
+Broadcast chess games reconstructed from a **UCI engine transcript** over UDP in a
+**TLCS-compatible** protocol, so [node-tlcv](https://github.com/jhonnold/node-tlcv)
+(and the desktop TLCV) can watch them live. A single transcript may contain many
+games and many matchups (e.g. a whole fastchess run); they are segmented and shown
+in sequence on one board.
 
 It's the inverse of node-tlcv: node-tlcv is a *client* of Tom's Live Chess Server;
 this is a minimal *server* that speaks enough of the same wire protocol to drive it.
@@ -12,10 +14,22 @@ official spec — so this aligns with node-tlcv rather than being a 1:1 TLCS clo
 ## How it works
 
 ```
-UCI transcript ──tail──▶ parser ──▶ GameState (chess.js) ──▶ TLCS UDP server ──▶ node-tlcv
+log ──tail──▶ LogSource adapter ──▶ parser ──▶ Pipeline / GameState (chess.js) ──▶ TLCS UDP server ──▶ node-tlcv
 ```
 
-It live-tails the transcript and, for each event, emits the matching TLCS message(s):
+A **`LogSource` adapter** normalizes one producer line into `{ uci, engineId?,
+direction? }`, so different log producers can be supported without touching the
+chess logic. Two adapters ship today (`--format`):
+
+- **`fastchess`** — reads fastchess `-log file=… engine=true` output *directly* (no
+  external stripping). The engine tags let it bind each game's player names to the
+  right colour and detect game/matchup boundaries.
+- **`raw`** — a bare, already-stripped UCI transcript. Games are still segmented
+  (board resets between them), but without engine tags it can't bind names per game,
+  so it falls back to CLI `--white`/`--black` (with `id name` filling the defaults).
+- **`auto`** (default) sniffs the first line and picks one.
+
+It live-tails the log and, for each event, emits the matching TLCS message(s):
 
 | UCI | TLCS out | Notes |
 |---|---|---|
@@ -24,6 +38,7 @@ It live-tails the transcript and, for each event, emits the matching TLCS messag
 | `info … score … pv …` | `WPV`/`BPV` | score normalized to White POV; time ms→cs; PV coords→SAN; only `multipv 1` |
 | `bestmove <coord>` | `FEN`, `WMOVE`/`BMOVE`, `FMR` | move number + SAN |
 | game over (board) | `result:` | mate/stalemate/draw |
+| new game (boundary) | `result:` (prev, if none) → `WPLAYER`/`BPLAYER` → startpos `FEN` | resets node-tlcv's board for the next game |
 
 Reliability matches node-tlcv's transport: state-critical messages are ID-wrapped
 (`<N>MSG`) and resent until `ACK: N`, in strict order; `WPV`/`BPV`/`WTIME`/`BTIME`
@@ -44,9 +59,13 @@ npm run build           # or run straight from source with tsx:
 npm start -- --log path/to/game.uci --port 16066 --white "Engine A" --black "Engine B" --site "My Match"
 ```
 
-Options: `--log <path>` (required), `--port` (16066), `--bind` (0.0.0.0),
-`--white`/`--black`/`--site`, `--from-end` (skip existing content). `LOG_LEVEL=debug`
-logs every UDP message.
+Options: `--log <path>` (required), `--format auto|raw|fastchess` (auto), `--port`
+(16066), `--bind` (0.0.0.0), `--white`/`--black`/`--site`, `--from-end` (skip existing
+content). `LOG_LEVEL=debug` logs every UDP message.
+
+With `--format fastchess` you point `--log` at the fastchess engine log itself; with
+`--format raw` you point it at a pre-stripped transcript. `--white`/`--black` are only
+used as the fallback names for the raw/untagged path.
 
 Point node-tlcv at it via `config/config.json`:
 `{ "connections": ["<host>:16066"] }`.
@@ -82,21 +101,29 @@ Start the bridge **first** (it must be listening before node-tlcv boots — node
 once and never retries), start node-tlcv, then feed it a real game from fastchess:
 
 ```bash
-# 1) bridge — tails a transcript, broadcasts on 16066
-npm start -- --log /tmp/live.uci --port 16066 --bind 127.0.0.1 --white A --black B &
+# 1) bridge — tails the fastchess log directly (no sed), broadcasts on 16066
+npm start -- --log /tmp/fc.log --format fastchess --port 16066 --bind 127.0.0.1 &
 # 2) node-tlcv (in ../node-tlcv): npm run dev-server   → http://127.0.0.1:8080/16066
-# 3) real game → stripped raw UCI → the transcript the bridge tails
+# 3) real games — multiple games / matchups in one log are fine
 fastchess -engine cmd=<engineA> -engine cmd=<engineB> -each tc=10+0.1 \
-  -rounds 1 -games 1 -log file=/tmp/fc.log engine=true realtime=true &
-tail -F /tmp/fc.log | sed -u -E 's/.*(<--- |---> )//' >> /tmp/live.uci
+  -rounds 4 -games 2 -repeat -concurrency 1 \
+  -log file=/tmp/fc.log engine=true realtime=true
 ```
 
-Use a real `tc=` (not `st=`/`movetime`) so the clocks tick, and run without fastchess
-adjudication so the game ends on the board (only mate/stalemate/draw yields a `result:`).
-Needs node-tlcv checked out at `../node-tlcv`.
+With `--format fastchess` the bridge consumes the engine-tagged log directly, so the
+player names come from the run and swap correctly each game. (The old `--format raw`
+path with `tail -F … | sed -u -E 's/.*(<--- |---> )//' >> /tmp/live.uci` still works
+for pre-stripped transcripts.) Use a real `tc=` (not `st=`/`movetime`) so the clocks
+tick, `-concurrency 1` so games don't interleave in one log, and no fastchess
+adjudication so games end on the board (a non-board end emits `result: *`). Needs
+node-tlcv checked out at `../node-tlcv`.
 
-## Scope (v1)
+## Scope
 
-Single game on one port; board-derived results only (no resign/adjudication signal in
-pure UCI); mid-game joiners get the current position (not full move history); minimal
+Sequential multi-game / multi-matchup on one port (each game replaces the previous on
+the board; assumes `-concurrency 1` so the log isn't interleaved). Player-name binding
+needs a tagged producer (`--format fastchess`); the raw path keeps CLI names. Results
+are board-derived (mate/stalemate/draw); an adjudicated/unknown end emits `result: *`.
+A new game that starts from a *non-startpos* position won't visually reset node-tlcv's
+board. Mid-game joiners get the current position (not full move history); minimal
 RESULTTABLE. See the comments in `src/` and the plan for the rationale behind each.

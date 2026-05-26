@@ -1,0 +1,27 @@
+id name EngineA
+id name EngineB
+position startpos
+go wtime 1000 btime 1000 winc 0 binc 0
+bestmove f2f3
+position startpos moves f2f3
+go wtime 1000 btime 1000 winc 0 binc 0
+bestmove e7e5
+position startpos moves f2f3 e7e5
+go wtime 1000 btime 1000 winc 0 binc 0
+bestmove g2g4
+position startpos moves f2f3 e7e5 g2g4
+go wtime 1000 btime 1000 winc 0 binc 0
+bestmove d8h4
+ucinewgame
+position startpos
+go wtime 1000 btime 1000 winc 0 binc 0
+bestmove f2f3
+position startpos moves f2f3
+go wtime 1000 btime 1000 winc 0 binc 0
+bestmove e7e5
+position startpos moves f2f3 e7e5
+go wtime 1000 btime 1000 winc 0 binc 0
+bestmove g2g4
+position startpos moves f2f3 e7e5 g2g4
+go wtime 1000 btime 1000 winc 0 binc 0
+bestmove d8h4

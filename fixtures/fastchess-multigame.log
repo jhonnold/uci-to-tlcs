@@ -1,0 +1,37 @@
+[INFO  ] [00:00:00.000000] <                    > fastchess --- Starting tournament...
+[Engine] [00:00:00.000000] <                  1>  EngA <--- uci
+[Engine] [00:00:00.001000] <                  1>  EngA ---> id name EngineA
+[Engine] [00:00:00.001000] <                  1>  EngA ---> uciok
+[Engine] [00:00:00.002000] <                  1>  EngB <--- uci
+[Engine] [00:00:00.003000] <                  1>  EngB ---> id name EngineB
+[Engine] [00:00:00.003000] <                  1>  EngB ---> uciok
+[Engine] [00:00:00.004000] <                  1>  EngA <--- ucinewgame
+[Engine] [00:00:00.004000] <                  1>  EngB <--- ucinewgame
+[Engine] [00:00:00.005000] <                  1>  EngA <--- position startpos
+[Engine] [00:00:00.005000] <                  1>  EngA <--- go wtime 1000 btime 1000 winc 0 binc 0
+[Engine] [00:00:00.006000] <                  1>  EngA ---> info depth 5 multipv 1 score cp 12 nodes 100 time 1 pv f2f3
+[Engine] [00:00:00.006000] <                  1>  EngA ---> bestmove f2f3
+[Engine] [00:00:00.007000] <                  1>  EngB <--- position startpos moves f2f3
+[Engine] [00:00:00.007000] <                  1>  EngB <--- go wtime 1000 btime 1000 winc 0 binc 0
+[Engine] [00:00:00.008000] <                  1>  EngB ---> bestmove e7e5
+[Engine] [00:00:00.009000] <                  1>  EngA <--- position startpos moves f2f3 e7e5
+[Engine] [00:00:00.009000] <                  1>  EngA <--- go wtime 1000 btime 1000 winc 0 binc 0
+[Engine] [00:00:00.010000] <                  1>  EngA ---> bestmove g2g4
+[Engine] [00:00:00.011000] <                  1>  EngB <--- position startpos moves f2f3 e7e5 g2g4
+[Engine] [00:00:00.011000] <                  1>  EngB <--- go wtime 1000 btime 1000 winc 0 binc 0
+[Engine] [00:00:00.012000] <                  1>  EngB ---> info depth 6 multipv 1 score mate 1 nodes 200 time 1 pv d8h4
+[Engine] [00:00:00.012000] <                  1>  EngB ---> bestmove d8h4
+[Engine] [00:00:00.013000] <                  1>  EngB <--- ucinewgame
+[Engine] [00:00:00.013000] <                  1>  EngA <--- ucinewgame
+[Engine] [00:00:00.014000] <                  1>  EngB <--- position startpos
+[Engine] [00:00:00.014000] <                  1>  EngB <--- go wtime 1000 btime 1000 winc 0 binc 0
+[Engine] [00:00:00.015000] <                  1>  EngB ---> bestmove f2f3
+[Engine] [00:00:00.016000] <                  1>  EngA <--- position startpos moves f2f3
+[Engine] [00:00:00.016000] <                  1>  EngA <--- go wtime 1000 btime 1000 winc 0 binc 0
+[Engine] [00:00:00.017000] <                  1>  EngA ---> bestmove e7e5
+[Engine] [00:00:00.018000] <                  1>  EngB <--- position startpos moves f2f3 e7e5
+[Engine] [00:00:00.018000] <                  1>  EngB <--- go wtime 1000 btime 1000 winc 0 binc 0
+[Engine] [00:00:00.019000] <                  1>  EngB ---> bestmove g2g4
+[Engine] [00:00:00.020000] <                  1>  EngA <--- position startpos moves f2f3 e7e5 g2g4
+[Engine] [00:00:00.020000] <                  1>  EngA <--- go wtime 1000 btime 1000 winc 0 binc 0
+[Engine] [00:00:00.021000] <                  1>  EngA ---> bestmove d8h4

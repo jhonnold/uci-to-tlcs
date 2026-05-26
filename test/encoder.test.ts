@@ -196,7 +196,7 @@ test('pipeline: sample-game.uci produces the expected ordered emissions', () => 
   const path = fileURLToPath(new URL('../fixtures/sample-game.uci', import.meta.url));
   const sink = new RecordingSink();
   const pipeline = new Pipeline(sink, { white: 'White', black: 'Black', site: 'TestSite' });
-  for (const line of readFileSync(path, 'utf8').split('\n')) pipeline.handleLine(line);
+  for (const line of readFileSync(path, 'utf8').split('\n')) pipeline.handleLine({ uci: line });
 
   const e = sink.emits;
   // id-name fallback fills in the default names

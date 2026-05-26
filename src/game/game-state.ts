@@ -24,6 +24,12 @@ export class GameState {
   /** The FEN the current game started from, or null for the standard start. */
   startFen: string | null = null;
 
+  /** Clear the board back to the standard start, for a fresh game in a multi-game stream. */
+  reset(): void {
+    this.chess = new Chess();
+    this.startFen = null;
+  }
+
   /** Resync the board to a `position` command. Returns false if it can't be built. */
   setPosition(startpos: boolean, fen: string | undefined, moves: string[]): boolean {
     const base = startpos || !fen ? STARTPOS_FEN : fen;

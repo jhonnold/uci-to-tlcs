@@ -1,6 +1,10 @@
+import { isFormat, type Format } from './source/index.js';
+
 export interface Config {
-  /** Path to the raw UCI transcript to tail. */
+  /** Path to the UCI transcript / engine log to tail. */
   logPath: string;
+  /** Log producer format: `auto` (sniff), `raw` (stripped transcript), `fastchess`. */
+  format: Format;
   /** UDP broadcast port (the port node-tlcv connects to and binds locally). */
   port: number;
   /** Local bind address (0.0.0.0 by default; a loopback alias for local testing). */
@@ -18,7 +22,8 @@ Usage:
   uci-to-tlcs --log <path> [options]
 
 Options:
-  --log <path>       Raw UCI transcript to tail (required)
+  --log <path>       UCI transcript / engine log to tail (required)
+  --format <fmt>     Log producer: auto | raw | fastchess (default auto)
   --port <n>         UDP broadcast port (default 16066)
   --bind <addr>      Local bind address (default 0.0.0.0)
   --white <name>     White player name (default "White")
@@ -31,6 +36,7 @@ Options:
 export function parseConfig(argv: string[]): Config {
   const cfg: Config = {
     logPath: '',
+    format: 'auto',
     port: 16066,
     bindAddr: '0.0.0.0',
     white: 'White',
@@ -45,6 +51,12 @@ export function parseConfig(argv: string[]): Config {
       case '--log':
         cfg.logPath = argv[++i];
         break;
+      case '--format': {
+        const fmt = argv[++i];
+        if (!isFormat(fmt)) throw new Error(`Invalid --format: ${fmt} (use auto | raw | fastchess)`);
+        cfg.format = fmt;
+        break;
+      }
       case '--port':
         cfg.port = parseInt(argv[++i], 10);
         break;
