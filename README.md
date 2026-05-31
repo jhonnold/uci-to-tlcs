@@ -19,11 +19,15 @@ log ──tail──▶ LogSource adapter ──▶ parser ──▶ Pipeline / 
 
 A **`LogSource` adapter** normalizes one producer line into `{ uci, engineId?,
 direction? }`, so different log producers can be supported without touching the
-chess logic. Two adapters ship today (`--format`):
+chess logic. Three adapters ship today (`--format`):
 
 - **`fastchess`** — reads fastchess `-log file=… engine=true` output *directly* (no
   external stripping). The engine tags let it bind each game's player names to the
   right colour and detect game/matchup boundaries.
+- **`myracle`** — reads myracle's tournament `.debug` log *directly*. Lines look like
+  `863187 >first : uci` (ms timestamp, `>`/`<` direction, `first`/`second` engine tag).
+  The tag is remapped to the real display name (learned from the `Starting engine N`
+  banner and the engine's `id name`), so names bind to the right colour like fastchess.
 - **`raw`** — a bare, already-stripped UCI transcript. Games are still segmented
   (board resets between them), but without engine tags it can't bind names per game,
   so it falls back to CLI `--white`/`--black` (with `id name` filling the defaults).
@@ -35,7 +39,7 @@ It live-tails the log and, for each event, emits the matching TLCS message(s):
 |---|---|---|
 | `position …` | `FEN` (+`FMR`) once at start | truncated FEN (`board stm castling`); board is authoritative |
 | `go wtime … btime …` | `WTIME`/`BTIME` | ms → centiseconds (÷10) |
-| `info … score … pv …` | `WPV`/`BPV` | score normalized to White POV; time ms→cs; PV coords→SAN; only `multipv 1` |
+| `info … score … pv …` | `WPV`/`BPV` | score in side-to-move (engine) POV, matching TLCS; time ms→cs; PV coords→SAN; only `multipv 1` |
 | `bestmove <coord>` | `FEN`, `WMOVE`/`BMOVE`, `FMR` | move number + SAN |
 | game over (board) | `result:` | mate/stalemate/draw |
 | new game (boundary) | `result:` (prev, if none) → `WPLAYER`/`BPLAYER` → startpos `FEN` | resets node-tlcv's board for the next game |
@@ -59,13 +63,15 @@ npm run build           # or run straight from source with tsx:
 npm start -- --log path/to/game.uci --port 16066 --white "Engine A" --black "Engine B" --site "My Match"
 ```
 
-Options: `--log <path>` (required), `--format auto|raw|fastchess` (auto), `--port`
-(16066), `--bind` (0.0.0.0), `--white`/`--black`/`--site`, `--from-end` (skip existing
-content). `LOG_LEVEL=debug` logs every UDP message.
+Options: `--log <path>` (required), `--format auto|raw|fastchess|myracle` (auto),
+`--port` (16066), `--bind` (0.0.0.0), `--white`/`--black`/`--site`, `--from-end` (skip
+existing content). `LOG_LEVEL=debug` logs every UDP message.
 
-With `--format fastchess` you point `--log` at the fastchess engine log itself; with
-`--format raw` you point it at a pre-stripped transcript. `--white`/`--black` are only
-used as the fallback names for the raw/untagged path.
+With `--format fastchess` (or `myracle`) you point `--log` at the engine/tournament log
+itself; with `--format raw` you point it at a pre-stripped transcript. `--white`/`--black`
+are only used as the fallback names for the raw/untagged path. To attach to a log that is
+*already running*, keep the default (read from start) so the top-of-file engine names are
+learned — `--from-end` would skip them and the myracle path would fall back to `first`/`second`.
 
 Point node-tlcv at it via `config/config.json`:
 `{ "connections": ["<host>:16066"] }`.

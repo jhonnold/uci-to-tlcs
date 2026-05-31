@@ -140,6 +140,27 @@ export class Pipeline {
       this.beginNewGame();
     }
     if (engineId) this.participants.add(engineId);
+    this.maybeBindBlack();
+  }
+
+  /**
+   * Bind Black and emit the game header once White and exactly one other participant
+   * are known. Called both after a participant joins (`ucinewgame`) and after White is
+   * bound (first `go`), so it fires whichever comes last: fastchess batches both
+   * `ucinewgame`s before the first `go` (binds at `go`); myracle inits engines one at a
+   * time, so the second participant's `ucinewgame` can arrive *after* White's `go`
+   * (binds there). Deferring the header until both names are known upholds node-tlcv's
+   * resetMoves invariant (a move shown before WPLAYER/BPLAYER is wiped); `onBestMove`
+   * is the backstop if a producer never reveals the second participant.
+   */
+  private maybeBindBlack(): void {
+    if (!this.whiteId || this.blackId) return;
+    const others = [...this.participants].filter((id) => id !== this.whiteId);
+    if (others.length !== 1) return;
+    this.blackId = others[0];
+    this.collectingParticipants = false;
+    this.awaitingFirstGo = false;
+    this.emitGameHeaderIfReady();
   }
 
   /** Close out the previous game and reset per-game state for a fresh one. */
@@ -165,6 +186,21 @@ export class Pipeline {
     // Untagged path detects boundaries here (tagged path already did at `ucinewgame`).
     if (this.gameActive && this.isGameReset(ev)) this.beginNewGame();
 
+    // Forward extension of the live game: a producer may reveal a move in the *next*
+    // engine's `position` command before that engine logs its own `bestmove` (myracle
+    // feeds the opponent its reply first). Apply & emit each newly-revealed move so it
+    // isn't lost — its later `bestmove` is deduplicated in onBestMove. (The final move
+    // of a game gets no following `position`, so `bestmove` stays its emit path.)
+    if (
+      this.gameActive &&
+      ev.startpos &&
+      ev.moves.length > this.currentMoves.length &&
+      isPrefixExtension(this.currentMoves, ev.moves)
+    ) {
+      for (const m of ev.moves.slice(this.currentMoves.length)) this.applyAndEmit(m);
+      return;
+    }
+
     if (!this.game.setPosition(ev.startpos, ev.fen, ev.moves)) return;
     this.currentMoves = ev.moves.slice();
 
@@ -173,16 +209,14 @@ export class Pipeline {
   }
 
   private onGo(ev: GoEvent, n: NormalizedLine): void {
-    // First `go` to an engine after a reset binds that engine to White.
+    // First `go` to an engine after a reset binds that engine to White. Black + the
+    // header are bound by maybeBindBlack once the other participant is known — which,
+    // for a sequential-init producer (myracle), can be after this first `go`.
     if (this.awaitingFirstGo && n.direction === 'in' && n.engineId) {
       this.whiteId = n.engineId;
-      const others = [...this.participants].filter((id) => id !== n.engineId);
-      this.blackId = others.length === 1 ? others[0] : undefined;
       this.awaitingFirstGo = false;
-      this.collectingParticipants = false;
+      this.maybeBindBlack();
     }
-
-    if (this.tagged) this.emitGameHeaderIfReady();
 
     if (ev.wtimeMs !== undefined && ev.btimeMs !== undefined) {
       this.sink.emitClocks(msToCs(ev.wtimeMs), msToCs(ev.btimeMs));
@@ -229,23 +263,15 @@ export class Pipeline {
     if (info.multipv !== 1) return; // only the primary line is the broadcast eval
 
     const color = this.game.turn(); // side to move = the thinking side
-    const whiteCp = this.game.toWhitePov(scoreToCentipawns(info));
+    const scoreCp = scoreToCentipawns(info); // side-to-move (engine) POV, matching TLCS
     const sanPv = this.game.playoutPvToSan(info.pv);
     if (sanPv.length === 0) return;
 
-    this.sink.emitPv(color, info.depth, Math.round(whiteCp), msToCs(info.timeMs), info.nodes, sanPv);
+    this.sink.emitPv(color, info.depth, Math.round(scoreCp), msToCs(info.timeMs), info.nodes, sanPv);
   }
 
-  private onBestMove(move: string | null): void {
-    // Defensive: guarantee the header (players) precedes the first move even if the
-    // `go` that should have triggered it lacked a tagged engineId.
-    this.emitGameHeaderIfReady();
-
-    if (move === null) {
-      this.maybeEmitResult();
-      return;
-    }
-
+  /** Apply one coordinate move to the authoritative board and broadcast it (+ result). */
+  private applyAndEmit(move: string): void {
     const applied = this.game.applyMove(move);
     if (!applied) return;
     this.currentMoves.push(move);
@@ -259,6 +285,24 @@ export class Pipeline {
     });
 
     this.maybeEmitResult();
+  }
+
+  private onBestMove(move: string | null): void {
+    // Defensive: guarantee the header (players) precedes the first move even if the
+    // `go` that should have triggered it lacked a tagged engineId.
+    this.emitGameHeaderIfReady();
+
+    if (move === null) {
+      this.maybeEmitResult();
+      return;
+    }
+
+    // A `position` command may have already revealed (and emitted) this move — myracle
+    // logs the opponent's `position` feed before the engine's own `bestmove`. Skip the
+    // duplicate; consecutive plies can never share from/to coordinates, so this is safe.
+    if (this.currentMoves[this.currentMoves.length - 1] === move) return;
+
+    this.applyAndEmit(move);
   }
 
   private maybeEmitResult(): void {

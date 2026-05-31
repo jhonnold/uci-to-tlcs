@@ -120,15 +120,6 @@ test('GameState: promotion and castling coordinate moves', () => {
   assert.equal(g.applyMove('e1g1')!.san, 'O-O');
 });
 
-test('GameState: White-POV normalization by side to move', () => {
-  const g = new GameState();
-  g.setPosition(true, undefined, ['e2e4']); // black to move
-  assert.equal(g.turn(), 'b');
-  assert.equal(g.toWhitePov(28), -28); // +0.28 for black ⇒ -0.28 for white
-  g.applyMove('e7e5'); // white to move
-  assert.equal(g.toWhitePov(33), 33);
-});
-
 test('GameState: PV coords play out to SAN and truncate on illegal move', () => {
   const g = new GameState();
   g.setPosition(true, undefined, []);
@@ -219,9 +210,9 @@ test('pipeline: sample-game.uci produces the expected ordered emissions', () => 
     fmr: 0,
   });
 
-  // black's reply: engine-POV -28 ⇒ +28 White POV
+  // black's reply: engine-POV -28 broadcast as-is (side-to-move POV passthrough)
   const blackPv = e.find((x) => x.k === 'pv' && x.color === 'b') as Extract<Emit, { k: 'pv' }>;
-  assert.equal(blackPv.score, 28);
+  assert.equal(blackPv.score, -28);
   assert.deepEqual(blackPv.pv, ['e5', 'Nf3', 'Nc6', 'Bb5']);
 
   const blackMove = e.find((x) => x.k === 'move' && x.color === 'b') as Extract<Emit, { k: 'move' }>;

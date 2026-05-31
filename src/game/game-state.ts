@@ -80,11 +80,6 @@ export class GameState {
     return parseInt(this.chess.fen().split(' ')[4] ?? '0', 10);
   }
 
-  /** Normalize an engine-POV centipawn score to White's POV using the side to move. */
-  toWhitePov(enginePovCp: number): number {
-    return this.chess.turn() === 'w' ? enginePovCp : -enginePovCp;
-  }
-
   /**
    * Play out a coordinate PV from the current position into SAN, stopping at the
    * first move that doesn't apply. Mirrors node-tlcv's playoutPV (inverted: we

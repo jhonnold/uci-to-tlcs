@@ -22,9 +22,13 @@ npm run dev       # tsx watch
 Three concerns, kept separate on purpose:
 - **`source/` (LogSource adapter)** normalizes one producer line into
   `{ uci, engineId?, direction? }` and nothing more — no chess, no segmentation.
-  `RawUciSource` (untagged) and `FastchessSource` (engine-tagged) ship; `--format`
-  / `makeSource` pick one (`auto` sniffs the first decisive line). Add a producer =
-  add an adapter, don't touch the pipeline.
+  `RawUciSource` (untagged), `FastchessSource` and `MyracleSource` (engine-tagged) ship;
+  `--format` / `makeSource` pick one (`auto` sniffs the first decisive line, tagged
+  matchers before the loose `looksLikeRawUci`). Add a producer = add an adapter, don't
+  touch the pipeline. An adapter MAY be stateful for *identity* only (e.g. `MyracleSource`
+  remaps its `first`/`second` tag to the real display name, learned from the `Starting
+  engine N` banner + the engine's `id name` — `id name` wins, it's hyphen-safe) — never
+  for chess or segmentation.
 - **`pipeline.ts` / `game/game-state.ts`** own all unit/perspective conversion **and**
   game segmentation. The `BroadcastSink` interface (`pipeline.ts`) is the test seam —
   `encoder.test.ts` / `multigame.test.ts` drive the pipeline through a fake sink with
@@ -57,8 +61,21 @@ Three concerns, kept separate on purpose:
   unrecoverable.
 - **Encoding invariants** (easy to regress, all enforced implicitly): 3-field
   truncated FEN (`board stm castling`); time ms→centiseconds (÷10); `score cp` is
-  side-to-move POV → normalize to White; only `multipv 1` is the broadcast eval; mate
+  broadcast in side-to-move (engine) POV — each engine's own perspective, matching
+  real TLCS, **no** White-POV flip; only `multipv 1` is the broadcast eval; mate
   mapped to ±(100000 − n) so node-tlcv renders it decisive.
+- **Moves are emitted from two paths, deduped (`pipeline.ts`).** A move is broadcast
+  either when its `bestmove` arrives *or* when a `position … moves` command first reveals
+  it (a forward prefix-extension of the current list → `onPosition` applies + emits each
+  new ply via `applyAndEmit`). This matters because myracle logs the opponent's
+  `position` feed **before** that engine's own `bestmove`, so the move would otherwise be
+  silently swallowed by the resync and never broadcast (≈half the game lost). `onBestMove`
+  dedupes: if the move already tails `currentMoves` (pre-revealed via `position`) it's
+  skipped — safe because consecutive plies can't share from/to coordinates. The game's
+  **final** move never gets a following `position`, so `bestmove` stays its only path
+  (and is where the terminal `result:` check lands). fastchess/raw always log `bestmove`
+  before the including `position`, so their `position` deltas are empty — behaviour
+  unchanged.
 - **Results are board-derived only.** Pure UCI has no resign/adjudication signal, so
   only mate/stalemate/draw on the board produces a `result:` (`game-state.ts`). At a
   game boundary, if the previous game produced none, the pipeline synthesizes
@@ -69,8 +86,14 @@ Three concerns, kept separate on purpose:
   one (covers startpos-no-moves and divergence); on the tagged path a `ucinewgame`
   (direction `in`) also triggers it and names the participants. **Name→colour binding
   needs a tagged producer**: White = the engine that gets `position startpos`+the first
-  `go`; Black = the other `ucinewgame` participant — both known *before* move 1.
-  Untagged input keeps positional/CLI names (`id name` fills defaults for game 1 only).
+  `go`; Black = the other `ucinewgame` participant. **Don't assume both `ucinewgame`s
+  precede the first `go`** — fastchess batches them, but myracle inits engines one at a
+  time, so the 2nd engine's `ucinewgame` can land *after* White's `go` (even after its
+  first `info`). So `maybeBindBlack()` binds Black + emits the header when *both* are
+  known (called from both `onUciNewGame` and `onGo`, whichever is last), not eagerly at
+  `go`; `collectingParticipants` stays open until then so the late `ucinewgame` doesn't
+  trigger a spurious new game. `onBestMove` is the header backstop. Untagged input keeps
+  positional/CLI names (`id name` fills defaults for game 1 only).
 - **node-tlcv new-game contract** (reverse-engineered, drives the per-game emit order
   `result → WPLAYER → BPLAYER → startpos FEN → moves`; see `../node-tlcv/src/game-service.ts`):
   (1) board reset fires only on a **startpos** FEN while loaded (`onFen`) — a non-startpos
