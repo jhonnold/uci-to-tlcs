@@ -122,6 +122,26 @@ test('fastchess multi-game: player names + colors swap between games', () => {
   assert.equal(e.filter((x) => x.k === 'site').length, 1);
 });
 
+test('fastchess multi-token names: full names survive and moves are emitted', () => {
+  const e = drive(new FastchessSource(), 'fastchess-multitoken.log');
+
+  // The configured names keep their spaces / version / commit hash verbatim.
+  const players = e.filter((x) => x.k === 'players') as Extract<Emit, { k: 'players' }>[];
+  assert.deepEqual(
+    players.map((p) => ({ white: p.white, black: p.black })),
+    [{ white: 'Berserk A', black: 'Berserk 14 v2-rc.1 a4994ff' }],
+  );
+
+  // Regression (gaps.md I): single-token name capture dropped every engine line, so 0
+  // moves were emitted. A real game now yields its full move list and a board result.
+  const moves = e.filter((x) => x.k === 'move') as Extract<Emit, { k: 'move' }>[];
+  assert.equal(moves.length, 4);
+  assert.deepEqual(moves.map((m) => m.san), ['f3', 'e5', 'g4', 'Qh4#']);
+
+  const results = e.filter((x) => x.k === 'result') as Extract<Emit, { k: 'result' }>[];
+  assert.deepEqual(results.map((r) => r.result), ['0-1']);
+});
+
 // ----------------------------------------------- adjudicated end (no board result)
 
 test('adjudicated game synthesizes result:* before the next game starts', () => {
