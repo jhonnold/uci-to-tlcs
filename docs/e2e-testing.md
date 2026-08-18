@@ -36,10 +36,10 @@ LOG_LEVEL=debug npm start -- --log /tmp/fc.log --format fastchess \
 # kibitzer
 ( cd ../node-tlcv && npm run dev-server ) > /tmp/node-tlcv.log 2>&1 &
 
-# producer — single-token engine names (multi-token names drop every line, gaps.md I),
-# -concurrency 1 (games don't interleave), real tc= (ticking clocks), no adjudication.
-fastchess -engine name=BerserkA cmd=BerserkA -engine name=BerserkB cmd=BerserkB \
-  -engine name=BerserkC cmd=BerserkC -engine name=BerserkD cmd=BerserkD \
+# producer — engine names may contain spaces / versions / commit hashes; quote any
+# name with a space. -concurrency 1 (games don't interleave), real tc= (ticking clocks).
+fastchess -engine name="Berserk A" cmd=berserk -engine name="Berserk B" cmd=berserk \
+  -engine name="Berserk C" cmd=berserk -engine name="Berserk D" cmd=berserk \
   -each tc=10+0.1 option.Hash=32 option.Threads=1 -rounds 3 -games 1 -concurrency 1 \
   -log file=/tmp/fc.log engine=true realtime=true > /tmp/fastchess.log 2>&1
 ```
@@ -76,9 +76,12 @@ Kill the background jobs; `rm /tmp/{fc,uci-to-tlcs,node-tlcv,fastchess}.log`.
 
 ## Variants
 
-- **Local / mock client** (no fastchess or node-tlcv): `npm run mock-client --
-  --ephemeral` binds an OS port and still receives (we reply to the source port), so no
-  loopback alias is needed. To exercise the strict same-port client instead, drop
+- **Local / mock client** (stand-in for node-tlcv): `npm run mock-client --
+  --ephemeral` binds an OS port, LOGONs, ACKs every `<NNN>`, and pretty-prints what it
+  receives (no loopback alias needed — we reply to the source port). Run it **alongside real
+  fastchess** (the §3 commands, minus the kibitzer) to verify the bridge pushes the right
+  `WPLAYER`/`BPLAYER` names and `WMOVE`/`BMOVE` stream without running node-tlcv — e.g. to
+   confirm space-y engine names are pushed whole. For the strict same-port client instead, drop
   `--ephemeral` and use aliases (server `--bind 127.0.0.1`, client `--bind 127.0.0.2`,
   same port).
 - **LOGON-race**: node-tlcv sends `LOGONv15` once at boot and never retries. Bring the

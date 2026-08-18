@@ -102,18 +102,6 @@ node-tlcv uses `RESULTTABLE` to rebuild the **crosstable + game archive + `curre
 - **H. Desktop TLCV is assumed, not validated (coverage).** All invariants are reverse-engineered
   from node-tlcv + the mock client. Desktop TLCV may want `MENU`, a different LOGON-success string,
   or a full 6-field FEN.
-- **I. Multi-token fastchess engine names silently kill the whole stream (correctness, reproduced).**
-  The fastchess adapter captures the engine name as a **single token** — `(\S+)` in the line regex
-  (`src/source/fastchess-source.ts:23`). A name containing a space (e.g. `Berserk A`) breaks the
-  match: `\S+` eats `Berserk`, then the regex expects the direction marker `<---`/`--->` but finds
-  the rest of the name, so `normalize` returns `null` and the line is **dropped**. Because *every*
-  engine I/O line fails to match, no `FEN`/`WMOVE`/`BMOVE`/`WPV`/`BPV`/clock is ever emitted — even
-  though the server is up, the client has LOGONed, and `PING`/`PONG` still flow. It's **silent**: the
-  debug log shows only heartbeats. **Reproduced in the 2026-08 e2e run**: a 4-engine RR named
-  `Berserk A/B/C/D` produced **0** moves; renaming to single-token `BerserkA/B/C/D` fixed it
-  immediately. Fix: capture the name greedily up to the marker (e.g.
-  `…<pid>\s+(.+?)\s+(<---|--->)\s+(.*)$`), or document "single-token names required". (Interacts with
-  the name-keyed identity note below.)
 - **J. The "reliable" channel is bounded — lossy against a slow consumer (robustness, reproduced).**
   The stop-and-wait sender (`src/tlcs/reliable-sender.ts:92-99`) retransmits each ID-wrapped message
   at most `maxTries=4` × `retransmitMs=750` (~3s). If a client doesn't `ACK: <id>` in that window the

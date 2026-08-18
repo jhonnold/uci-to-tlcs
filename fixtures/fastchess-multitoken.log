@@ -1,0 +1,23 @@
+[INFO  ] [00:00:00.000000] <                    > fastchess --- Starting tournament...
+[Engine] [00:00:00.000000] <                  1>  Berserk A <--- uci
+[Engine] [00:00:00.001000] <                  1>  Berserk A ---> id name Berserk 20260524
+[Engine] [00:00:00.001000] <                  1>  Berserk A ---> uciok
+[Engine] [00:00:00.002000] <                  1>  Berserk 14 v2-rc.1 a4994ff <--- uci
+[Engine] [00:00:00.003000] <                  1>  Berserk 14 v2-rc.1 a4994ff ---> id name Berserk 20260524
+[Engine] [00:00:00.003000] <                  1>  Berserk 14 v2-rc.1 a4994ff ---> uciok
+[Engine] [00:00:00.004000] <                  1>  Berserk A <--- ucinewgame
+[Engine] [00:00:00.004000] <                  1>  Berserk 14 v2-rc.1 a4994ff <--- ucinewgame
+[Engine] [00:00:00.005000] <                  1>  Berserk A <--- position startpos
+[Engine] [00:00:00.005000] <                  1>  Berserk A <--- go wtime 1000 btime 1000 winc 0 binc 0
+[Engine] [00:00:00.006000] <                  1>  Berserk A ---> info depth 5 multipv 1 score cp 12 nodes 100 time 1 pv f2f3
+[Engine] [00:00:00.006000] <                  1>  Berserk A ---> bestmove f2f3
+[Engine] [00:00:00.007000] <                  1>  Berserk 14 v2-rc.1 a4994ff <--- position startpos moves f2f3
+[Engine] [00:00:00.007000] <                  1>  Berserk 14 v2-rc.1 a4994ff <--- go wtime 1000 btime 1000 winc 0 binc 0
+[Engine] [00:00:00.008000] <                  1>  Berserk 14 v2-rc.1 a4994ff ---> bestmove e7e5
+[Engine] [00:00:00.009000] <                  1>  Berserk A <--- position startpos moves f2f3 e7e5
+[Engine] [00:00:00.009000] <                  1>  Berserk A <--- go wtime 1000 btime 1000 winc 0 binc 0
+[Engine] [00:00:00.010000] <                  1>  Berserk A ---> bestmove g2g4
+[Engine] [00:00:00.011000] <                  1>  Berserk 14 v2-rc.1 a4994ff <--- position startpos moves f2f3 e7e5 g2g4
+[Engine] [00:00:00.011000] <                  1>  Berserk 14 v2-rc.1 a4994ff <--- go wtime 1000 btime 1000 winc 0 binc 0
+[Engine] [00:00:00.012000] <                  1>  Berserk 14 v2-rc.1 a4994ff ---> info depth 6 multipv 1 score mate 1 nodes 200 time 1 pv d8h4
+[Engine] [00:00:00.012000] <                  1>  Berserk 14 v2-rc.1 a4994ff ---> bestmove d8h4

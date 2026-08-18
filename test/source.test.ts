@@ -29,6 +29,30 @@ test('FastchessSource: extracts engineId + direction + payload (in vs out)', () 
   );
 });
 
+test('FastchessSource: multi-token (space) names are captured whole', () => {
+  const s = new FastchessSource();
+  assert.deepEqual(
+    s.normalize('[Engine] [15:14:19.224585] <     139834165294784>  Berserk A <--- go wtime 410 btime 410'),
+    { uci: 'go wtime 410 btime 410', engineId: 'Berserk A', direction: 'in' },
+  );
+  assert.deepEqual(
+    s.normalize(
+      '[Engine] [15:14:19.224961] <     139834165294784>  Berserk 14 v2-rc.1 a4994ff ---> bestmove e2e3 ponder a7a6',
+    ),
+    { uci: 'bestmove e2e3 ponder a7a6', engineId: 'Berserk 14 v2-rc.1 a4994ff', direction: 'out' },
+  );
+});
+
+test('FastchessSource: strips fastchess <stderr> annotation, keeps the real name', () => {
+  const s = new FastchessSource();
+  assert.deepEqual(
+    s.normalize(
+      '[Engine] [15:14:19.231926] <     139834165294784>  <stderr> Berserk A ---> Process exited normally with status 0',
+    ),
+    { uci: 'Process exited normally with status 0', engineId: 'Berserk A', direction: 'out' },
+  );
+});
+
 test('FastchessSource: drops banners and diagnostic dumps', () => {
   const s = new FastchessSource();
   assert.equal(s.normalize('[INFO  ] [15:14:18.831197] <                    > fastchess --- Starting tournament...'), null);
@@ -41,6 +65,8 @@ test('FastchessSource: drops banners and diagnostic dumps', () => {
 
 test('FastchessSource.matches: discriminates tagged lines from bare UCI/banners', () => {
   assert.equal(FastchessSource.matches('[Engine] [00:00:00.0] <  1>  EngA <--- uci'), true);
+  // multi-token name still reads as a tagged line (this is what the old regex missed)
+  assert.equal(FastchessSource.matches('[Engine] [00:00:00.0] <  1>  Berserk A ---> bestmove e2e4'), true);
   assert.equal(FastchessSource.matches('position startpos'), false);
   assert.equal(FastchessSource.matches('[INFO  ] [00:00:00.0] <    > fastchess --- hi'), false);
 });
