@@ -30,8 +30,10 @@ Details live in `docs/`, loaded only when relevant:
 - **`docs/pipeline.md`** — move emission (two deduped paths), board-derived results,
   and multi-game segmentation + name→colour binding. Reach for it when a move, result,
   or game boundary is wrong.
-- **`docs/e2e-testing.md`** — mock-client and real node-tlcv e2e runbooks, plus the
-  LOGON-race. Reach for it before shipping a protocol/transport change.
+- **`docs/e2e-testing.md`** — the full fastchess → uci-to-tlcs → node-tlcv e2e runbook
+  (configure, run, wait, check logs & PGNs), the mock-client local path, and the
+  LOGON-race. Reach for it before shipping a protocol/transport change, or to verify a
+  move/result/name/clock bug end-to-end.
 - **`README.md`** — full CLI options, the UCI→TLCS encoding table, and scope.
 - **`../node-tlcv/src/`** — the wire contract's source of truth (`game-service.ts`,
   `kibitzer/uci-parser.ts`, `udp-transport.ts`); there is no official spec.
