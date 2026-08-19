@@ -21,7 +21,7 @@ export interface Config {
 const USAGE = `uci-to-tlcs — broadcast a raw UCI transcript as TLCS over UDP
 
 Usage:
-  uci-to-tlcs --log <path> [options]
+  uci-to-tlcs --log <path> --pgn <path> [options]
 
 Options:
   --log <path>       UCI transcript / engine log to tail (required)

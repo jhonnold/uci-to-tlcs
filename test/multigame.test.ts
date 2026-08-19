@@ -364,3 +364,101 @@ test('adjudicated game synthesizes result:* before the next game starts', () => 
     ['EngA', 'EngB'],
   );
 });
+
+// ------------------------------------------------- review regressions (PR #4 follow-up)
+
+test('resync that never completes its bind does not swallow the next game boundary', () => {
+  const sink = new RecordingSink();
+  const pipeline = new Pipeline(sink, { white: 'White', black: 'Black', site: 'TestSite' });
+
+  const lines: NormalizedLine[] = [
+    // Join mid-game on what turns out to be the game's LAST search: 3 plies played, Black
+    // to move -> EngB is Black. Its reply is mate, so EngA never issues a tagged `go` and
+    // the second colour never binds — the case that used to latch the boundary gate.
+    { uci: 'position startpos moves f2f3 e7e5 g2g4', engineId: 'EngB', direction: 'in' },
+    { uci: 'go wtime 1000 btime 1000', engineId: 'EngB', direction: 'in' },
+    { uci: 'bestmove d8h4', engineId: 'EngB', direction: 'out' },
+    // Game 2, colours swapped (-repeat). This boundary must be honoured.
+    { uci: 'ucinewgame', engineId: 'EngB', direction: 'in' },
+    { uci: 'ucinewgame', engineId: 'EngA', direction: 'in' },
+    { uci: 'position startpos', engineId: 'EngB', direction: 'in' },
+    { uci: 'go wtime 1000 btime 1000', engineId: 'EngB', direction: 'in' },
+    { uci: 'bestmove d2d4', engineId: 'EngB', direction: 'out' },
+  ];
+  for (const n of lines) pipeline.handleLine(n);
+
+  const e = sink.emits;
+  const players = e.filter((x) => x.k === 'players') as Extract<Emit, { k: 'players' }>[];
+  // Game 2 gets its own header with the swapped pair — not game 1's stale binding.
+  assert.deepEqual(players[players.length - 1], { k: 'players', white: 'EngB', black: 'EngA' });
+  // Game 2 starts from startpos, i.e. the boundary really reset the board.
+  const inits = e.filter((x) => x.k === 'init') as Extract<Emit, { k: 'init' }>[];
+  assert.equal(inits[inits.length - 1].fen, STARTPOS_TRUNC);
+  // Game 1 was closed and recorded with its real (parity-bound) black.
+  assert.deepEqual(pipeline.finishedGames(), [{ number: 1, white: 'White', black: 'EngB', result: '0-1' }]);
+});
+
+test('info before the first position is dropped (orphan search on --from-end)', () => {
+  const sink = new RecordingSink();
+  const pipeline = new Pipeline(sink, { white: 'White', black: 'Black', site: 'TestSite' });
+
+  // The bridge attaches mid-search: `info` lines land before their `position` is seen.
+  pipeline.handleLine({ uci: 'info depth 12 score cp 34 nodes 1000 time 50 pv d2d4 d7d5 c2c4', engineId: 'EngA', direction: 'out' });
+  assert.equal(sink.emits.length, 0, 'no PV against the untouched startpos board');
+
+  // Once the real position lands, PVs flow again — scored from the right side to move.
+  pipeline.handleLine({ uci: 'position startpos moves e2e4', engineId: 'EngB', direction: 'in' });
+  pipeline.handleLine({ uci: 'info depth 12 score cp 20 nodes 1000 time 50 pv e7e5', engineId: 'EngB', direction: 'out' });
+  const pvs = sink.emits.filter((x) => x.k === 'pv') as Extract<Emit, { k: 'pv' }>[];
+  assert.deepEqual(pvs.map((p) => ({ color: p.color, pv: p.pv })), [{ color: 'b', pv: ['e5'] }]);
+});
+
+test('opening-book game (boundary already seen) emits one FEN, not a duplicate', () => {
+  const sink = new RecordingSink();
+  const pipeline = new Pipeline(sink, { white: 'White', black: 'Black', site: 'TestSite' });
+
+  const lines: NormalizedLine[] = [
+    { uci: 'ucinewgame', engineId: 'EngA', direction: 'in' },
+    { uci: 'ucinewgame', engineId: 'EngB', direction: 'in' },
+    // fastchess opening book: the game's first position already carries two book plies.
+    { uci: 'position startpos moves e2e4 e7e5', engineId: 'EngA', direction: 'in' },
+    { uci: 'go wtime 1000 btime 1000', engineId: 'EngA', direction: 'in' },
+    { uci: 'bestmove g1f3', engineId: 'EngA', direction: 'out' },
+  ];
+  for (const n of lines) pipeline.handleLine(n);
+
+  const e = sink.emits;
+  assert.equal(e.filter((x) => x.k === 'cur').length, 0, 'book position is not a resync');
+  const inits = e.filter((x) => x.k === 'init') as Extract<Emit, { k: 'init' }>[];
+  assert.equal(inits.length, 1);
+  assert.equal(inits[0].fen, FEN_AFTER_E4_E5, 'header carries the book position');
+  // White still binds from `go` order (parity is a resync-only shortcut).
+  const players = e.filter((x) => x.k === 'players') as Extract<Emit, { k: 'players' }>[];
+  assert.deepEqual(players, [{ k: 'players', white: 'EngA', black: 'EngB' }]);
+});
+
+test('currentGame(): the open game is visible before its boundary closes it', () => {
+  const sink = new RecordingSink();
+  const pipeline = new Pipeline(sink, { white: 'White', black: 'Black', site: 'TestSite', gameNumber: 7 });
+
+  assert.equal(pipeline.currentGame(), undefined, 'no game before the first header');
+
+  const g1: NormalizedLine[] = [
+    { uci: 'ucinewgame', engineId: 'EngA', direction: 'in' },
+    { uci: 'ucinewgame', engineId: 'EngB', direction: 'in' },
+    { uci: 'position startpos', engineId: 'EngA', direction: 'in' },
+    { uci: 'go wtime 1000 btime 1000', engineId: 'EngA', direction: 'in' },
+    { uci: 'bestmove e2e4', engineId: 'EngA', direction: 'out' },
+  ];
+  for (const n of g1) pipeline.handleLine(n);
+
+  // Open and in progress: absent from finishedGames(), present as `*`.
+  assert.deepEqual(pipeline.finishedGames(), []);
+  assert.deepEqual(pipeline.currentGame(), { number: 7, white: 'EngA', black: 'EngB', result: '*' });
+
+  // At the next boundary it moves to the finished record and the new game becomes open.
+  pipeline.handleLine({ uci: 'ucinewgame', engineId: 'EngB', direction: 'in' });
+  pipeline.handleLine({ uci: 'ucinewgame', engineId: 'EngA', direction: 'in' });
+  assert.deepEqual(pipeline.finishedGames(), [{ number: 7, white: 'EngA', black: 'EngB', result: '*' }]);
+  assert.equal(pipeline.currentGame(), undefined, 'game 8 has no header yet');
+});

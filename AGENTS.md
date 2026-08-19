@@ -12,7 +12,7 @@ the data flow, and scope.
 npm test          # unit tests (parser, encoder, pipeline) via node:test
 npm run typecheck # tsc --noEmit
 npm run build     # tsc → dist/
-npm start -- --log <path> [opts]   # run from source via tsx
+npm start -- --log <path> --pgn <path> [opts]   # run from source via tsx
 npm run dev       # tsx watch
 ```
 

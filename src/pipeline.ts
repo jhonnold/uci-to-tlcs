@@ -91,6 +91,7 @@ export class Pipeline {
   private tagged = false; // latched once any line carries a direction
   private siteEmitted = false;
   private firstHeaderEmitted = false;
+  private sawGameBoundary = false; // latched at the first observed boundary; gates resync
   private idNames: string[] = []; // untagged-fallback naming only
   private fallbackWhite: string;
   private fallbackBlack: string;
@@ -106,7 +107,8 @@ export class Pipeline {
 
   // Per-game colour binding (tagged path).
   private participants = new Set<string>(); // engineIds seen via `ucinewgame` or a tagged `go`
-  private collectingParticipants = false;
+  private collectingParticipants = false; // a `ucinewgame`-opened setup is still in progress
+  private resyncBinding = false; // a resync pre-bound one colour; the other is still owed
   private awaitingFirstGo = false;
   private whiteId?: string;
   private blackId?: string;
@@ -198,6 +200,7 @@ export class Pipeline {
     this.whiteId = white;
     this.blackId = black;
     this.collectingParticipants = false;
+    this.resyncBinding = false;
     this.awaitingFirstGo = false;
     if (this.pendingHeader) {
       this.emitGameHeaderIfReady();
@@ -226,6 +229,10 @@ export class Pipeline {
   /** Close out the previous game and reset per-game state for a fresh one. */
   private beginNewGame(): void {
     this.closeCurrentGame();
+    // Once a boundary has been observed, the bridge is no longer joining mid-game:
+    // a later `position` carrying moves is an opening book, not a resync.
+    this.sawGameBoundary = true;
+    this.resyncBinding = false; // an incomplete resync bind must not leak into this game
     this.game.reset();
     this.positionSeen = false;
     this.positionEmitted = false;
@@ -260,7 +267,10 @@ export class Pipeline {
       return;
     }
 
-    const midGameResync = !this.gameActive && ev.moves.length > 0;
+    // Only the first game the bridge sees can be joined mid-flight; once a boundary has
+    // been observed, a first `position` carrying moves is an opening book and takes the
+    // normal header path (emitting the resync position too would duplicate the FEN).
+    const midGameResync = !this.gameActive && ev.moves.length > 0 && !this.sawGameBoundary;
 
     if (!this.game.setPosition(ev.startpos, ev.fen, ev.moves)) return;
     this.positionSeen = true;
@@ -286,7 +296,10 @@ export class Pipeline {
   private onMidGameResync(ev: PositionEvent, n: NormalizedLine): void {
     if (n.direction === 'in' && n.engineId && ev.startpos) {
       this.participants.add(n.engineId);
-      this.collectingParticipants = true;
+      // NOT `collectingParticipants`: that flag gates new-game detection at `ucinewgame`,
+      // and a resync bind that never completes (the game ends before the second engine's
+      // `go`) would latch it and swallow the next game's boundary.
+      this.resyncBinding = true;
       // Parity, not `go`-order, decides White here: suppress the first-`go` binding.
       this.awaitingFirstGo = false;
       if (ev.moves.length % 2 === 0) this.whiteId = n.engineId;
@@ -314,7 +327,7 @@ export class Pipeline {
         this.whiteId = n.engineId;
         this.awaitingFirstGo = false;
       }
-      if (this.collectingParticipants) {
+      if (this.collectingParticipants || this.resyncBinding) {
         this.participants.add(n.engineId);
         this.maybeBindPlayers();
       }
@@ -364,6 +377,9 @@ export class Pipeline {
   }
 
   private onInfo(info: UciInfo): void {
+    // Same orphan guard as onBestMove: before the game's first `position` the board sits
+    // at startpos, so the side to move (and hence the PV's colour and score POV) is wrong.
+    if (!this.positionSeen) return;
     if (info.multipv !== 1) return; // only the primary line is the broadcast eval
 
     const color = this.game.turn(); // side to move = the thinking side
@@ -436,6 +452,17 @@ export class Pipeline {
   /** Number of the current (or next) game in this run. */
   get currentGameNumber(): number {
     return this.firstGameNumber + this.finished.length;
+  }
+
+  /**
+   * The open game as an in-progress database entry, or `undefined` if no game is
+   * active. `closeCurrentGame` only runs at the *next* game's boundary, so the game
+   * being played — including the last one of a run — is absent from `finishedGames()`.
+   */
+  currentGame(): PgnGame | undefined {
+    if (!this.gameActive) return undefined;
+    const [white, black] = this.resolveNames();
+    return { number: this.currentGameNumber, white, black, result: this.lastResult ?? RESULT_UNKNOWN };
   }
 }
 

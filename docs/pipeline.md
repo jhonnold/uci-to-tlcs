@@ -40,13 +40,19 @@ or touching game boundaries / player-name binding in `pipeline.ts` and
    positional/CLI names (`id name` fills defaults for game 1 only).
 
 - **Mid-game resync (bridge starts partway into a game).** When the first `position`
-  seen for a game already carries moves (`--from-end`, restart), `onMidGameResync`
+  seen for a game already carries moves *and the bridge has not yet observed a game
+  boundary* (`sawGameBoundary`, latched in `beginNewGame`), `onMidGameResync`
   fires: the current position is published via `emitCurrentPosition` (FEN+FMR, so a
   client LOGONing during the binding gap already has the board) and — on tagged input
   with a `startpos`-based position — the side-to-move's colour is pre-bound **by move
   count parity** (the `position` is addressed to the engine about to move; even count =
   White). `awaitingFirstGo` is suppressed so the first `go` can't mis-bind. The other
-  colour binds when the second engine's first tagged `go` registers it as a participant.
+  colour binds when the second engine's first tagged `go` registers it as a participant —
+  tracked by `resyncBinding`, deliberately *not* `collectingParticipants`: that flag gates
+  new-game detection at `ucinewgame`, and a resync bind that never completes (the joined
+  game ends before the second engine's `go`) would latch it and swallow the next boundary.
+  Only the first game the bridge sees can resync; afterwards a first `position` with moves
+  is an opening book, and re-publishing it would duplicate the header's FEN.
   If the first `bestmove` beats that (the usual order), the backstop emits the header
   with the parity-bound side + CLI fallback for the other; when the bind completes, the
    real names are re-sent via `setPlayers` (node-tlcv re-arms its move list on the late

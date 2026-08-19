@@ -60,7 +60,7 @@ and lets several clients share one host. A client that goes silent (no PING/ACK 
 ```bash
 npm install
 npm run build           # or run straight from source with tsx:
-npm start -- --log path/to/game.uci --port 16066 --white "Engine A" --black "Engine B" --site "My Match"
+npm start -- --log path/to/game.uci --pgn /tmp/ct.pgn --port 16066 --white "Engine A" --black "Engine B" --site "My Match"
 ```
 
 Options: `--log <path>` (required), `--pgn <path>` (required — the PGN game database,

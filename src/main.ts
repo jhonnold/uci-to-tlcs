@@ -20,10 +20,14 @@ function main(): void {
     white: cfg.white,
     black: cfg.black,
     site: cfg.site,
-    gameNumber: fileGames.length + 1,
+    // From-start replays the log's own history, so this run's games ARE the file's games
+    // (mergeGames lets the file win the collision). Only --from-end skips that history and
+    // has to continue the file's numbering.
+    gameNumber: cfg.fromStart ? 1 : fileGames.length + 1,
     onGameStart: (gameNumber) => {
       fileGames = loadPgnGames(cfg.pgnPath);
-      const all = mergeGames(fileGames, pipeline.finishedGames());
+      const open = pipeline.currentGame();
+      const all = mergeGames(fileGames, [...pipeline.finishedGames(), ...(open ? [open] : [])]);
       logger.debug(`game ${gameNumber}: ${all.length} game(s) in database (${fileGames.length} from PGN)`);
     },
   });

@@ -70,9 +70,10 @@ node-tlcv uses `RESULTTABLE` to rebuild the **crosstable + game archive + `curre
      `PipelineMeta.gameNumber`, `Pipeline.currentGameNumber`);
   2. ~~a finished-games accumulator~~ — `closeCurrentGame` records each closed game
      (`Pipeline.finishedGames()`); the PGN file is loaded at startup and re-read at every game
-     boundary (`main.ts`), `mergeGames` resolves them;
-  3. still missing: a **crosstable renderer** matching the format above (the renderer is the
-     remaining work, plus the live game's in-progress entry);
+     boundary (`main.ts`), `mergeGames` resolves them. `closeCurrentGame` only runs at the
+     *next* game's boundary, so the open game (including a run's last) comes from
+     `Pipeline.currentGame()` instead — an in-progress entry with the board's result or `*`;
+  3. still missing: a **crosstable renderer** matching the format above;
   4. still missing: **reliable transport** for a multi-line dump — `sendResultTable` uses the
      unreliable channel (`server.ts`), so a large table would drop lines.
 - **Identity is name-keyed**: the H2H matrix keys rows on player *name*. fastchess identity is the

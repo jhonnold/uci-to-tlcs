@@ -68,8 +68,9 @@ Artifacts: `/tmp/node-tlcv-pgns/uci-to-tlcs/*.pgn` (ground truth), `/tmp/uci-to-
 - **Clocks** — `WTIME`/`BTIME` present and decreasing.
 - **Registration** — exactly one client in `/tmp/uci-to-tlcs.log` (`LOGONv15`); 0 =
   LOGON-race, >1 = node-tlcv restarted.
-- **Retries** — `reliable send … unacked, retrying` count: 0 = clean, many = a slow
-  consumer (gaps.md J).
+- **Drops** — `grep -c 'unacked after 4 tries' /tmp/uci-to-tlcs.log`: 0 = clean, many = a
+  slow consumer (gaps.md J). A handful over a fast RR is expected — node-tlcv self-corrects
+  on the next `FEN`, so check names/results still land, not just the count.
 - **Errors** — `grep -iE 'error|warn|uncaught|unhandled' /tmp/uci-to-tlcs.log /tmp/node-tlcv.log /tmp/fastchess.log`.
 
 ## 6. Tear down
