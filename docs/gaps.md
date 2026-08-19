@@ -116,10 +116,8 @@ node-tlcv uses `RESULTTABLE` to rebuild the **crosstable + game archive + `curre
   degrades to lossy under a slow viewer; a live board can transiently skip a move and re-sync on the
   next FEN. Fix ideas: longer/backed-off retry, per-client pacing, or make the next FEN the explicit
   resync anchor.
-- **Smaller:** `MENU` not emitted; LOGON **snapshot ordering** mixes reliable (FEN/players,
-  stop-and-wait) with unwrapped (PV/clock, immediate), so a fresh client can get PV before its
-  position and briefly replay against the wrong board; identity is display-name-keyed (fine for
-  the live board, collapses same-named engines in a crosstable).
+- **Smaller:** `MENU` not emitted; identity is display-name-keyed (fine for the live board,
+  collapses same-named engines in a crosstable).
 
 ## Where the evidence lives
 

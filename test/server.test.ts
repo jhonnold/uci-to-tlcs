@@ -130,6 +130,74 @@ test('server: keys clients by ip:port so two clients on one host both get moves'
   }
 });
 
+test('server: mid-game LOGON replays site, players, latest position, clocks and PV before further moves', async () => {
+  const { server, port } = await startServer();
+  const early = await TestClient.create(port, 'early');
+  const late = await TestClient.create(port, 'late');
+  const fen2 = 'FEN: rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq';
+  try {
+    early.logon();
+    await waitFor(() => early.received.includes('LOGON SUCCESSFUL'));
+
+    // A game in progress: header + two moves + clocks + a PV, all before `late` joins.
+    server.setSite('Midgame Arena');
+    server.setPlayers('Engine W', 'Engine B');
+    server.emitMove({
+      fenTruncated: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq',
+      color: 'w',
+      fullMoveNumber: 1,
+      san: 'e4',
+      fmr: 0,
+    });
+    server.emitMove({
+      fenTruncated: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq',
+      color: 'b',
+      fullMoveNumber: 1,
+      san: 'e5',
+      fmr: 0,
+    });
+    server.emitClocks(98_000, 97_500);
+    server.emitPv('w', 5, 12, 100, 100, ['Nf3']);
+
+    // Wait for the pre-logon reliable queue to drain (FMR is each move's last msg).
+    await waitFor(() => early.received.filter((m) => m === 'FMR: 0').length === 2);
+
+    late.logon();
+    await waitFor(() => late.received.includes(fen2));
+
+    // Snapshot content: the LATEST position (not move 1), current players/site.
+    const idx = (m: string) => late.received.indexOf(m);
+    assert(idx('SITE: Midgame Arena') !== -1);
+    assert(idx('WPLAYER: Engine W') !== -1);
+    assert(idx('BPLAYER: Engine B') !== -1);
+    assert(idx(fen2) !== -1);
+    assert(!late.received.includes('FEN: rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq'));
+
+    // Snapshot order: SITE -> players -> FEN -> FMR -> clocks -> PV, all before the next move.
+    assert(idx('SITE: Midgame Arena') < idx('WPLAYER: Engine W'));
+    assert(idx('WPLAYER: Engine W') < idx('BPLAYER: Engine B'));
+    assert(idx('BPLAYER: Engine B') < idx(fen2));
+    assert(idx(fen2) < idx('FMR: 0'));
+    assert(idx('FMR: 0') < idx('WTIME: 98000 otim 97500'));
+    assert(idx('WTIME: 98000 otim 97500') < idx('WPV: 5 12 100 100 Nf3'));
+
+    // The next live move lands only after the snapshot is complete.
+    server.emitMove({
+      fenTruncated: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKBNR b KQkq',
+      color: 'w',
+      fullMoveNumber: 2,
+      san: 'Nf3',
+      fmr: 1,
+    });
+    await waitFor(() => late.received.some((m) => m.startsWith('WMOVE') && m.includes('Nf3')));
+    assert(idx('WPV: 5 12 100 100 Nf3') < late.received.findIndex((m) => m.startsWith('WMOVE')));
+  } finally {
+    early.close();
+    late.close();
+    server.close();
+  }
+});
+
 test('server: reaps a silent client after the idle timeout', async () => {
   const { server, port } = await startServer({ clientTimeoutMs: 150, reapIntervalMs: 40 });
   const alice = await TestClient.create(port, 'alice');

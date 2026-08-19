@@ -229,12 +229,15 @@ export class TlcsServer {
     if (s.fenTruncated) this.sender.enqueue(P.fen(s.fenTruncated), dest);
     if (s.fmr !== undefined) this.sender.enqueue(P.fmr(s.fmr), dest);
 
+    // Clocks/PV also go through the reliable queue (after FMR) so the position
+    // always precedes them for a fresh client; live broadcasts of these stay
+    // unwrapped (high frequency).
     if (s.whiteTimeCs !== undefined && s.blackTimeCs !== undefined) {
-      this.rawSendTo(P.time('w', s.whiteTimeCs, s.blackTimeCs), dest);
-      this.rawSendTo(P.time('b', s.blackTimeCs, s.whiteTimeCs), dest);
+      this.sender.enqueue(P.time('w', s.whiteTimeCs, s.blackTimeCs), dest);
+      this.sender.enqueue(P.time('b', s.blackTimeCs, s.whiteTimeCs), dest);
     }
-    if (s.lastWpv) this.rawSendTo(s.lastWpv, dest);
-    if (s.lastBpv) this.rawSendTo(s.lastBpv, dest);
+    if (s.lastWpv) this.sender.enqueue(s.lastWpv, dest);
+    if (s.lastBpv) this.sender.enqueue(s.lastBpv, dest);
   }
 
   /** Drop clients that have gone silent past the timeout (e.g. a crashed viewer). */
