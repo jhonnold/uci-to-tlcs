@@ -35,7 +35,16 @@ changing reply/targeting logic, or touching the FEN/time/score/PV encoding in
 
 - **node-tlcv new-game contract** (reverse-engineered, drives the per-game emit order
   `result → WPLAYER → BPLAYER → startpos FEN → moves`; see `../node-tlcv/src/game-service.ts`):
-  (1) board reset fires only on a **startpos** FEN while loaded (`onFen`) — a non-startpos
-  new-game FEN won't reset it; (2) WPLAYER/BPLAYER set `resetMoves`, so **both players
-  must precede move 1** or the shown move is wiped (`buildGameDelta`); (3) `gameStartArmed`/
-  PGN finalize re-arm **only on `result:`** (`onResult`) — hence the synthesized `*`.
+   (1) board reset fires only on a **startpos** FEN while loaded (`onFen`) — a non-startpos
+   new-game FEN won't reset it; (2) WPLAYER/BPLAYER set `resetMoves`, so **both players
+   must precede move 1** or the shown move is wiped (`buildGameDelta`); (3) `gameStartArmed`/
+   PGN finalize re-arm **only on `result:`** (`onResult`) — hence the synthesized `*`.
+
+- **Mid-game join snapshot** (`sendSnapshot`, `tlcs/server.ts`): on `LOGON` the server
+  unicasts `SITE` → `WPLAYER` → `BPLAYER` → `FEN` → `FMR` (all reliable-channel, in that
+  order), then clocks and last PVs unwrapped. Verified against a real server (Graham's
+  live TLCS, port 16067, captured 2026-08 via node-tlcv): a mid-game joiner receives
+  exactly players + site + **current FEN only** (no move-history replay; the viewer's
+  move list starts at the join point and the saved PGN starts from the join FEN), plus
+  no-ops (`FEATURE`/`LEVEL`) and a RESULTTABLE dump. Our snapshot's extra FMR/clocks are
+  harmless; the missing move list is an accepted gap (see `gaps.md`).

@@ -3,6 +3,8 @@ import { isFormat, type Format } from './source/index.js';
 export interface Config {
   /** Path to the UCI transcript / engine log to tail. */
   logPath: string;
+  /** PGN game database (fastchess `-pgnout` file); the finished-games source. */
+  pgnPath: string;
   /** Log producer format: `auto` (sniff), `raw` (stripped transcript), `fastchess`. */
   format: Format;
   /** UDP broadcast port (the port node-tlcv connects to and binds locally). */
@@ -23,6 +25,7 @@ Usage:
 
 Options:
   --log <path>       UCI transcript / engine log to tail (required)
+  --pgn <path>       PGN game database, e.g. fastchess -pgnout file (required)
   --format <fmt>     Log producer: auto | raw | fastchess (default auto)
   --port <n>         UDP broadcast port (default 16066)
   --bind <addr>      Local bind address (default 0.0.0.0)
@@ -36,6 +39,7 @@ Options:
 export function parseConfig(argv: string[]): Config {
   const cfg: Config = {
     logPath: '',
+    pgnPath: '',
     format: 'auto',
     port: 16066,
     bindAddr: '0.0.0.0',
@@ -50,6 +54,9 @@ export function parseConfig(argv: string[]): Config {
     switch (arg) {
       case '--log':
         cfg.logPath = argv[++i];
+        break;
+      case '--pgn':
+        cfg.pgnPath = argv[++i];
         break;
       case '--format': {
         const fmt = argv[++i];
@@ -86,6 +93,7 @@ export function parseConfig(argv: string[]): Config {
   }
 
   if (!cfg.logPath) throw new Error(`Missing required --log <path>\n\n${USAGE}`);
+  if (!cfg.pgnPath) throw new Error(`Missing required --pgn <path>\n\n${USAGE}`);
   if (!Number.isInteger(cfg.port) || cfg.port <= 0 || cfg.port > 65535) {
     throw new Error(`Invalid --port: ${cfg.port}`);
   }

@@ -153,6 +153,7 @@ type Emit =
   | { k: 'site'; site: string }
   | { k: 'players'; white: string; black: string }
   | { k: 'init'; fen: string; fmr: number }
+  | { k: 'cur'; fen: string; fmr: number }
   | { k: 'move'; fen: string; color: ColorCode; n: number; san: string; fmr: number }
   | { k: 'clocks'; w: number; b: number }
   | { k: 'pv'; color: ColorCode; depth: number; score: number; time: number; nodes: number; pv: string[] }
@@ -168,6 +169,9 @@ class RecordingSink implements BroadcastSink {
   }
   emitInitialPosition(fen: string, fmr: number) {
     this.emits.push({ k: 'init', fen, fmr });
+  }
+  emitCurrentPosition(fen: string, fmr: number) {
+    this.emits.push({ k: 'cur', fen, fmr });
   }
   emitMove(a: { fenTruncated: string; color: ColorCode; fullMoveNumber: number; san: string; fmr: number }) {
     this.emits.push({ k: 'move', fen: a.fenTruncated, color: a.color, n: a.fullMoveNumber, san: a.san, fmr: a.fmr });

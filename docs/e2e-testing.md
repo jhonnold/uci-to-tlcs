@@ -30,7 +30,7 @@ relies on our source-port reply, so no same-host `EADDRINUSE`):
 
 ```bash
 # bridge — up first so node-tlcv's LOGON lands (see LOGON-race)
-LOG_LEVEL=debug npm start -- --log /tmp/fc.log --format fastchess \
+LOG_LEVEL=debug npm start -- --log /tmp/fc.log --pgn /tmp/ct.pgn --format fastchess \
   --bind 127.0.0.1 --port 16000 > /tmp/uci-to-tlcs.log 2>&1 &
 
 # kibitzer
@@ -38,9 +38,11 @@ LOG_LEVEL=debug npm start -- --log /tmp/fc.log --format fastchess \
 
 # producer — engine names may contain spaces / versions / commit hashes; quote any
 # name with a space. -concurrency 1 (games don't interleave), real tc= (ticking clocks).
+# -pgnout feeds the bridge's PGN game database (one PGN appended per finished game).
 fastchess -engine name="Berserk A" cmd=berserk -engine name="Berserk B" cmd=berserk \
   -engine name="Berserk C" cmd=berserk -engine name="Berserk D" cmd=berserk \
   -each tc=10+0.1 option.Hash=32 option.Threads=1 -rounds 3 -games 1 -concurrency 1 \
+  -pgnout file=/tmp/ct.pgn append=true \
   -log file=/tmp/fc.log engine=true realtime=true > /tmp/fastchess.log 2>&1
 ```
 
@@ -72,7 +74,7 @@ Artifacts: `/tmp/node-tlcv-pgns/uci-to-tlcs/*.pgn` (ground truth), `/tmp/uci-to-
 
 ## 6. Tear down
 
-Kill the background jobs; `rm /tmp/{fc,uci-to-tlcs,node-tlcv,fastchess}.log`.
+Kill the background jobs; `rm /tmp/{fc,uci-to-tlcs,node-tlcv,fastchess}.log /tmp/ct.pgn`.
 
 ## Variants
 
@@ -87,3 +89,18 @@ Kill the background jobs; `rm /tmp/{fc,uci-to-tlcs,node-tlcv,fastchess}.log`.
 - **LOGON-race**: node-tlcv sends `LOGONv15` once at boot and never retries. Bring the
   bridge up **before** node-tlcv, or it sits connected-but-unregistered (PINGs PONGed,
   0 moves).
+- **Bridge starts mid-game (resync + parity binding)** — verifies `--from-end` against a
+  log whose current game is already underway (the restart/attach case):
+  1. Start fastchess as in §3 (with `-pgnout`); let game 2 get a few moves in.
+  2. Start the bridge against the *live* log: `LOG_LEVEL=debug npm start -- --log
+     /tmp/fc.log --pgn /tmp/ct.pgn --format fastchess --from-end --bind 127.0.0.1
+     --port 16000` (`--from-end` skips the replayed history).
+  3. Bring up a client (mock or node-tlcv) **after** the bridge.
+  4. Check: the client gets real engine names in `WPLAYER`/`BPLAYER` (parity-bound from
+     the resync `position`, corrected once the second engine's `go` lands), and the
+     snapshot `FEN` equals the position the log has actually reached — recompute it by
+     applying the log's `bestmove`s so far (chess.js, first three FEN fields) and diff.
+     The viewer's move list starts at the join point (no history replay — expected).
+- **Client joins mid-game (bridge already running)** — the regression path for the
+  snapshot: bridge up from §3, then LOGON a second client (mock or a second node-tlcv
+  config) during game 2; same assertions as above.

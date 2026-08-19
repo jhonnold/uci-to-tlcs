@@ -57,16 +57,24 @@ node-tlcv uses `RESULTTABLE` to rebuild the **crosstable + game archive + `curre
 - **What a proper table is** (from `result-parser.ts`): a standings block (`RANK … GAMES POINTS`
   header + one H2H column per player; cells `1`/`=`/`0`, `*` self, `.` unplayed), a `game no.`
   section (`<n> <white> <black> <1-0|0-1|1/2-1/2|*>`), and a `total games = N` footer.
+  **Ground truth captured 2026-08** from a real server (Graham's live TLCS, port 16067,
+  node-tlcv log kept at `/tmp/node-tlcv-graham.log`): the dump is `CTRESET` → progress lines
+  (`Gathering Information...`/`Sorting...`/`Building crosstable...`) → `CTRESET` → standings
+  header + H2H matrix → `Total games = N` → `Most recent games played...` → game list
+  **newest-first**, ~250 lines (it does not dump the full archive).
 - **It is fully derivable from `(game#, white, black, result)` tuples** — no move bodies. So a
   PGN's *headers* (White/Black/Result + sequence number) are enough; the PGN body is irrelevant
   to the table.
-- **What we lack to produce it:**
-  1. a **global game counter** — none exists (only in-game move history in `GameState`);
-  2. a **finished-games accumulator** — `Pipeline` emits `result` then `beginNewGame()` discards
-     it; the server keeps only the single live-game snapshot;
-  3. a **crosstable renderer** matching the format above;
-  4. **reliable transport** for a multi-line dump — `sendResultTable` uses the unreliable channel
-     (`server.ts:218`), so a large table would drop lines.
+- **What we have vs. lack to produce it:**
+  1. ~~a global game counter~~ — games are numbered from the `--pgn` file (`pgn.ts`,
+     `PipelineMeta.gameNumber`, `Pipeline.currentGameNumber`);
+  2. ~~a finished-games accumulator~~ — `closeCurrentGame` records each closed game
+     (`Pipeline.finishedGames()`); the PGN file is loaded at startup and re-read at every game
+     boundary (`main.ts`), `mergeGames` resolves them;
+  3. still missing: a **crosstable renderer** matching the format above (the renderer is the
+     remaining work, plus the live game's in-progress entry);
+  4. still missing: **reliable transport** for a multi-line dump — `sendResultTable` uses the
+     unreliable channel (`server.ts`), so a large table would drop lines.
 - **Identity is name-keyed**: the H2H matrix keys rows on player *name*. fastchess identity is the
   configured engine name, and identical binaries share a name — two same-named engines collapse
   into one row.
@@ -98,7 +106,13 @@ node-tlcv uses `RESULTTABLE` to rebuild the **crosstable + game archive + `curre
   `wtime`/`btime`, plus the snapshot. No tick between moves (fine for replay); a producer omitting
   clock state leaves a side's clock stale; the increment is read but never modeled.
 - **G. No persistence in the bridge (operational).** Restart re-tails from 0 (default) = full
-  replay; with `--from-end` a restart loses prior history and serves an empty RESULTTABLE.
+  replay; with `--from-end` a restart loses prior move history. The mid-game resync now
+  restores the board + names (and the `--pgn` file carries finished games), but the shown
+  move list still starts at the join point and the RESULTTABLE is a stub.
+- **K. Mid-game snapshot has no move list (fidelity, accepted).** The real server replays the
+  **last move** (FEN-before → BMOVE/WMOVE → FEN-after) so a joiner's move list carries one
+  prior move; we send only the current FEN (see `tlcs-wire.md`). node-tlcv handles both —
+  the board is correct either way, and the saved PGN starts from the join point in both cases.
 - **H. Desktop TLCV is assumed, not validated (coverage).** All invariants are reverse-engineered
   from node-tlcv + the mock client. Desktop TLCV may want `MENU`, a different LOGON-success string,
   or a full 6-field FEN.

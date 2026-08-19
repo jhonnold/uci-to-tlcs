@@ -31,9 +31,39 @@ or touching game boundaries / player-name binding in `pipeline.ts` and
   needs a tagged producer**: White = the engine that gets `position startpos`+the first
   `go`; Black = the other `ucinewgame` participant. **Don't assume both `ucinewgame`s
   precede the first `go`** — fastchess batches them, but myracle inits engines one at a
-  time, so the 2nd engine's `ucinewgame` can land *after* White's `go` (even after its
-  first `info`). So `maybeBindBlack()` binds Black + emits the header when *both* are
-  known (called from both `onUciNewGame` and `onGo`, whichever is last), not eagerly at
-  `go`; `collectingParticipants` stays open until then so the late `ucinewgame` doesn't
-  trigger a spurious new game. `onBestMove` is the header backstop. Untagged input keeps
-  positional/CLI names (`id name` fills defaults for game 1 only).
+   time, so the 2nd engine's `ucinewgame` can land *after* White's `go` (even after its
+   first `info`). So `maybeBindPlayers()` completes the bind + emits the header when one
+   side is known and exactly one other participant exists (called from `onUciNewGame`,
+   `onGo`, and the resync path below — whichever lands last), not eagerly at `go`;
+   `collectingParticipants` stays open until then so a late participant doesn't trigger
+   a spurious new game. `onBestMove` is the header backstop. Untagged input keeps
+   positional/CLI names (`id name` fills defaults for game 1 only).
+
+- **Mid-game resync (bridge starts partway into a game).** When the first `position`
+  seen for a game already carries moves (`--from-end`, restart), `onMidGameResync`
+  fires: the current position is published via `emitCurrentPosition` (FEN+FMR, so a
+  client LOGONing during the binding gap already has the board) and — on tagged input
+  with a `startpos`-based position — the side-to-move's colour is pre-bound **by move
+  count parity** (the `position` is addressed to the engine about to move; even count =
+  White). `awaitingFirstGo` is suppressed so the first `go` can't mis-bind. The other
+  colour binds when the second engine's first tagged `go` registers it as a participant.
+  If the first `bestmove` beats that (the usual order), the backstop emits the header
+  with the parity-bound side + CLI fallback for the other; when the bind completes, the
+   real names are re-sent via `setPlayers` (node-tlcv re-arms its move list on the late
+   WPLAYER/BPLAYER, restarting the shown game at the join point). A `fen`-based resync
+   position has no absolute parity → names stay at the defaults. **Orphan `bestmove`:**
+   `--from-end` can start *between* a `position` and its `bestmove` — the first line is
+   then a `bestmove` whose `position` was already written. `onBestMove` skips any
+   `bestmove` seen before the game's first `position` (`positionSeen`): letting it start
+   the game at startpos would make the first real `position` take the forward-extension
+   path (empty list is a prefix of everything) and replay the whole game instead of
+   resyncing.
+
+- **Finished games are recorded for the PGN merge.** `closeCurrentGame` (at every game
+  boundary, before the old colour binding is cleared) records `{white, black, result}`
+  — real result if the board produced one, else the synthesized `*` — and
+  `finishedGames()` numbers them from `meta.gameNumber` (the PGN file's finished count +
+  1, set by `main.ts`); `currentGameNumber` is `gameNumber + finished.length`. The file
+  is the database of record: `mergeGames` (in `pgn.ts`) lets file entries win number
+  collisions. `meta.onGameStart` fires per game so `main.ts` re-reads the live-appended
+  PGN at every boundary.

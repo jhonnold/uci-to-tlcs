@@ -13,6 +13,7 @@ type Emit =
   | { k: 'site'; site: string }
   | { k: 'players'; white: string; black: string }
   | { k: 'init'; fen: string; fmr: number }
+  | { k: 'cur'; fen: string; fmr: number }
   | { k: 'move'; fen: string; color: ColorCode; n: number; san: string; fmr: number }
   | { k: 'clocks'; w: number; b: number }
   | { k: 'pv'; color: ColorCode; depth: number; score: number; time: number; nodes: number; pv: string[] }
@@ -28,6 +29,9 @@ class RecordingSink implements BroadcastSink {
   }
   emitInitialPosition(fen: string, fmr: number) {
     this.emits.push({ k: 'init', fen, fmr });
+  }
+  emitCurrentPosition(fen: string, fmr: number) {
+    this.emits.push({ k: 'cur', fen, fmr });
   }
   emitMove(a: { fenTruncated: string; color: ColorCode; fullMoveNumber: number; san: string; fmr: number }) {
     this.emits.push({ k: 'move', fen: a.fenTruncated, color: a.color, n: a.fullMoveNumber, san: a.san, fmr: a.fmr });
@@ -143,6 +147,189 @@ test('fastchess multi-token names: full names survive and moves are emitted', ()
 });
 
 // ----------------------------------------------- adjudicated end (no board result)
+
+// ------------------------------------------------- mid-game resync (bridge --from-end)
+
+const FEN_AFTER_E4 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq';
+const FEN_AFTER_E4_E5 = 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq';
+
+test('resync (odd move count): black parity-bound, position published before names arrive', () => {
+  const sink = new RecordingSink();
+  const pipeline = new Pipeline(sink, { white: 'White', black: 'Black', site: 'TestSite' });
+
+  const lines: NormalizedLine[] = [
+    // Bridge starts mid-game: 1 ply played, Black to move -> EngB is Black.
+    { uci: 'position startpos moves e2e4', engineId: 'EngB', direction: 'in' },
+    { uci: 'go wtime 1000 btime 1000', engineId: 'EngB', direction: 'in' },
+    { uci: 'bestmove e7e5', engineId: 'EngB', direction: 'out' },
+    { uci: 'position startpos moves e2e4 e7e5', engineId: 'EngA', direction: 'in' },
+    { uci: 'go wtime 1000 btime 1000', engineId: 'EngA', direction: 'in' },
+    { uci: 'bestmove g1f3', engineId: 'EngA', direction: 'out' },
+  ];
+  for (const n of lines) pipeline.handleLine(n);
+
+  const e = sink.emits;
+
+  // The current position is the very first thing published (before any names),
+  // so a client LOGONing during the binding gap already has the board.
+  assert.equal(e[0].k, 'cur');
+  assert.deepEqual({ fen: (e[0] as Extract<Emit, { k: 'cur' }>).fen, fmr: (e[0] as Extract<Emit, { k: 'cur' }>).fmr }, { fen: FEN_AFTER_E4, fmr: 0 });
+
+  const players = e.filter((x) => x.k === 'players') as Extract<Emit, { k: 'players' }>[];
+  assert.equal(players.length, 2);
+  // Backstop header (first bestmove) carries the parity-bound black + fallback white,
+  // and still precedes the first move (resetMoves invariant).
+  assert.deepEqual(players[0], { k: 'players', white: 'White', black: 'EngB' });
+  const firstPlayers = idx(e, 'players')[0];
+  const firstMove = idx(e, 'move')[0];
+  assert.ok(firstPlayers < firstMove, 'backstop players precede first move');
+  // Once White's identity lands (its first `go`), the real names are re-sent.
+  assert.deepEqual(players[1], { k: 'players', white: 'EngA', black: 'EngB' });
+  assert.ok(idx(e, 'players')[1] > firstMove, 'corrected players arrive after the join-point move');
+
+  // Moves continue from the join point.
+  const moves = e.filter((x) => x.k === 'move') as Extract<Emit, { k: 'move' }>[];
+  assert.deepEqual(
+    moves.map((m) => ({ n: m.n, san: m.san, color: m.color })),
+    [
+      { n: 1, san: 'e5', color: 'b' },
+      { n: 2, san: 'Nf3', color: 'w' },
+    ],
+  );
+});
+
+test('resync (even move count): white parity-bound, then black binds at its first go', () => {
+  const sink = new RecordingSink();
+  const pipeline = new Pipeline(sink, { white: 'White', black: 'Black', site: 'TestSite' });
+
+  const lines: NormalizedLine[] = [
+    // 2 plies played, White to move -> EngA is White.
+    { uci: 'position startpos moves e2e4 e7e5', engineId: 'EngA', direction: 'in' },
+    { uci: 'go wtime 1000 btime 1000', engineId: 'EngA', direction: 'in' },
+    { uci: 'bestmove g1f3', engineId: 'EngA', direction: 'out' },
+    { uci: 'position startpos moves e2e4 e7e5 g1f3', engineId: 'EngB', direction: 'in' },
+    { uci: 'go wtime 1000 btime 1000', engineId: 'EngB', direction: 'in' },
+    { uci: 'bestmove b8c6', engineId: 'EngB', direction: 'out' },
+  ];
+  for (const n of lines) pipeline.handleLine(n);
+
+  const e = sink.emits;
+  assert.equal(e[0].k, 'cur');
+  assert.equal((e[0] as Extract<Emit, { k: 'cur' }>).fen, FEN_AFTER_E4_E5);
+
+  const players = e.filter((x) => x.k === 'players') as Extract<Emit, { k: 'players' }>[];
+  assert.equal(players.length, 2);
+  assert.deepEqual(players[0], { k: 'players', white: 'EngA', black: 'Black' });
+  assert.deepEqual(players[1], { k: 'players', white: 'EngA', black: 'EngB' });
+  assert.ok(idx(e, 'players')[1] > idx(e, 'move')[0], 'corrected players arrive after the join-point move');
+});
+
+test('resync (untagged): header with CLI names at the first position', () => {
+  const sink = new RecordingSink();
+  const pipeline = new Pipeline(sink, { white: 'White', black: 'Black', site: 'TestSite' });
+
+  pipeline.handleLine({ uci: 'position startpos moves e2e4 e7e5' });
+  pipeline.handleLine({ uci: 'bestmove g1f3' });
+
+  const e = sink.emits;
+  assert.equal(e.filter((x) => x.k === 'cur').length, 0, 'untagged resync uses the header path, not a bare position');
+  assert.equal(e[0].k, 'site');
+  const players = e.filter((x) => x.k === 'players') as Extract<Emit, { k: 'players' }>[];
+  assert.deepEqual(players, [{ k: 'players', white: 'White', black: 'Black' }]);
+  const init = e.find((x) => x.k === 'init') as Extract<Emit, { k: 'init' }>;
+  assert.equal(init.fen, FEN_AFTER_E4_E5);
+  const moves = e.filter((x) => x.k === 'move') as Extract<Emit, { k: 'move' }>[];
+  assert.deepEqual(moves.map((m) => m.san), ['Nf3']);
+});
+
+test('resync after orphan bestmove (bridge starts between position and bestmove): no replay from move 1', () => {
+  const sink = new RecordingSink();
+  const pipeline = new Pipeline(sink, { white: 'White', black: 'Black', site: 'TestSite' });
+
+  const lines: NormalizedLine[] = [
+    // The bridge's first line is a `bestmove` whose `position` was already written —
+    // and one that is even legal from startpos, the nastiest case.
+    { uci: 'bestmove e2e4', engineId: 'EngA', direction: 'out' },
+    // First real position: 2 plies, White to move -> EngA is White.
+    { uci: 'position startpos moves e2e4 e7e5', engineId: 'EngA', direction: 'in' },
+    { uci: 'go wtime 1000 btime 1000', engineId: 'EngA', direction: 'in' },
+    { uci: 'bestmove g1f3', engineId: 'EngA', direction: 'out' },
+    { uci: 'position startpos moves e2e4 e7e5 g1f3', engineId: 'EngB', direction: 'in' },
+    { uci: 'go wtime 1000 btime 1000', engineId: 'EngB', direction: 'in' },
+    { uci: 'bestmove b8c6', engineId: 'EngB', direction: 'out' },
+  ];
+  for (const n of lines) pipeline.handleLine(n);
+
+  const e = sink.emits;
+
+  // The resync position is the very first emit: the orphan bestmove started nothing.
+  assert.equal(e[0].k, 'cur');
+  assert.equal((e[0] as Extract<Emit, { k: 'cur' }>).fen, FEN_AFTER_E4_E5);
+  const init = e.find((x) => x.k === 'init') as Extract<Emit, { k: 'init' }>;
+  assert.equal(init.fen, FEN_AFTER_E4_E5, 'header FEN is the join position, not startpos');
+
+  // Names: backstop (parity white + fallback black) then the corrected real pair.
+  const players = e.filter((x) => x.k === 'players') as Extract<Emit, { k: 'players' }>[];
+  assert.deepEqual(players, [
+    { k: 'players', white: 'EngA', black: 'Black' },
+    { k: 'players', white: 'EngA', black: 'EngB' },
+  ]);
+
+  // Moves continue from the join point — no e4/e5 replay.
+  const moves = e.filter((x) => x.k === 'move') as Extract<Emit, { k: 'move' }>[];
+  assert.deepEqual(moves.map((m) => ({ n: m.n, san: m.san, color: m.color })), [
+    { n: 2, san: 'Nf3', color: 'w' },
+    { n: 2, san: 'Nc6', color: 'b' },
+  ]);
+});
+
+// ------------------------------------------------------ finished-games record
+
+test('finished games are recorded with PGN numbers from meta.gameNumber', () => {
+  const sink = new RecordingSink();
+  const starts: number[] = [];
+  const pipeline = new Pipeline(sink, {
+    white: 'White',
+    black: 'Black',
+    site: 'TestSite',
+    gameNumber: 41,
+    onGameStart: (n) => starts.push(n),
+  });
+
+  // Game 1 (EngA white): fool's mate.
+  const g1: NormalizedLine[] = [
+    { uci: 'ucinewgame', engineId: 'EngA', direction: 'in' },
+    { uci: 'ucinewgame', engineId: 'EngB', direction: 'in' },
+    { uci: 'position startpos', engineId: 'EngA', direction: 'in' },
+    { uci: 'go wtime 1000 btime 1000', engineId: 'EngA', direction: 'in' },
+    { uci: 'bestmove f2f3', engineId: 'EngA', direction: 'out' },
+    { uci: 'position startpos moves f2f3', engineId: 'EngB', direction: 'in' },
+    { uci: 'go wtime 1000 btime 1000', engineId: 'EngB', direction: 'in' },
+    { uci: 'bestmove e7e5', engineId: 'EngB', direction: 'out' },
+    { uci: 'position startpos moves f2f3 e7e5', engineId: 'EngA', direction: 'in' },
+    { uci: 'go wtime 1000 btime 1000', engineId: 'EngA', direction: 'in' },
+    { uci: 'bestmove g2g4', engineId: 'EngA', direction: 'out' },
+    { uci: 'position startpos moves f2f3 e7e5 g2g4', engineId: 'EngB', direction: 'in' },
+    { uci: 'go wtime 1000 btime 1000', engineId: 'EngB', direction: 'in' },
+    { uci: 'bestmove d8h4', engineId: 'EngB', direction: 'out' },
+  ];
+  for (const n of g1) pipeline.handleLine(n);
+
+  assert.equal(pipeline.currentGameNumber, 41);
+  assert.equal(pipeline.finishedGames().length, 0, 'game still open before its boundary');
+
+  // Game 2 opens: game 1 closes (checkmated) and is recorded as PGN game 41.
+  pipeline.handleLine({ uci: 'ucinewgame', engineId: 'EngB', direction: 'in' });
+  pipeline.handleLine({ uci: 'ucinewgame', engineId: 'EngA', direction: 'in' });
+  pipeline.handleLine({ uci: 'position startpos', engineId: 'EngB', direction: 'in' });
+  pipeline.handleLine({ uci: 'go wtime 1000 btime 1000', engineId: 'EngB', direction: 'in' });
+
+  assert.deepEqual(pipeline.finishedGames(), [
+    { number: 41, white: 'EngA', black: 'EngB', result: '0-1' },
+  ]);
+  assert.equal(pipeline.currentGameNumber, 42);
+  assert.deepEqual(starts, [41, 42]);
+});
 
 test('adjudicated game synthesizes result:* before the next game starts', () => {
   const sink = new RecordingSink();

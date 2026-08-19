@@ -115,6 +115,11 @@ export class TlcsServer {
     this.sender.enqueue(P.fmr(fmr));
   }
 
+  /** Board already mid-game (bridge started partway in): same wire effect as emitInitialPosition. */
+  emitCurrentPosition(fenTruncated: string, fmr: number): void {
+    this.emitInitialPosition(fenTruncated, fmr);
+  }
+
   /** A played move, in TLCS order: FEN (post-move), then MOVE, then FMR. */
   emitMove(args: {
     fenTruncated: string;

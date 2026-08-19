@@ -63,9 +63,12 @@ npm run build           # or run straight from source with tsx:
 npm start -- --log path/to/game.uci --port 16066 --white "Engine A" --black "Engine B" --site "My Match"
 ```
 
-Options: `--log <path>` (required), `--format auto|raw|fastchess|myracle` (auto),
+Options: `--log <path>` (required), `--pgn <path>` (required — the PGN game database,
+e.g. fastchess's `-pgnout file`; finished games are numbered from it),
+`--format auto|raw|fastchess|myracle` (auto),
 `--port` (16066), `--bind` (0.0.0.0), `--white`/`--black`/`--site`, `--from-end` (skip
-existing content). `LOG_LEVEL=debug` logs every UDP message.
+existing content). `LOG_LEVEL=debug` logs every UDP message. The PGN file may not exist
+yet (fastchess creates it at the first finished game) — a warning is enough.
 
 With `--format fastchess` (or `myracle`) you point `--log` at the engine/tournament log
 itself; with `--format raw` you point it at a pre-stripped transcript. `--white`/`--black`
@@ -87,7 +90,7 @@ the client's source port, the client can bind an ephemeral port on the same host
 loopback alias needed):
 
 ```bash
-npm start -- --log fixtures/sample-game.uci --port 16066 --bind 127.0.0.1 &
+npm start -- --log fixtures/sample-game.uci --pgn /tmp/ct.pgn --port 16066 --bind 127.0.0.1 &
 npm run mock-client -- --server 127.0.0.1 --port 16066 --ephemeral
 # append lines to the log and watch them decode live
 ```
@@ -108,11 +111,12 @@ once and never retries), start node-tlcv, then feed it a real game from fastches
 
 ```bash
 # 1) bridge — tails the fastchess log directly (no sed), broadcasts on 16066
-npm start -- --log /tmp/fc.log --format fastchess --port 16066 --bind 127.0.0.1 &
+npm start -- --log /tmp/fc.log --pgn /tmp/ct.pgn --format fastchess --port 16066 --bind 127.0.0.1 &
 # 2) node-tlcv (in ../node-tlcv): npm run dev-server   → http://127.0.0.1:8080/16066
-# 3) real games — multiple games / matchups in one log are fine
+# 3) real games — multiple games / matchups in one log are fine; -pgnout feeds the bridge's PGN
 fastchess -engine cmd=<engineA> -engine cmd=<engineB> -each tc=10+0.1 \
   -rounds 4 -games 2 -repeat -concurrency 1 \
+  -pgnout file=/tmp/ct.pgn append=true \
   -log file=/tmp/fc.log engine=true realtime=true
 ```
 
@@ -131,5 +135,8 @@ the board; assumes `-concurrency 1` so the log isn't interleaved). Player-name b
 needs a tagged producer (`--format fastchess`); the raw path keeps CLI names. Results
 are board-derived (mate/stalemate/draw); an adjudicated/unknown end emits `result: *`.
 A new game that starts from a *non-startpos* position won't visually reset node-tlcv's
-board. Mid-game joiners get the current position (not full move history); minimal
-RESULTTABLE. See the comments in `src/` and the plan for the rationale behind each.
+board. Clients joining mid-game — including a bridge that started mid-game
+(`--from-end`) — get site, player names, and the current position (not full move
+history; the join point becomes the start of the shown game). Finished games are
+numbered from the `--pgn` file (see `src/pgn.ts`); the RESULTTABLE reply is still a
+minimal stub. See the comments in `src/` and `docs/` for the rationale behind each.
