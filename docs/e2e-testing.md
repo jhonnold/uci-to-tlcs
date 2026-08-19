@@ -66,8 +66,9 @@ Artifacts: `/tmp/node-tlcv-pgns/uci-to-tlcs/*.pgn` (ground truth), `/tmp/uci-to-
 - **Clocks** — `WTIME`/`BTIME` present and decreasing.
 - **Registration** — exactly one client in `/tmp/uci-to-tlcs.log` (`LOGONv15`); 0 =
   LOGON-race, >1 = node-tlcv restarted.
-- **Retries** — `reliable send … unacked, retrying` count: 0 = clean, many = a slow
-  consumer (gaps.md J).
+- **Drops** — `grep -c 'unacked after 4 tries' /tmp/uci-to-tlcs.log`: 0 = clean, many = a
+  slow consumer (gaps.md J). A handful over a fast RR is expected — node-tlcv self-corrects
+  on the next `FEN`, so check names/results still land, not just the count.
 - **Errors** — `grep -iE 'error|warn|uncaught|unhandled' /tmp/uci-to-tlcs.log /tmp/node-tlcv.log /tmp/fastchess.log`.
 
 ## 6. Tear down
@@ -87,3 +88,18 @@ Kill the background jobs; `rm /tmp/{fc,uci-to-tlcs,node-tlcv,fastchess}.log`.
 - **LOGON-race**: node-tlcv sends `LOGONv15` once at boot and never retries. Bring the
   bridge up **before** node-tlcv, or it sits connected-but-unregistered (PINGs PONGed,
   0 moves).
+- **Bridge starts mid-game (resync + parity binding)** — verifies `--from-end` against a
+  log whose current game is already underway (the restart/attach case):
+   1. Start fastchess as in §3; let the current game get a few moves in.
+   2. Start the bridge against the *live* log: `LOG_LEVEL=debug npm start -- --log
+      /tmp/fc.log --format fastchess --from-end --bind 127.0.0.1
+      --port 16000` (`--from-end` skips the replayed history).
+  3. Bring up a client (mock or node-tlcv) **after** the bridge.
+  4. Check: the client gets real engine names in `WPLAYER`/`BPLAYER` (parity-bound from
+     the resync `position`, corrected once the second engine's `go` lands), and the
+     snapshot `FEN` equals the position the log has actually reached — recompute it by
+     applying the log's `bestmove`s so far (chess.js, first three FEN fields) and diff.
+     The viewer's move list starts at the join point (no history replay — expected).
+- **Client joins mid-game (bridge already running)** — the regression path for the
+  snapshot: bridge up from §3, then LOGON a second client (mock or a second node-tlcv
+  config) during game 2; same assertions as above.

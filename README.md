@@ -131,5 +131,8 @@ the board; assumes `-concurrency 1` so the log isn't interleaved). Player-name b
 needs a tagged producer (`--format fastchess`); the raw path keeps CLI names. Results
 are board-derived (mate/stalemate/draw); an adjudicated/unknown end emits `result: *`.
 A new game that starts from a *non-startpos* position won't visually reset node-tlcv's
-board. Mid-game joiners get the current position (not full move history); minimal
-RESULTTABLE. See the comments in `src/` and the plan for the rationale behind each.
+board. Clients joining mid-game — including a bridge that started mid-game
+(`--from-end`) — get site, player names, and the current position (not full move
+history; the join point becomes the start of the shown game). The RESULTTABLE reply is
+still a minimal stub. See the comments in `src/` and `docs/` for the rationale behind
+each.

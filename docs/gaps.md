@@ -98,7 +98,13 @@ node-tlcv uses `RESULTTABLE` to rebuild the **crosstable + game archive + `curre
   `wtime`/`btime`, plus the snapshot. No tick between moves (fine for replay); a producer omitting
   clock state leaves a side's clock stale; the increment is read but never modeled.
 - **G. No persistence in the bridge (operational).** Restart re-tails from 0 (default) = full
-  replay; with `--from-end` a restart loses prior history and serves an empty RESULTTABLE.
+  replay; with `--from-end` a restart loses prior move history. The mid-game resync now
+  restores the board + names, but the shown move list still starts at the join point and the
+  RESULTTABLE is a stub.
+- **K. Mid-game snapshot has no move list (fidelity, accepted).** The real server replays the
+  **last move** (FEN-before → BMOVE/WMOVE → FEN-after) so a joiner's move list carries one
+  prior move; we send only the current FEN (see `tlcs-wire.md`). node-tlcv handles both —
+  the board is correct either way, and the saved PGN starts from the join point in both cases.
 - **H. Desktop TLCV is assumed, not validated (coverage).** All invariants are reverse-engineered
   from node-tlcv + the mock client. Desktop TLCV may want `MENU`, a different LOGON-success string,
   or a full 6-field FEN.

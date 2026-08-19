@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { createSocket, type Socket } from 'node:dgram';
 
 import { TlcsServer, type ServerOptions } from '../src/tlcs/server.js';
+import { Pipeline } from '../src/pipeline.js';
+import type { NormalizedLine } from '../src/source/log-source.js';
 
 const HOST = '127.0.0.1';
 
@@ -148,6 +150,48 @@ test('server: reaps a silent client after the idle timeout', async () => {
   } finally {
     alice.close();
     bob.close();
+    server.close();
+  }
+});
+
+test('server: a client joining mid-game gets site, players, and the current FEN in order', async () => {
+  const { server, port } = await startServer();
+  const client = await TestClient.create(port, 'late');
+  try {
+    // The bridge started mid-game: a resync position (1 ply played, Black to move),
+    // then both engines' identities arrive — the same order the pipeline would see.
+    const pipeline = new Pipeline(server, { white: 'White', black: 'Black', site: 'TestSite' });
+    const lines: NormalizedLine[] = [
+      { uci: 'position startpos moves e2e4', engineId: 'EngB', direction: 'in' },
+      { uci: 'go wtime 1000 btime 1000', engineId: 'EngB', direction: 'in' },
+      { uci: 'bestmove e7e5', engineId: 'EngB', direction: 'out' },
+      { uci: 'go wtime 1000 btime 1000', engineId: 'EngA', direction: 'in' },
+    ];
+    for (const n of lines) pipeline.handleLine(n);
+
+    client.logon();
+    const sawFen = () => client.received.some((m) => m.startsWith('FEN:'));
+    await waitFor(() => client.received.includes('LOGON SUCCESSFUL') && sawFen());
+
+    const order = (prefix: string) => client.received.findIndex((m) => m.startsWith(prefix));
+    const logon = client.received.indexOf('LOGON SUCCESSFUL');
+    const site = order('SITE:');
+    const wp = order('WPLAYER:');
+    const bp = order('BPLAYER:');
+    const fen = order('FEN:');
+    const fmr = order('FMR:');
+    for (const [name, i] of Object.entries({ logon, site, wp, bp, fen, fmr })) {
+      assert.ok(i >= 0, `${name} present in snapshot`);
+    }
+    assert.ok(logon < site && site < wp && wp < bp && bp < fen && fen < fmr, 'snapshot order: LOGON, SITE, WPLAYER, BPLAYER, FEN, FMR');
+    assert.equal(client.received[wp], 'WPLAYER: EngA');
+    assert.equal(client.received[bp], 'BPLAYER: EngB');
+    assert.equal(
+      client.received[fen],
+      'FEN: rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq',
+    );
+  } finally {
+    client.close();
     server.close();
   }
 });
