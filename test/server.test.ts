@@ -163,7 +163,9 @@ test('server: mid-game LOGON replays site, players, latest position, clocks and 
     await waitFor(() => early.received.filter((m) => m === 'FMR: 0').length === 2);
 
     late.logon();
-    await waitFor(() => late.received.includes(fen2));
+    // Wait for the WHOLE snapshot (WPV is its last reliable message) before
+    // asserting order, so a slow ACK round-trip can't make a later idx() -1.
+    await waitFor(() => late.received.includes('WPV: 5 12 100 100 Nf3'));
 
     // Snapshot content: the LATEST position (not move 1), current players/site.
     const idx = (m: string) => late.received.indexOf(m);
