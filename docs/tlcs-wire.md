@@ -38,9 +38,12 @@ changing reply/targeting logic, or touching the FEN/time/score/PV encoding in
   the reliable channel in that order, so a late client lands on the current board/players/site
   without waiting for the next move (node-tlcv's first-FEN `resetFromFen` path). Board-only: no
   move history is replayed (matches existing TLCS servers). Re-LOGON replays it too. The
-  snapshot's clocks/PV on the reliable channel is the one exception to the unwrapped rule
+  snapshot's clocks/PV on the reliable channel is the exception to the unwrapped rule
   above; a slow-ACKing joiner can briefly stall the global stop-and-wait queue for existing
-  clients (worst case ~3s per unacked msg).
+  clients (worst case ~3s per unacked msg). A new joiner is added to the broadcast
+  registry only after the snapshot's LAST message is delivered (`ReliableSender`
+  `onComplete`), so live unwrapped clock/PV sends and moves enqueued before the LOGON
+  can't overtake it; with an empty snapshot it registers immediately.
 
 - **node-tlcv new-game contract** (reverse-engineered, drives the per-game emit order
   `result → WPLAYER → BPLAYER → startpos FEN → moves`; see `../node-tlcv/src/game-service.ts`):

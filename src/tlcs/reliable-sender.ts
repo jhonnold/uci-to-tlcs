@@ -7,6 +7,8 @@ interface QueueItem {
   msg: string;
   /** Single client dest (`ip:port`) to deliver to, or null to broadcast to all. */
   target: string | null;
+  /** Fires once this item is delivered (all targets ACKed) or gives up after maxTries. */
+  onComplete?: () => void;
 }
 
 interface InFlight {
@@ -15,6 +17,7 @@ interface InFlight {
   targets: string[];
   acked: Set<string>;
   tries: number;
+  onComplete?: () => void;
 }
 
 export interface ReliableOptions {
@@ -50,8 +53,8 @@ export class ReliableSender {
   }
 
   /** Queue a reliable message. `target` null = broadcast to all current clients. */
-  enqueue(msg: string, target: string | null = null): void {
-    this.queue.push({ msg, target });
+  enqueue(msg: string, target: string | null = null, onComplete?: () => void): void {
+    this.queue.push({ msg, target, onComplete });
     this.pump();
   }
 
@@ -79,11 +82,12 @@ export class ReliableSender {
     if (targets.length === 0) {
       // No one to deliver to — the id is consumed (kept monotonic) and we move on.
       logger.debug(`Reliable msg <${this.id}> dropped (no clients): ${item.msg}`);
+      item.onComplete?.();
       this.pump();
       return;
     }
 
-    this.inFlight = { id: this.id, msg: item.msg, targets, acked: new Set(), tries: 1 };
+    this.inFlight = { id: this.id, msg: item.msg, targets, acked: new Set(), tries: 1, onComplete: item.onComplete };
     const payload = `<${this.id}>${item.msg}`;
     for (const dest of targets) this.rawSend(payload, dest);
     this.armTimer();
@@ -108,7 +112,9 @@ export class ReliableSender {
 
   private complete(): void {
     this.clearTimer();
+    const done = this.inFlight?.onComplete;
     this.inFlight = null;
+    done?.();
     this.pump();
   }
 
