@@ -33,6 +33,15 @@ changing reply/targeting logic, or touching the FEN/time/score/PV encoding in
   real TLCS, **no** White-POV flip; only `multipv 1` is the broadcast eval; mate
   mapped to ±(100000 − n) so node-tlcv renders it decisive.
 
+- **Mid-game join** (`tlcs/server.ts` `sendSnapshot`): on `LOGONv15` the server unicasts a
+  snapshot of the live game — SITE → WPLAYER → BPLAYER → FEN → FMR → clocks → last PV — all on
+  the reliable channel in that order, so a late client lands on the current board/players/site
+  without waiting for the next move (node-tlcv's first-FEN `resetFromFen` path). Board-only: no
+  move history is replayed (matches existing TLCS servers). Re-LOGON replays it too. The
+  snapshot's clocks/PV on the reliable channel is the one exception to the unwrapped rule
+  above; a slow-ACKing joiner can briefly stall the global stop-and-wait queue for existing
+  clients (worst case ~3s per unacked msg).
+
 - **node-tlcv new-game contract** (reverse-engineered, drives the per-game emit order
   `result → WPLAYER → BPLAYER → startpos FEN → moves`; see `../node-tlcv/src/game-service.ts`):
   (1) board reset fires only on a **startpos** FEN while loaded (`onFen`) — a non-startpos
