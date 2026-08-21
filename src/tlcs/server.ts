@@ -184,8 +184,8 @@ export class TlcsServer {
   private onLogon(ip: string, port: number, user: string): void {
     const dest = destKey(ip, port);
     const isNew = !this.clients.has(dest);
-    if (!isNew) this.registerClient(ip, port, user);
-    logger.info(`LOGON ${user}@${dest} (${this.clients.size + (isNew ? 1 : 0)} client(s))`);
+    this.clients.set(dest, { ip, port, user, lastSeen: Date.now() });
+    logger.info(`LOGON ${user}@${dest} (${this.clients.size} client(s))`);
 
     this.rawSend(P.LOGON_SUCCESSFUL, ip, port);
 
@@ -196,9 +196,7 @@ export class TlcsServer {
       }
     }
 
-    // New joiners are registered only once the snapshot is delivered, so live
-    // unwrapped sends and already-queued broadcasts can't overtake it.
-    this.sendSnapshot(dest, isNew ? { ip, port, user } : null);
+    this.sendSnapshot(dest);
   }
 
   private onLogoff(dest: string): void {
@@ -222,42 +220,24 @@ export class TlcsServer {
     this.rawSend(P.ct('total games = 0'), ip, port);
   }
 
-  /** Add (or refresh) a client in the broadcast registry. */
-  private registerClient(ip: string, port: number, user: string): void {
-    this.clients.set(destKey(ip, port), { ip, port, user, lastSeen: Date.now() });
-  }
-
-  /**
-   * Unicast current game state to a client, in order, on the reliable channel.
-   * Clocks/PV ride the queue (after FMR) too, so the position always precedes
-   * them; live broadcasts of these stay unwrapped (high frequency). When
-   * `register` is given, the client joins the broadcast registry only after the
-   * LAST snapshot message is delivered — until then live unwrapped sends and
-   * pre-queued broadcasts skip it. With no snapshot to send, register at once.
-   */
-  private sendSnapshot(dest: string, register: { ip: string; port: number; user: string } | null): void {
+  /** Unicast current game state to a freshly-connected client. */
+  private sendSnapshot(dest: string): void {
     const s = this.snap;
-    const items: string[] = [];
-    if (s.site) items.push(P.site(s.site));
-    if (s.white) items.push(P.wplayer(s.white));
-    if (s.black) items.push(P.bplayer(s.black));
-    if (s.fenTruncated) items.push(P.fen(s.fenTruncated));
-    if (s.fmr !== undefined) items.push(P.fmr(s.fmr));
-    if (s.whiteTimeCs !== undefined && s.blackTimeCs !== undefined) {
-      items.push(P.time('w', s.whiteTimeCs, s.blackTimeCs));
-      items.push(P.time('b', s.blackTimeCs, s.whiteTimeCs));
-    }
-    if (s.lastWpv) items.push(s.lastWpv);
-    if (s.lastBpv) items.push(s.lastBpv);
+    if (s.site) this.sender.enqueue(P.site(s.site), dest);
+    if (s.white) this.sender.enqueue(P.wplayer(s.white), dest);
+    if (s.black) this.sender.enqueue(P.bplayer(s.black), dest);
+    if (s.fenTruncated) this.sender.enqueue(P.fen(s.fenTruncated), dest);
+    if (s.fmr !== undefined) this.sender.enqueue(P.fmr(s.fmr), dest);
 
-    const registerClient = register ? () => this.registerClient(register.ip, register.port, register.user) : undefined;
-    if (!registerClient || items.length === 0) {
-      registerClient?.();
-      for (const msg of items) this.sender.enqueue(msg, dest);
-      return;
+    // Clocks/PV also go through the reliable queue (after FMR) so the position
+    // always precedes them for a fresh client; live broadcasts of these stay
+    // unwrapped (high frequency).
+    if (s.whiteTimeCs !== undefined && s.blackTimeCs !== undefined) {
+      this.sender.enqueue(P.time('w', s.whiteTimeCs, s.blackTimeCs), dest);
+      this.sender.enqueue(P.time('b', s.blackTimeCs, s.whiteTimeCs), dest);
     }
-    for (let i = 0; i < items.length - 1; i++) this.sender.enqueue(items[i], dest);
-    this.sender.enqueue(items[items.length - 1], dest, registerClient);
+    if (s.lastWpv) this.sender.enqueue(s.lastWpv, dest);
+    if (s.lastBpv) this.sender.enqueue(s.lastBpv, dest);
   }
 
   /** Drop clients that have gone silent past the timeout (e.g. a crashed viewer). */
