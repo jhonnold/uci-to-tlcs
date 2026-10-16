@@ -7,7 +7,8 @@ changing reply/targeting logic, or touching the FEN/time/score/PV encoding in
 - **Protocol is reverse-engineered, not specced.** The TLCS wire contract is defined
   empirically by what node-tlcv accepts (`../node-tlcv` `src/game-service.ts`,
   `src/kibitzer/uci-parser.ts`, `src/udp-transport.ts`). Cross-check there before
-  changing any wire format — there is no official spec.
+  changing any wire format — there is no official spec. For what the original
+  server (TLCS 1.6a) does, see `docs/tlcs-server-spec.md`.
 
 - **Two send channels, different rules** (`tlcs/server.ts`):
   - *Reliable* (`sender.enqueue`) — ID-wrapped `<N>MSG`, ACKed, **stop-and-wait with

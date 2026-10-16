@@ -34,6 +34,12 @@ Details live in `docs/`, loaded only when relevant:
   (configure, run, wait, check logs & PGNs), the mock-client local path, and the
   LOGON-race. Reach for it before shipping a protocol/transport change, or to verify a
   move/result/name/clock bug end-to-end.
+- **`docs/tlcs-server-spec.md`** — rebuild spec reverse-engineered from the original
+  TLCS 1.6a server binary: transport, numbering/retransmit, logon burst, every command,
+  WinBoard log tailing, `server.ini`, planned improvements, and the gap/plan for this
+  repo (§10). Reach for it when deciding what to build next or matching real-server
+  behavior.
 - **`README.md`** — full CLI options, the UCI→TLCS encoding table, and scope.
 - **`../node-tlcv/src/`** — the wire contract's source of truth (`game-service.ts`,
-  `kibitzer/uci-parser.ts`, `udp-transport.ts`); there is no official spec.
+  `kibitzer/uci-parser.ts`, `udp-transport.ts`); there is no official spec, but
+  `docs/tlcs-server-spec.md` documents what the original server does.
