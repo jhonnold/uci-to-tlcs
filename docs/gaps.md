@@ -87,10 +87,17 @@ node-tlcv uses `RESULTTABLE` to rebuild the **crosstable + game archive + `curre
 - **C. Games must be sequential, not concurrent (scope).** One `GameState`, one board. The e2e
   runbook insists on `-concurrency 1`. Interleaved UCI from two engine-pairs can't be split on a
   single board.
-- **D. Inter-game board reset only on startpos (edge).** node-tlcv resets its board in `onFen`
-  **only for a startpos FEN** (or first load) (`game-service.ts:129`). Our per-game header emits
-  the actual start FEN; a new game opening from a non-startpos FEN (chess960, endgame study,
-  handicap) is treated as backup-only — the new game's move 1 applies to the *previous* board.
+- **D. Inter-game board reset only on startpos (FIXED, gated hack).** node-tlcv resets its board in
+  `onFen` **only for a startpos FEN** (or first load) (`game-service.ts:129`). A non-startpos start
+  (EPD book, 960) is now sent as `FEN startpos`/`FMR 0` → `FEN X`/`FMR f` → `xMOVE (setup)` (see
+  `tlcs-wire.md`), which makes node-tlcv's failed-move path `resetFromFen()` load X. Gated by
+  `FENSETUPMOVE`/`--fen-setup-move` (default on). Cost: desktop TLCV shows `1. (setup)` once in its
+  move list (board correct). Follow-up for node-tlcv: reset on any FEN right after WPLAYER/BPLAYER,
+  which would remove the hack. Known limitations: (a) TLCS FEN drops the en-passant field, so
+  node-tlcv's `[FEN]` always has `-` (cosmetic; compare the first 3 fields); (b) a mid-game
+  re-LOGON of an already-loaded node-tlcv during a non-startpos game still stores the snapshot FEN
+  as backup only (same for startpos games; suggest `sendLogonSnapshot` reuse the setup sequence);
+  (c) untagged `isGameReset` ignores a changed `fen` with no moves (fastchess is tagged).
 - **E. `currentGameNumber` pinned at 1 (symptom of RESULTTABLE).** With the `total games = 0`
   stub, node-tlcv's `currentGameNumber` stays at its default (`game-service.ts:445` derives it
   from the games list); every result is labeled "Game 1" and `savePgn` overwrites one filename.

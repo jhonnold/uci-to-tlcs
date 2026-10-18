@@ -105,3 +105,11 @@ test('BOM stripped, Ctrl-Z ends input', () => {
   assert.equal(p('\uFEFFPORT=5').values.port, 5);
   assert.equal(p('PORT=5\n\x1aDELAY=9').values.delayMs, undefined);
 });
+
+test('FENSETUPMOVE: 1 true, 0 and empty false, other values throw', () => {
+  assert.equal(p('FENSETUPMOVE=1').values.fenSetupMove, true);
+  assert.equal(p('FENSETUPMOVE=0').values.fenSetupMove, false);
+  assert.equal(p('FENSETUPMOVE=').values.fenSetupMove, false);
+  assert.equal(p('PORT=1').values.fenSetupMove, undefined);
+  assert.throws(() => p('FENSETUPMOVE=yes'), /line 1: invalid FENSETUPMOVE/);
+});

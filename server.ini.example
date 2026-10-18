@@ -12,6 +12,7 @@ DELAY=100
 DELAYAFTERMOVE=0
 DELAYAFTERGAME=0
 SAVEDEBUG=0
+'FENSETUPMOVE=1
 'MENU ID=1 WIDTH=12000 HEIGHT=6000 NAME="Schedule" URL="https://example.com/schedule"
 ' Up to 10 MENU lines (ID=1..10), sent verbatim to viewers at logon.
 ' Extensions (not in the reference server):

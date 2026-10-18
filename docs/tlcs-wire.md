@@ -43,6 +43,13 @@ changing reply/targeting logic, or touching the FEN/time/score/PV encoding in
   above; a slow-ACKing joiner can briefly stall the global stop-and-wait queue for existing
   clients (worst case ~3s per unacked msg).
 
+- **Non-startpos new game** (`FENSETUPMOVE`, default on): `WPLAYER`/`BPLAYER` → `FEN startpos`/`FMR 0`
+  → `FEN X`/`FMR f` → `FEN X`/`xMOVE n. (setup)`/`FMR f` → book moves. node-tlcv's `onMove` fails
+  `(setup)` in chess.js and its catch runs `resetFromFen()` (loads `X f n`; PGN gets `[SetUp][FEN]`,
+  no move). Desktop TLCV appends the text unvalidated: `1. (setup)` once in the move list, board
+  correct. `FENSETUPMOVE=0` sends only `FEN X`/`FMR f`: clean on desktop, wrong on an already-loaded
+  node-tlcv.
+
 - **node-tlcv new-game contract** (reverse-engineered, drives the per-game emit order
   `result → WPLAYER → BPLAYER → startpos FEN → moves`; see `../node-tlcv/src/game-service.ts`):
   (1) board reset fires only on a **startpos** FEN while loaded (`onFen`) — a non-startpos

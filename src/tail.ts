@@ -19,11 +19,13 @@ export class FileTailer {
   private poll: NodeJS.Timeout | null = null;
   private reading = false;
   private closed = false;
+  private caughtUp = false;
 
   constructor(
     private path: string,
     private onLine: LineHandler,
     private fromStart: boolean,
+    private onCaughtUp?: () => void,
   ) {}
 
   start(): void {
@@ -85,10 +87,14 @@ export class FileTailer {
         // truncated / rotated in place
         this.resetForRotation();
       }
-      if (size <= this.offset) return;
-
-      await this.consume(this.offset, size);
-      this.offset = size;
+      if (size > this.offset) {
+        await this.consume(this.offset, size);
+        this.offset = size;
+      }
+      if (!this.caughtUp) {
+        this.caughtUp = true;
+        this.onCaughtUp?.();
+      }
     } finally {
       this.reading = false;
     }

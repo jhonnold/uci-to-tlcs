@@ -221,3 +221,12 @@ test('pipeline: sample-game.uci produces the expected ordered emissions', () => 
   // no multipv>=2 lines leaked in, no result for an unfinished game
   assert.ok(!e.some((x) => x.k === 'result'));
 });
+
+test('parseLine: go movestogo', () => {
+  assert.deepEqual(parseLine('go wtime 60000 btime 60000 movestogo 40'), {
+    type: 'go',
+    wtimeMs: 60000,
+    btimeMs: 60000,
+    movestogo: 40,
+  });
+});
