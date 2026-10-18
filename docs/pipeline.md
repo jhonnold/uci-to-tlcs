@@ -39,11 +39,25 @@ or touching game boundaries / player-name binding in `pipeline.ts` and
   book at 500 ms stalls ~8 s at game start) — deliberate, simplest. The queue is unbounded
   like the reference's pause-after-move; one warning at >1000 queued sends.
 
-- **Results are board-derived only.** Pure UCI has no resign/adjudication signal, so
-  only mate/stalemate/draw on the board produces a `result:` (`game-state.ts`). At a
-  game boundary, if the previous game produced none, the pipeline synthesizes
-  `result: *` (PGN unknown) so node-tlcv finalizes and re-arms (see
-  `tlcs-wire.md`, node-tlcv new-game contract).
+- **Results: board-derived, or PGN-authoritative with `--pgn`.** Pure UCI has no
+  resign/adjudication/forfeit signal, so without a PGN only mate/stalemate/draw on the
+  board produces a `result:` (`game-state.ts`), and at a game boundary a game with none
+  gets a synthesized `result: *` (see `tlcs-wire.md`, node-tlcv new-game contract).
+  With `--pgn <fastchess -pgnout file>` (`src/results/`: `ByteLineReader` ->
+  `PgnStreamParser` -> `GameRegistry`) the Pipeline numbers its own games (`gameNumber`,
+  opened at `ucinewgame` / header) and asks the registry (`ResultAuthority`) for entry
+  N. The PGN `Result` is sent as `result: <r>` (no reason) at the earliest of: (a) the
+  **ply gate** (`plies >= PlyCount`, or `PlyCount-1` for `illegal move`; only when the
+  PGN White/Black equal the bound names as an unordered set, so a stale/appended PGN
+  cannot fire mid-game); (b) the **boundary** (next `ucinewgame`; the PGN is re-read
+  once, synchronously; no entry -> board result or `*` with a warning); (c) an `in`
+  `quit` (end of tournament; same pull, but no entry means do nothing). A board-terminal
+  game with no entry after `holdTicks` polls (~2 s) gets its board result plus a
+  warning. `emitResultOnce` is the only `sink.emitResult` call site: one result per
+  game. fastchess writes entry k before game k+1's `ucinewgame`; `quit` can also appear
+  mid-tournament (`recover`, `restart=on`), which is safe because lookup is by live game
+  number. Use a fresh `-pgnout` file: fastchess appends, so an old file misaligns game
+  numbers (startup warns when it already holds games).
 
 - **Multi-game segmentation lives in `pipeline.ts`.** One log can hold many games/
   matchups (assume `-concurrency 1`; interleaved logs can't be demuxed). A new game

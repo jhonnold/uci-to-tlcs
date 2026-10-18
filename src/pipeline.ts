@@ -3,6 +3,8 @@ import { scoreToCentipawns, type UciInfo } from './uci/info.js';
 import { GameState, STARTPOS_TRUNC } from './game/game-state.js';
 import { msToCs, type ColorCode } from './tlcs/protocol.js';
 import type { NormalizedLine } from './source/log-source.js';
+import type { FinishedGame } from './results/registry.js';
+import { logger } from './util/logger.js';
 
 /**
  * Everything the pipeline emits. Implemented by TlcsServer for the real UDP
@@ -25,6 +27,20 @@ export interface BroadcastSink {
   emitResult(result: string): void;
   /** WinBoard-format `level <mps> <base> <inc>` text. Optional: absent until the server supports it. */
   emitLevel?(text: string): void;
+}
+
+/** Source of authoritative results (the tournament PGN), keyed by 1-based game number. */
+export interface ResultAuthority {
+  lookup(n: number): FinishedGame | undefined;
+  refresh(): unknown;
+}
+
+export interface PipelineOpts {
+  authority?: ResultAuthority;
+  /** Number of the first game seen; a function is resolved lazily at the first game open. */
+  firstGameNumber?: number | (() => number);
+  /** Registry polls a board-terminal game waits for its PGN entry before using the board result. */
+  holdTicks?: number;
 }
 
 export interface PipelineMeta {
@@ -105,9 +121,20 @@ export class Pipeline {
   private blackId?: string;
   private readonly fenSetupMove: boolean;
 
+  // PGN-authority state (inert without an authority).
+  private gameNumber = 0;
+  private numbered = false;
+  private gameNumberBase?: number;
+  private heldTicks = 0;
+  private holdWarned = false;
+  private emittedEntry?: FinishedGame;
+  private boundNames?: [string, string]; // names sent in this game's header (tagged/bound only)
+  private overrunWarned = false;
+
   constructor(
     private sink: BroadcastSink,
     meta: PipelineMeta,
+    private opts: PipelineOpts = {},
   ) {
     this.site = meta.site;
     this.fallbackWhite = meta.white;
@@ -122,6 +149,10 @@ export class Pipeline {
     // it marks a new game's setup and identifies a participant before any move.
     if (n.direction === 'in' && n.uci && n.uci.trim() === 'ucinewgame') {
       this.onUciNewGame(n.engineId);
+      return;
+    }
+    if (n.direction === 'in' && n.uci?.trim() === 'quit') {
+      this.onQuit();
       return;
     }
 
@@ -162,6 +193,7 @@ export class Pipeline {
       this.positionStm = undefined;
       this.awaitingFirstGo = true;
       this.beginNewGame();
+      this.openGameNumber();
     }
     if (engineId) this.participants.add(engineId);
     this.maybeBindColours();
@@ -192,10 +224,15 @@ export class Pipeline {
 
   /** Close out the previous game and reset per-game state for a fresh one. */
   private beginNewGame(): void {
-    if (this.gameActive && !this.resultEmitted) {
-      // Adjudication / unknown end: synthesize so node-tlcv finalizes + re-arms.
-      this.sink.emitResult(RESULT_UNKNOWN);
-    }
+    // PGN entry if configured, else adjudication / unknown end: synthesize so
+    // node-tlcv finalizes + re-arms.
+    this.closeAtBoundary('boundary');
+    this.numbered = false;
+    this.heldTicks = 0;
+    this.holdWarned = false;
+    this.emittedEntry = undefined;
+    this.overrunWarned = false;
+    this.boundNames = undefined;
     this.game.reset();
     this.positionEmitted = false;
     this.resultEmitted = false;
@@ -287,6 +324,7 @@ export class Pipeline {
 
   private emitGameHeaderIfReady(): void {
     if (!this.pendingHeader) return;
+    this.openGameNumber();
 
     if (!this.siteEmitted) {
       this.sink.setSite(this.site);
@@ -294,6 +332,7 @@ export class Pipeline {
     }
 
     const [white, black] = this.resolveNames();
+    this.boundNames = this.whiteId && this.blackId ? [white, black] : undefined;
     this.sink.setPlayers(white, black);
     this.emitBasePosition();
 
@@ -385,11 +424,139 @@ export class Pipeline {
   }
 
   private maybeEmitResult(): void {
+    if (this.opts.authority) {
+      this.pgnGate();
+      return;
+    }
     if (this.resultEmitted || !this.game.isGameOver()) return;
     const r = this.game.result();
-    if (r) {
-      this.sink.emitResult(r);
-      this.resultEmitted = true;
+    if (r) this.emitResultOnce(r);
+  }
+
+  // --------------------------------------------------------------- PGN authority
+
+  /** The single `sink.emitResult` call site: a game can never get two results. */
+  private emitResultOnce(r: string): void {
+    if (this.resultEmitted) return;
+    this.resultEmitted = true;
+    this.sink.emitResult(r);
+  }
+
+  currentGameNumber(): number {
+    return this.gameNumber;
+  }
+
+  private openGameNumber(): void {
+    if (this.numbered) return;
+    if (this.gameNumberBase === undefined) {
+      const f = this.opts.firstGameNumber ?? 1;
+      this.gameNumber = typeof f === 'function' ? f() : f;
+      this.gameNumberBase = this.gameNumber;
+    } else {
+      this.gameNumber += 1;
+    }
+    this.numbered = true;
+  }
+
+  /** Plies the entry's PlyCount implies were played on the board (illegal move: not applied). */
+  private targetPlies(e: FinishedGame): number | undefined {
+    if (e.plyCount === undefined) return undefined;
+    return e.termination === 'illegal move' ? e.plyCount - 1 : e.plyCount;
+  }
+
+  /** PGN names equal the bound names as an unordered set (true when names are not bound). */
+  private namesMatchLoosely(e: FinishedGame): boolean {
+    if (!this.boundNames) return true;
+    const [w, b] = this.boundNames;
+    return (e.white === w && e.black === b) || (e.white === b && e.black === w);
+  }
+
+  /** Emit the PGN result as soon as the game's plies reach the entry's PlyCount. */
+  private pgnGate(): void {
+    const auth = this.opts.authority;
+    if (!auth || !this.gameActive) return;
+    if (this.resultEmitted) {
+      this.warnOverrun();
+      return;
+    }
+    const e = auth.lookup(this.gameNumber);
+    if (!e || !this.namesMatchLoosely(e)) return;
+    const target = this.targetPlies(e);
+    if (target === undefined || this.currentMoves.length < target) return;
+    this.checkEntry(e, false);
+    this.emittedEntry = e;
+    this.emitResultOnce(e.result);
+  }
+
+  private warnOverrun(): void {
+    const e = this.emittedEntry;
+    if (!e || this.overrunWarned) return;
+    const target = this.targetPlies(e);
+    if (target !== undefined && this.currentMoves.length > target) {
+      this.overrunWarned = true;
+      logger.warn(`game ${this.gameNumber}: ${this.currentMoves.length} plies exceed PGN PlyCount ${e.plyCount} (misaligned PGN?)`);
+    }
+  }
+
+  private checkEntry(e: FinishedGame, atBoundary: boolean): void {
+    if (this.boundNames && (e.white !== this.boundNames[0] || e.black !== this.boundNames[1])) {
+      const [w, b] = this.boundNames;
+      logger.warn(`game ${this.gameNumber}: PGN names "${e.white}" vs "${e.black}" differ from log "${w}" vs "${b}"`);
+    }
+    const target = this.targetPlies(e);
+    const plies = this.currentMoves.length;
+    if (target !== undefined && plies > target) {
+      logger.warn(`game ${this.gameNumber}: ${plies} plies exceed PGN PlyCount ${e.plyCount} (misaligned PGN?)`);
+      this.overrunWarned = true;
+    } else if (atBoundary && target !== undefined && plies < target) {
+      logger.warn(`game ${this.gameNumber}: only ${plies} plies seen, PGN PlyCount ${e.plyCount}`);
+    }
+  }
+
+  /**
+   * Final chance to close a game: pull the PGN once, send its entry if present.
+   * `boundary` (next game opens) falls back to the board result / `*`; `quit` does not.
+   * Without an authority this is the legacy synthesized `*`.
+   */
+  private closeAtBoundary(kind: 'boundary' | 'quit'): void {
+    if (!this.gameActive || this.resultEmitted) return;
+    const auth = this.opts.authority;
+    if (!auth) {
+      if (kind === 'boundary') this.emitResultOnce(RESULT_UNKNOWN);
+      return;
+    }
+    auth.refresh();
+    const e = auth.lookup(this.gameNumber);
+    if (e) {
+      this.checkEntry(e, true);
+      this.emittedEntry = e;
+      this.emitResultOnce(e.result);
+      return;
+    }
+    if (kind === 'quit') return;
+    const r = this.game.isGameOver() ? this.game.result() : null;
+    logger.warn(`no PGN entry for game ${this.gameNumber}; fallback ${r ?? RESULT_UNKNOWN}`);
+    this.emitResultOnce(r ?? RESULT_UNKNOWN);
+  }
+
+  private onQuit(): void {
+    this.closeAtBoundary('quit');
+  }
+
+  /** Called after every PGN registry poll. */
+  onAuthorityTick(): void {
+    if (!this.opts.authority) return;
+    this.pgnGate();
+    if (!this.gameActive || this.resultEmitted || !this.game.isGameOver()) return;
+    const r = this.game.result();
+    if (!r) return;
+    this.heldTicks++;
+    if (this.heldTicks >= (this.opts.holdTicks ?? 10)) {
+      if (!this.holdWarned) {
+        this.holdWarned = true;
+        logger.warn(`PGN entry for game ${this.gameNumber} not seen after ${this.heldTicks} polls; using board result ${r}`);
+      }
+      this.emitResultOnce(r);
     }
   }
 }

@@ -69,6 +69,11 @@ existing content), `--ini <path>` (reference-style `server.ini`, see below),
 `--pgn <path>`, `--delay-after-move <ms>`, `--delay-after-game <ms>`,
 `--fen-setup-move <0|1>` (default 1: non-startpos games send a synthetic `(setup)` move so node-tlcv loads the FEN; desktop TLCV shows `1. (setup)` once, board correct). `LOG_LEVEL=debug` logs every UDP message.
 
+`--pgn <path>` points at the fastchess `-pgnout` file; when set, its `Result` is the
+authoritative result for each game (resign/adjudication/time forfeit included, zero
+`*`). Use a **fresh** `-pgnout` file per run: fastchess appends, and old entries
+misalign the game numbers.
+
 With `--format fastchess` (or `myracle`) you point `--log` at the engine/tournament log
 itself; with `--format raw` you point it at a pre-stripped transcript. `--white`/`--black`
 are only used as the fallback names for the raw/untagged path. To attach to a log that is

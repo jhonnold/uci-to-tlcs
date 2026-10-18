@@ -1,0 +1,1279 @@
+[Engine] [18:57:50.119634] <     139788905723584>  BerserkA <--- uci
+[Engine] [18:57:50.151739] <     139788905723584>  BerserkA ---> id name Berserk 20260906
+[Engine] [18:57:50.151779] <     139788905723584>  BerserkA ---> id author Jay Honnold
+[Engine] [18:57:50.151784] <     139788905723584>  BerserkA ---> option name Hash type spin default 16 min 2 max 33554432
+[Engine] [18:57:50.151787] <     139788905723584>  BerserkA ---> option name Threads type spin default 1 min 1 max 2048
+[Engine] [18:57:50.151791] <     139788905723584>  BerserkA ---> option name SyzygyPath type string default <empty>
+[Engine] [18:57:50.151800] <     139788905723584>  BerserkA ---> option name MultiPV type spin default 1 min 1 max 256
+[Engine] [18:57:50.151803] <     139788905723584>  BerserkA ---> option name Ponder type check default false
+[Engine] [18:57:50.151806] <     139788905723584>  BerserkA ---> option name UCI_ShowWDL type check default true
+[Engine] [18:57:50.151810] <     139788905723584>  BerserkA ---> option name UCI_Chess960 type check default false
+[Engine] [18:57:50.151815] <     139788905723584>  BerserkA ---> option name MoveOverhead type spin default 50 min 0 max 10000
+[Engine] [18:57:50.151819] <     139788905723584>  BerserkA ---> option name Contempt type spin default 0 min -100 max 100
+[Engine] [18:57:50.151825] <     139788905723584>  BerserkA ---> option name EvalFile type string default <empty>
+[Engine] [18:57:50.151828] <     139788905723584>  BerserkA ---> option name Minimal type check default false
+[Engine] [18:57:50.151833] <     139788905723584>  BerserkA ---> option name Normalize type check default true
+[Engine] [18:57:50.151836] <     139788905723584>  BerserkA ---> option name SoftNodes type check default false
+[Engine] [18:57:50.151843] <     139788905723584>  BerserkA ---> uciok
+[Engine] [18:57:50.152131] <     139788905723584>  Berserk B <--- uci
+[Engine] [18:57:50.178747] <     139788905723584>  Berserk B ---> id name Berserk 20260906
+[Engine] [18:57:50.178786] <     139788905723584>  Berserk B ---> id author Jay Honnold
+[Engine] [18:57:50.178790] <     139788905723584>  Berserk B ---> option name Hash type spin default 16 min 2 max 33554432
+[Engine] [18:57:50.178792] <     139788905723584>  Berserk B ---> option name Threads type spin default 1 min 1 max 2048
+[Engine] [18:57:50.178796] <     139788905723584>  Berserk B ---> option name SyzygyPath type string default <empty>
+[Engine] [18:57:50.178798] <     139788905723584>  Berserk B ---> option name MultiPV type spin default 1 min 1 max 256
+[Engine] [18:57:50.178801] <     139788905723584>  Berserk B ---> option name Ponder type check default false
+[Engine] [18:57:50.178804] <     139788905723584>  Berserk B ---> option name UCI_ShowWDL type check default true
+[Engine] [18:57:50.178809] <     139788905723584>  Berserk B ---> option name UCI_Chess960 type check default false
+[Engine] [18:57:50.178811] <     139788905723584>  Berserk B ---> option name MoveOverhead type spin default 50 min 0 max 10000
+[Engine] [18:57:50.178816] <     139788905723584>  Berserk B ---> option name Contempt type spin default 0 min -100 max 100
+[Engine] [18:57:50.178819] <     139788905723584>  Berserk B ---> option name EvalFile type string default <empty>
+[Engine] [18:57:50.178825] <     139788905723584>  Berserk B ---> option name Minimal type check default false
+[Engine] [18:57:50.178827] <     139788905723584>  Berserk B ---> option name Normalize type check default true
+[Engine] [18:57:50.178830] <     139788905723584>  Berserk B ---> option name SoftNodes type check default false
+[Engine] [18:57:50.178832] <     139788905723584>  Berserk B ---> uciok
+[Engine] [18:57:50.178864] <     139788905723584>  BerserkA <--- ucinewgame
+[Engine] [18:57:50.178876] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.180609] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.180619] <     139788905723584>  Berserk B <--- ucinewgame
+[Engine] [18:57:50.180626] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.182257] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.182279] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.182312] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.182335] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.182363] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.182368] <     139788905723584>  BerserkA <--- position startpos
+[Engine] [18:57:50.182375] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.182401] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.182407] <     139788905723584>  BerserkA <--- go wtime 1010 btime 1010 winc 10 binc 10
+[Engine] [18:57:50.183100] <     139788905723584>  BerserkA ---> bestmove e2e3 ponder a7a6
+[Engine] [18:57:50.183105] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.183134] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.183195] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.183234] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.183245] <     139788905723584>  Berserk B <--- position startpos moves e2e3
+[Engine] [18:57:50.183251] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.183283] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.183292] <     139788905723584>  Berserk B <--- go wtime 1020 btime 1010 winc 10 binc 10
+[Engine] [18:57:50.183900] <     139788905723584>  Berserk B ---> bestmove c7c5 ponder c2c4
+[Engine] [18:57:50.183908] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.183948] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.183999] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.184046] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.184053] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5
+[Engine] [18:57:50.184061] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.184098] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.184104] <     139788905723584>  BerserkA <--- go wtime 1020 btime 1020 winc 10 binc 10
+[Engine] [18:57:50.184623] <     139788905723584>  BerserkA ---> bestmove g1f3 ponder d7d5
+[Engine] [18:57:50.184628] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.184657] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.184690] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.184719] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.184725] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3
+[Engine] [18:57:50.184730] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.184756] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.184762] <     139788905723584>  Berserk B <--- go wtime 1030 btime 1020 winc 10 binc 10
+[Engine] [18:57:50.185044] <     139788905723584>  Berserk B ---> bestmove b8c6 ponder d2d4
+[Engine] [18:57:50.185047] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.185078] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.185111] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.185142] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.185148] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6
+[Engine] [18:57:50.185154] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.185183] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.185193] <     139788905723584>  BerserkA <--- go wtime 1030 btime 1030 winc 10 binc 10
+[Engine] [18:57:50.185667] <     139788905723584>  BerserkA ---> bestmove f1b5 ponder g8f6
+[Engine] [18:57:50.185680] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.185713] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.185753] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.185782] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.185788] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5
+[Engine] [18:57:50.185794] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.185822] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.185827] <     139788905723584>  Berserk B <--- go wtime 1040 btime 1030 winc 10 binc 10
+[Engine] [18:57:50.186099] <     139788905723584>  Berserk B ---> bestmove d8b6
+[Engine] [18:57:50.186103] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.186131] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.186165] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.186196] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.186202] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6
+[Engine] [18:57:50.186208] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.186249] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.186262] <     139788905723584>  BerserkA <--- go wtime 1040 btime 1040 winc 10 binc 10
+[Engine] [18:57:50.186795] <     139788905723584>  BerserkA ---> bestmove b5e2 ponder g8f6
+[Engine] [18:57:50.186800] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.186829] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.186870] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.186902] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.186909] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2
+[Engine] [18:57:50.186915] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.186950] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.186956] <     139788905723584>  Berserk B <--- go wtime 1050 btime 1040 winc 10 binc 10
+[Engine] [18:57:50.187188] <     139788905723584>  Berserk B ---> bestmove d7d5 ponder d2d4
+[Engine] [18:57:50.187191] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.187218] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.187250] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.187282] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.187288] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5
+[Engine] [18:57:50.187293] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.187328] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.187333] <     139788905723584>  BerserkA <--- go wtime 1050 btime 1050 winc 10 binc 10
+[Engine] [18:57:50.187981] <     139788905723584>  BerserkA ---> bestmove c2c4 ponder g8f6
+[Engine] [18:57:50.187987] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.188012] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.188060] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.188089] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.188095] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4
+[Engine] [18:57:50.188100] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.188134] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.188140] <     139788905723584>  Berserk B <--- go wtime 1060 btime 1050 winc 10 binc 10
+[Engine] [18:57:50.188695] <     139788905723584>  Berserk B ---> bestmove d5d4 ponder e3d4
+[Engine] [18:57:50.188708] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.188730] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.188766] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.188790] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.188797] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4
+[Engine] [18:57:50.188802] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.188836] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.188841] <     139788905723584>  BerserkA <--- go wtime 1060 btime 1060 winc 10 binc 10
+[Engine] [18:57:50.189017] <     139788905723584>  BerserkA ---> bestmove e1g1 ponder g8f6
+[Engine] [18:57:50.189020] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.189045] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.189080] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.189102] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.189108] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1
+[Engine] [18:57:50.189113] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.189143] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.189149] <     139788905723584>  Berserk B <--- go wtime 1070 btime 1060 winc 10 binc 10
+[Engine] [18:57:50.189726] <     139788905723584>  Berserk B ---> bestmove g8f6 ponder f1e1
+[Engine] [18:57:50.189732] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.189752] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.189789] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.189810] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.189816] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6
+[Engine] [18:57:50.189821] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.189853] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.189859] <     139788905723584>  BerserkA <--- go wtime 1070 btime 1070 winc 10 binc 10
+[Engine] [18:57:50.190067] <     139788905723584>  BerserkA ---> bestmove f1e1 ponder c8g4
+[Engine] [18:57:50.190073] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.190102] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.190152] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.190182] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.190191] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1
+[Engine] [18:57:50.190199] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.190257] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.190269] <     139788905723584>  Berserk B <--- go wtime 1080 btime 1070 winc 10 binc 10
+[Engine] [18:57:50.190876] <     139788905723584>  Berserk B ---> bestmove e7e5 ponder d2d3
+[Engine] [18:57:50.190882] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.190913] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.190951] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.190980] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.190987] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5
+[Engine] [18:57:50.190993] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.191043] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.191058] <     139788905723584>  BerserkA <--- go wtime 1080 btime 1080 winc 10 binc 10
+[Engine] [18:57:50.191530] <     139788905723584>  BerserkA ---> bestmove d2d3 ponder f8d6
+[Engine] [18:57:50.191535] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.191564] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.191605] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.191631] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.191638] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3
+[Engine] [18:57:50.191643] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.191686] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.191691] <     139788905723584>  Berserk B <--- go wtime 1090 btime 1080 winc 10 binc 10
+[Engine] [18:57:50.192092] <     139788905723584>  Berserk B ---> bestmove f8d6 ponder b1a3
+[Engine] [18:57:50.192095] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.192127] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.192165] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.192194] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.192201] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6
+[Engine] [18:57:50.192206] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.192249] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.192254] <     139788905723584>  BerserkA <--- go wtime 1090 btime 1090 winc 10 binc 10
+[Engine] [18:57:50.192731] <     139788905723584>  BerserkA ---> bestmove e3d4 ponder c5d4
+[Engine] [18:57:50.192736] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.192766] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.192803] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.192831] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.192837] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4
+[Engine] [18:57:50.192843] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.192886] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.192891] <     139788905723584>  Berserk B <--- go wtime 1100 btime 1090 winc 10 binc 10
+[Engine] [18:57:50.193254] <     139788905723584>  Berserk B ---> bestmove c5d4 ponder b1a3
+[Engine] [18:57:50.193259] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.193288] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.193328] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.193357] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.193364] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4
+[Engine] [18:57:50.193370] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.193415] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.193425] <     139788905723584>  BerserkA <--- go wtime 1100 btime 1100 winc 10 binc 10
+[Engine] [18:57:50.193926] <     139788905723584>  BerserkA ---> bestmove b1a3 ponder d6a3
+[Engine] [18:57:50.193936] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.193963] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.194008] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.194068] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.194084] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3
+[Engine] [18:57:50.194092] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.194142] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.194148] <     139788905723584>  Berserk B <--- go wtime 1110 btime 1100 winc 10 binc 10
+[Engine] [18:57:50.194789] <     139788905723584>  Berserk B ---> bestmove a7a6 ponder a3b1
+[Engine] [18:57:50.194795] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.194821] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.194865] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.194893] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.194904] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6
+[Engine] [18:57:50.194910] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.194956] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.194962] <     139788905723584>  BerserkA <--- go wtime 1110 btime 1110 winc 10 binc 10
+[Engine] [18:57:50.195173] <     139788905723584>  BerserkA ---> bestmove d1b3 ponder b6b3
+[Engine] [18:57:50.195176] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.195199] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.195233] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.195260] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.195267] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3
+[Engine] [18:57:50.195272] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.195317] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.195323] <     139788905723584>  Berserk B <--- go wtime 1120 btime 1110 winc 10 binc 10
+[Engine] [18:57:50.195912] <     139788905723584>  Berserk B ---> bestmove b6b3 ponder a2b3
+[Engine] [18:57:50.195918] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.195941] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.195985] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.196013] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.196020] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3
+[Engine] [18:57:50.196028] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.196086] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.196092] <     139788905723584>  BerserkA <--- go wtime 1120 btime 1120 winc 10 binc 10
+[Engine] [18:57:50.196610] <     139788905723584>  BerserkA ---> bestmove a2b3 ponder d6b8
+[Engine] [18:57:50.196616] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.196638] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.196675] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.196701] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.196708] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3
+[Engine] [18:57:50.196713] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.196760] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.196765] <     139788905723584>  Berserk B <--- go wtime 1130 btime 1120 winc 10 binc 10
+[Engine] [18:57:50.197270] <     139788905723584>  Berserk B ---> bestmove f6d7 ponder a3c2
+[Engine] [18:57:50.197276] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.197304] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.197345] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.197373] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.197379] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7
+[Engine] [18:57:50.197385] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.197437] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.197443] <     139788905723584>  BerserkA <--- go wtime 1130 btime 1130 winc 10 binc 10
+[Engine] [18:57:50.197941] <     139788905723584>  BerserkA ---> bestmove f3d2 ponder d7c5
+[Engine] [18:57:50.197947] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.197971] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.198007] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.198039] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.198046] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2
+[Engine] [18:57:50.198052] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.198104] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.198110] <     139788905723584>  Berserk B <--- go wtime 1140 btime 1130 winc 10 binc 10
+[Engine] [18:57:50.198652] <     139788905723584>  Berserk B ---> bestmove d7c5 ponder d2e4
+[Engine] [18:57:50.198658] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.198684] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.198724] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.198752] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.198760] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5
+[Engine] [18:57:50.198766] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.198821] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.198827] <     139788905723584>  BerserkA <--- go wtime 1140 btime 1140 winc 10 binc 10
+[Engine] [18:57:50.199065] <     139788905723584>  BerserkA ---> bestmove a3c2 ponder e8g8
+[Engine] [18:57:50.199068] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.199092] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.199135] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.199162] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.199169] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2
+[Engine] [18:57:50.199174] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.199228] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.199234] <     139788905723584>  Berserk B <--- go wtime 1150 btime 1140 winc 10 binc 10
+[Engine] [18:57:50.199696] <     139788905723584>  Berserk B ---> bestmove c8f5 ponder f2f4
+[Engine] [18:57:50.199699] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.199724] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.199764] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.199792] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.199799] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5
+[Engine] [18:57:50.199805] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.199863] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.199869] <     139788905723584>  BerserkA <--- go wtime 1150 btime 1150 winc 10 binc 10
+[Engine] [18:57:50.200105] <     139788905723584>  BerserkA ---> bestmove f2f4 ponder c5d3
+[Engine] [18:57:50.200109] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.200131] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.200166] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.200193] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.200201] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4
+[Engine] [18:57:50.200207] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.200263] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.200269] <     139788905723584>  Berserk B <--- go wtime 1160 btime 1150 winc 10 binc 10
+[Engine] [18:57:50.200706] <     139788905723584>  Berserk B ---> bestmove f5d3 ponder f4e5
+[Engine] [18:57:50.200711] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.200734] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.200772] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.200797] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.200804] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3
+[Engine] [18:57:50.200810] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.200869] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.200874] <     139788905723584>  BerserkA <--- go wtime 1160 btime 1160 winc 10 binc 10
+[Engine] [18:57:50.201062] <     139788905723584>  BerserkA ---> bestmove f4e5 ponder d6e5
+[Engine] [18:57:50.201065] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.201089] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.201123] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.201149] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.201156] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5
+[Engine] [18:57:50.201161] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.201220] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.201225] <     139788905723584>  Berserk B <--- go wtime 1170 btime 1160 winc 10 binc 10
+[Engine] [18:57:50.201738] <     139788905723584>  Berserk B ---> bestmove d6e7 ponder b3b4
+[Engine] [18:57:50.201744] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.201768] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.201808] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.201835] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.201842] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7
+[Engine] [18:57:50.201848] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.201911] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.201917] <     139788905723584>  BerserkA <--- go wtime 1170 btime 1170 winc 10 binc 10
+[Engine] [18:57:50.202196] <     139788905723584>  BerserkA ---> bestmove b3b4 ponder d3c2
+[Engine] [18:57:50.202199] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.202267] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.202320] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.202350] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.202358] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4
+[Engine] [18:57:50.202364] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.202436] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.202442] <     139788905723584>  Berserk B <--- go wtime 1180 btime 1170 winc 10 binc 10
+[Engine] [18:57:50.202998] <     139788905723584>  Berserk B ---> bestmove d3c2 ponder b4c5
+[Engine] [18:57:50.203003] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.203028] <     139788905723584>  Berserk B ---> readyok
+[WARN  ] [18:57:50.203082] <                    > fastchess --- Warning; Bestmove does not match beginning of last PV - move d3c2 from Berserk B
+Info; info depth 7 seldepth 6 multipv 1 score cp 259 wdl 998 2 0 nodes 463 nps 463000 hashfull 0 tbhits 0 time 1 pv e8g8 b4c5 d3c2 e2f3 
+Position; startpos
+Moves; e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4
+
+[Engine] [18:57:50.203091] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.203123] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.203130] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2
+[Engine] [18:57:50.203136] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.203203] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.203209] <     139788905723584>  BerserkA <--- go wtime 1180 btime 1180 winc 10 binc 10
+[Engine] [18:57:50.203808] <     139788905723584>  BerserkA ---> bestmove b4c5 ponder e8g8
+[Engine] [18:57:50.203814] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.203835] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.203876] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.203908] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.203915] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5
+[Engine] [18:57:50.203921] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.203989] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.203995] <     139788905723584>  Berserk B <--- go wtime 1190 btime 1180 winc 10 binc 10
+[Engine] [18:57:50.204516] <     139788905723584>  Berserk B ---> bestmove e8g8 ponder e2f3
+[Engine] [18:57:50.204522] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.204546] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.204581] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.204606] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.204613] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8
+[Engine] [18:57:50.204618] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.204686] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.204691] <     139788905723584>  BerserkA <--- go wtime 1190 btime 1190 winc 10 binc 10
+[Engine] [18:57:50.205018] <     139788905723584>  BerserkA ---> bestmove e2d1 ponder d4d3
+[Engine] [18:57:50.205021] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.205050] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.205093] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.205123] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.205130] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1
+[Engine] [18:57:50.205136] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.205206] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.205211] <     139788905723584>  Berserk B <--- go wtime 1200 btime 1190 winc 10 binc 10
+[Engine] [18:57:50.205694] <     139788905723584>  Berserk B ---> bestmove c2d3 ponder d1f3
+[Engine] [18:57:50.205700] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.205725] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.205760] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.205786] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.205794] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3
+[Engine] [18:57:50.205799] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.205870] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.205875] <     139788905723584>  BerserkA <--- go wtime 1200 btime 1200 winc 10 binc 10
+[Engine] [18:57:50.206104] <     139788905723584>  BerserkA ---> bestmove a1a3
+[Engine] [18:57:50.206107] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.206128] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.206160] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.206188] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.206196] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3
+[Engine] [18:57:50.206202] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.206285] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.206293] <     139788905723584>  Berserk B <--- go wtime 1210 btime 1200 winc 10 binc 10
+[Engine] [18:57:50.206899] <     139788905723584>  Berserk B ---> bestmove e7h4 ponder a3d3
+[Engine] [18:57:50.206906] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.206931] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.206983] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.207018] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.207026] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4
+[Engine] [18:57:50.207039] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.207122] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.207132] <     139788905723584>  BerserkA <--- go wtime 1210 btime 1210 winc 10 binc 10
+[Engine] [18:57:50.207686] <     139788905723584>  BerserkA ---> bestmove g2g3 ponder h4g5
+[Engine] [18:57:50.207692] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.207717] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.207762] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.207785] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.207793] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3
+[Engine] [18:57:50.207799] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.207874] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.207880] <     139788905723584>  Berserk B <--- go wtime 1220 btime 1210 winc 10 binc 10
+[Engine] [18:57:50.208084] <     139788905723584>  Berserk B ---> bestmove h4g5 ponder a3d3
+[Engine] [18:57:50.208087] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.208107] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.208142] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.208164] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.208174] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5
+[Engine] [18:57:50.208180] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.208256] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.208262] <     139788905723584>  BerserkA <--- go wtime 1220 btime 1220 winc 10 binc 10
+[Engine] [18:57:50.208736] <     139788905723584>  BerserkA ---> bestmove a3d3 ponder g5e3
+[Engine] [18:57:50.208742] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.208761] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.208800] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.208822] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.208829] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3
+[Engine] [18:57:50.208834] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.208908] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.208914] <     139788905723584>  Berserk B <--- go wtime 1230 btime 1220 winc 10 binc 10
+[Engine] [18:57:50.209217] <     139788905723584>  Berserk B ---> bestmove f8e8 ponder g1g2
+[Engine] [18:57:50.209221] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.209248] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.209284] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.209308] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.209315] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8
+[Engine] [18:57:50.209321] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.209399] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.209405] <     139788905723584>  BerserkA <--- go wtime 1230 btime 1230 winc 10 binc 10
+[Engine] [18:57:50.209781] <     139788905723584>  BerserkA ---> bestmove g1f1 ponder g5e3
+[Engine] [18:57:50.209787] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.209806] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.209836] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.209858] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.209866] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1
+[Engine] [18:57:50.209871] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.209953] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.209959] <     139788905723584>  Berserk B <--- go wtime 1240 btime 1230 winc 10 binc 10
+[Engine] [18:57:50.210216] <     139788905723584>  Berserk B ---> bestmove g5e3 ponder d3e3
+[Engine] [18:57:50.210219] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.210251] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.210291] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.210317] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.210325] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1 g5e3
+[Engine] [18:57:50.210330] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.210413] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.210418] <     139788905723584>  BerserkA <--- go wtime 1240 btime 1240 winc 10 binc 10
+[Engine] [18:57:50.210872] <     139788905723584>  BerserkA ---> bestmove d1f3 ponder c6e5
+[Engine] [18:57:50.210877] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.210897] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.210933] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.210956] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.210964] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1 g5e3 d1f3
+[Engine] [18:57:50.210970] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.211065] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.211072] <     139788905723584>  Berserk B <--- go wtime 1250 btime 1240 winc 10 binc 10
+[Engine] [18:57:50.211518] <     139788905723584>  Berserk B ---> bestmove e8e5 ponder f3e4
+[Engine] [18:57:50.211523] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.211551] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.211586] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.211621] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.211628] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1 g5e3 d1f3 e8e5
+[Engine] [18:57:50.211634] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.211732] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.211737] <     139788905723584>  BerserkA <--- go wtime 1250 btime 1250 winc 10 binc 10
+[Engine] [18:57:50.212176] <     139788905723584>  BerserkA ---> bestmove d2b3 ponder e3c1
+[Engine] [18:57:50.212179] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.212202] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.212237] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.212267] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.212274] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1 g5e3 d1f3 e8e5 d2b3
+[Engine] [18:57:50.212280] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.212372] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.212378] <     139788905723584>  Berserk B <--- go wtime 1260 btime 1250 winc 10 binc 10
+[Engine] [18:57:50.212853] <     139788905723584>  Berserk B ---> bestmove c6b4 ponder d3d1
+[Engine] [18:57:50.212858] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.212882] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.212917] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.212946] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.212955] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1 g5e3 d1f3 e8e5 d2b3 c6b4
+[Engine] [18:57:50.212962] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.213070] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.213076] <     139788905723584>  BerserkA <--- go wtime 1260 btime 1260 winc 10 binc 10
+[Engine] [18:57:50.213584] <     139788905723584>  BerserkA ---> bestmove d3e3 ponder d4e3
+[Engine] [18:57:50.213590] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.213615] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.213650] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.213680] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.213688] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1 g5e3 d1f3 e8e5 d2b3 c6b4 d3e3
+[Engine] [18:57:50.213694] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.213799] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.213805] <     139788905723584>  Berserk B <--- go wtime 1270 btime 1260 winc 10 binc 10
+[Engine] [18:57:50.214062] <     139788905723584>  Berserk B ---> bestmove d4e3 ponder e1e3
+[Engine] [18:57:50.214066] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.214093] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.214134] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.214163] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.214171] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1 g5e3 d1f3 e8e5 d2b3 c6b4 d3e3 d4e3
+[Engine] [18:57:50.214176] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.214278] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.214288] <     139788905723584>  BerserkA <--- go wtime 1270 btime 1270 winc 10 binc 10
+[Engine] [18:57:50.214780] <     139788905723584>  BerserkA ---> bestmove e1e2 ponder a8e8
+[Engine] [18:57:50.214786] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.214812] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.214851] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.214879] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.214888] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1 g5e3 d1f3 e8e5 d2b3 c6b4 d3e3 d4e3 e1e2
+[Engine] [18:57:50.214894] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.214987] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.214993] <     139788905723584>  Berserk B <--- go wtime 1280 btime 1270 winc 10 binc 10
+[Engine] [18:57:50.215410] <     139788905723584>  Berserk B ---> bestmove a8e8 ponder f3b7
+[Engine] [18:57:50.215416] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.215443] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.215481] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.215508] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.215516] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1 g5e3 d1f3 e8e5 d2b3 c6b4 d3e3 d4e3 e1e2 a8e8
+[Engine] [18:57:50.215522] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.215624] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.215632] <     139788905723584>  BerserkA <--- go wtime 1280 btime 1280 winc 10 binc 10
+[Engine] [18:57:50.216104] <     139788905723584>  BerserkA ---> bestmove f3b7 ponder e8b8
+[Engine] [18:57:50.216107] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.216134] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.216173] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.216200] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.216208] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1 g5e3 d1f3 e8e5 d2b3 c6b4 d3e3 d4e3 e1e2 a8e8 f3b7
+[Engine] [18:57:50.216221] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.216320] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.216326] <     139788905723584>  Berserk B <--- go wtime 1290 btime 1280 winc 10 binc 10
+[Engine] [18:57:50.216731] <     139788905723584>  Berserk B ---> bestmove e8e6 ponder b7a8
+[Engine] [18:57:50.216737] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.216764] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.216800] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.216828] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.216836] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1 g5e3 d1f3 e8e5 d2b3 c6b4 d3e3 d4e3 e1e2 a8e8 f3b7 e8e6
+[Engine] [18:57:50.216842] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.216939] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.216945] <     139788905723584>  BerserkA <--- go wtime 1290 btime 1290 winc 10 binc 10
+[Engine] [18:57:50.217167] <     139788905723584>  BerserkA ---> bestmove c5c6 ponder b4c6
+[Engine] [18:57:50.217171] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.217196] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.217234] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.217262] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.217273] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1 g5e3 d1f3 e8e5 d2b3 c6b4 d3e3 d4e3 e1e2 a8e8 f3b7 e8e6 c5c6
+[Engine] [18:57:50.217280] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.217377] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.217383] <     139788905723584>  Berserk B <--- go wtime 1300 btime 1290 winc 10 binc 10
+[Engine] [18:57:50.217837] <     139788905723584>  Berserk B ---> bestmove b4c6 ponder b7a6
+[Engine] [18:57:50.217843] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.217870] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.217910] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.217943] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.217953] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1 g5e3 d1f3 e8e5 d2b3 c6b4 d3e3 d4e3 e1e2 a8e8 f3b7 e8e6 c5c6 b4c6
+[Engine] [18:57:50.217959] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.218069] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.218076] <     139788905723584>  BerserkA <--- go wtime 1300 btime 1300 winc 10 binc 10
+[Engine] [18:57:50.218610] <     139788905723584>  BerserkA ---> bestmove b7a6 ponder h7h5
+[Engine] [18:57:50.218615] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.218638] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.218678] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.218710] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.218718] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1 g5e3 d1f3 e8e5 d2b3 c6b4 d3e3 d4e3 e1e2 a8e8 f3b7 e8e6 c5c6 b4c6 b7a6
+[Engine] [18:57:50.218724] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.218823] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.218829] <     139788905723584>  Berserk B <--- go wtime 1310 btime 1300 winc 10 binc 10
+[Engine] [18:57:50.219017] <     139788905723584>  Berserk B ---> bestmove e5f5 ponder f1g2
+[Engine] [18:57:50.219020] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.219057] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.219098] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.219123] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.219131] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1 g5e3 d1f3 e8e5 d2b3 c6b4 d3e3 d4e3 e1e2 a8e8 f3b7 e8e6 c5c6 b4c6 b7a6 e5f5
+[Engine] [18:57:50.219136] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.219231] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.219236] <     139788905723584>  BerserkA <--- go wtime 1310 btime 1310 winc 10 binc 10
+[Engine] [18:57:50.219640] <     139788905723584>  BerserkA ---> bestmove f1g2 ponder f5f2
+[Engine] [18:57:50.219645] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.219664] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.219701] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.219732] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.219740] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1 g5e3 d1f3 e8e5 d2b3 c6b4 d3e3 d4e3 e1e2 a8e8 f3b7 e8e6 c5c6 b4c6 b7a6 e5f5 f1g2
+[Engine] [18:57:50.219745] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.219845] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.219851] <     139788905723584>  Berserk B <--- go wtime 1320 btime 1310 winc 10 binc 10
+[Engine] [18:57:50.220048] <     139788905723584>  Berserk B ---> bestmove c6e5 ponder a6b7
+[Engine] [18:57:50.220052] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.220080] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.220116] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.220140] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.220148] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1 g5e3 d1f3 e8e5 d2b3 c6b4 d3e3 d4e3 e1e2 a8e8 f3b7 e8e6 c5c6 b4c6 b7a6 e5f5 f1g2 c6e5
+[Engine] [18:57:50.220154] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.220251] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.220257] <     139788905723584>  BerserkA <--- go wtime 1320 btime 1320 winc 10 binc 10
+[Engine] [18:57:50.220702] <     139788905723584>  BerserkA ---> bestmove b3d4 ponder f5f2
+[Engine] [18:57:50.220708] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.220737] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.220782] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.220810] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.220818] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1 g5e3 d1f3 e8e5 d2b3 c6b4 d3e3 d4e3 e1e2 a8e8 f3b7 e8e6 c5c6 b4c6 b7a6 e5f5 f1g2 c6e5 b3d4
+[Engine] [18:57:50.220824] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.220926] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.220932] <     139788905723584>  Berserk B <--- go wtime 1330 btime 1320 winc 10 binc 10
+[Engine] [18:57:50.221130] <     139788905723584>  Berserk B ---> bestmove e5d3 ponder c1e3
+[Engine] [18:57:50.221133] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.221160] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.221197] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.221225] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.221233] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1 g5e3 d1f3 e8e5 d2b3 c6b4 d3e3 d4e3 e1e2 a8e8 f3b7 e8e6 c5c6 b4c6 b7a6 e5f5 f1g2 c6e5 b3d4 e5d3
+[Engine] [18:57:50.221239] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.221340] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.221346] <     139788905723584>  BerserkA <--- go wtime 1330 btime 1330 winc 10 binc 10
+[Engine] [18:57:50.221778] <     139788905723584>  BerserkA ---> bestmove d4f5 ponder d3c1
+[Engine] [18:57:50.221784] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.221804] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.221850] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.221881] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.221890] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1 g5e3 d1f3 e8e5 d2b3 c6b4 d3e3 d4e3 e1e2 a8e8 f3b7 e8e6 c5c6 b4c6 b7a6 e5f5 f1g2 c6e5 b3d4 e5d3 d4f5
+[Engine] [18:57:50.221896] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.222002] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.222008] <     139788905723584>  Berserk B <--- go wtime 1340 btime 1330 winc 10 binc 10
+[Engine] [18:57:50.222367] <     139788905723584>  Berserk B ---> bestmove d3c1 ponder e2e3
+[Engine] [18:57:50.222372] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.222399] <     139788905723584>  Berserk B ---> readyok
+[WARN  ] [18:57:50.222439] <                    > fastchess --- Warning; Bestmove does not match beginning of last PV - move d3c1 from Berserk B
+Info; info depth 5 seldepth 5 multipv 1 score cp -555 wdl 0 0 1000 nodes 548 nps 548000 hashfull 0 tbhits 0 time 1 pv g7g6 c1e3 g6f5 
+Position; startpos
+Moves; e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1 g5e3 d1f3 e8e5 d2b3 c6b4 d3e3 d4e3 e1e2 a8e8 f3b7 e8e6 c5c6 b4c6 b7a6 e5f5 f1g2 c6e5 b3d4 e5d3 d4f5
+
+[Engine] [18:57:50.222448] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.222479] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.222486] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1 g5e3 d1f3 e8e5 d2b3 c6b4 d3e3 d4e3 e1e2 a8e8 f3b7 e8e6 c5c6 b4c6 b7a6 e5f5 f1g2 c6e5 b3d4 e5d3 d4f5 d3c1
+[Engine] [18:57:50.222492] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.222605] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.222610] <     139788905723584>  BerserkA <--- go wtime 1340 btime 1340 winc 10 binc 10
+[Engine] [18:57:50.223183] <     139788905723584>  BerserkA ---> bestmove e2e3 ponder e6e3
+[Engine] [18:57:50.223191] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.223215] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.223254] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.223288] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.223299] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1 g5e3 d1f3 e8e5 d2b3 c6b4 d3e3 d4e3 e1e2 a8e8 f3b7 e8e6 c5c6 b4c6 b7a6 e5f5 f1g2 c6e5 b3d4 e5d3 d4f5 d3c1 e2e3
+[Engine] [18:57:50.223305] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.223412] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.223418] <     139788905723584>  Berserk B <--- go wtime 1350 btime 1340 winc 10 binc 10
+[Engine] [18:57:50.223934] <     139788905723584>  Berserk B ---> bestmove h7h5 ponder e3e6
+[Engine] [18:57:50.223940] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.223966] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.224010] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.224045] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.224057] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1 g5e3 d1f3 e8e5 d2b3 c6b4 d3e3 d4e3 e1e2 a8e8 f3b7 e8e6 c5c6 b4c6 b7a6 e5f5 f1g2 c6e5 b3d4 e5d3 d4f5 d3c1 e2e3 h7h5
+[Engine] [18:57:50.224065] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.224173] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.224179] <     139788905723584>  BerserkA <--- go wtime 1350 btime 1350 winc 10 binc 10
+[Engine] [18:57:50.224685] <     139788905723584>  BerserkA ---> bestmove a6b5 ponder e6e3
+[Engine] [18:57:50.224691] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.224711] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.224753] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.224784] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.224792] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1b5 d8b6 b5e2 d7d5 c2c4 d5d4 e1g1 g8f6 f1e1 e7e5 d2d3 f8d6 e3d4 c5d4 b1a3 a7a6 d1b3 b6b3 a2b3 f6d7 f3d2 d7c5 a3c2 c8f5 f2f4 f5d3 f4e5 d6e7 b3b4 d3c2 b4c5 e8g8 e2d1 c2d3 a1a3 e7h4 g2g3 h4g5 a3d3 f8e8 g1f1 g5e3 d1f3 e8e5 d2b3 c6b4 d3e3 d4e3 e1e2 a8e8 f3b7 e8e6 c5c6 b4c6 b7a6 e5f5 f1g2 c6e5 b3d4 e5d3 d4f5 d3c1 e2e3 h7h5 a6b5
+[Engine] [18:57:50.224798] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.224910] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.224916] <     139788905723584>  Berserk B <--- go wtime 1360 btime 1350 winc 10 binc 10
+[Engine] [18:57:50.225075] <     139788905723584>  Berserk B ---> bestmove c1e2 ponder e3e6
+[Engine] [18:57:50.225079] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.225103] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.225377] <     139788905723584>  Berserk B <--- ucinewgame
+[Engine] [18:57:50.225386] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.226362] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.226371] <     139788905723584>  BerserkA <--- ucinewgame
+[Engine] [18:57:50.226377] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.227312] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.227321] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.227343] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.227354] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.227374] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.227379] <     139788905723584>  Berserk B <--- position startpos
+[Engine] [18:57:50.227384] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.227403] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.227410] <     139788905723584>  Berserk B <--- go wtime 1010 btime 1010 winc 10 binc 10
+[Engine] [18:57:50.227922] <     139788905723584>  Berserk B ---> bestmove e2e3 ponder a7a6
+[Engine] [18:57:50.227927] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.227963] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.228003] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.228029] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.228049] <     139788905723584>  BerserkA <--- position startpos moves e2e3
+[Engine] [18:57:50.228056] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.228077] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.228084] <     139788905723584>  BerserkA <--- go wtime 1020 btime 1010 winc 10 binc 10
+[Engine] [18:57:50.228687] <     139788905723584>  BerserkA ---> bestmove c7c5 ponder c2c4
+[Engine] [18:57:50.228693] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.228714] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.228748] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.228771] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.228777] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5
+[Engine] [18:57:50.228782] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.228801] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.228807] <     139788905723584>  Berserk B <--- go wtime 1020 btime 1020 winc 10 binc 10
+[Engine] [18:57:50.229285] <     139788905723584>  Berserk B ---> bestmove g1f3 ponder b8c6
+[Engine] [18:57:50.229292] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.229326] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.229398] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.229427] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.229433] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3
+[Engine] [18:57:50.229440] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.229465] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.229471] <     139788905723584>  BerserkA <--- go wtime 1030 btime 1020 winc 10 binc 10
+[Engine] [18:57:50.230007] <     139788905723584>  BerserkA ---> bestmove b8c6 ponder d2d4
+[Engine] [18:57:50.230013] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.230042] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.230084] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.230111] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.230117] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6
+[Engine] [18:57:50.230122] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.230147] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.230153] <     139788905723584>  Berserk B <--- go wtime 1030 btime 1030 winc 10 binc 10
+[Engine] [18:57:50.230723] <     139788905723584>  Berserk B ---> bestmove f1e2 ponder d7d5
+[Engine] [18:57:50.230729] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.230755] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.230798] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.230824] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.230830] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2
+[Engine] [18:57:50.230836] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.230862] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.230868] <     139788905723584>  BerserkA <--- go wtime 1040 btime 1030 winc 10 binc 10
+[Engine] [18:57:50.231047] <     139788905723584>  BerserkA ---> bestmove g7g6 ponder c2c4
+[Engine] [18:57:50.231051] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.231076] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.231109] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.231135] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.231141] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6
+[Engine] [18:57:50.231147] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.231173] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.231179] <     139788905723584>  Berserk B <--- go wtime 1040 btime 1040 winc 10 binc 10
+[Engine] [18:57:50.231729] <     139788905723584>  Berserk B ---> bestmove c2c4 ponder g8f6
+[Engine] [18:57:50.231734] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.231760] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.231800] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.231827] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.231833] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4
+[Engine] [18:57:50.231839] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.231869] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.231876] <     139788905723584>  BerserkA <--- go wtime 1050 btime 1040 winc 10 binc 10
+[Engine] [18:57:50.232251] <     139788905723584>  BerserkA ---> bestmove f8g7 ponder b1c3
+[Engine] [18:57:50.232254] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.232274] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.232309] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.232332] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.232339] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7
+[Engine] [18:57:50.232344] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.232374] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.232379] <     139788905723584>  Berserk B <--- go wtime 1050 btime 1050 winc 10 binc 10
+[Engine] [18:57:50.232991] <     139788905723584>  Berserk B ---> bestmove e1g1 ponder a8b8
+[Engine] [18:57:50.232997] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.233018] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.233065] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.233091] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.233097] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1
+[Engine] [18:57:50.233102] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.233131] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.233138] <     139788905723584>  BerserkA <--- go wtime 1060 btime 1050 winc 10 binc 10
+[Engine] [18:57:50.233642] <     139788905723584>  BerserkA ---> bestmove g8f6 ponder d2d4
+[Engine] [18:57:50.233648] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.233668] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.233701] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.233723] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.233729] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6
+[Engine] [18:57:50.233734] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.233764] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.233770] <     139788905723584>  Berserk B <--- go wtime 1060 btime 1060 winc 10 binc 10
+[Engine] [18:57:50.234113] <     139788905723584>  Berserk B ---> bestmove d2d4 ponder e8g8
+[Engine] [18:57:50.234118] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.234141] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.234184] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.234207] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.234214] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4
+[Engine] [18:57:50.234219] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.234268] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.234277] <     139788905723584>  BerserkA <--- go wtime 1070 btime 1060 winc 10 binc 10
+[Engine] [18:57:50.234855] <     139788905723584>  BerserkA ---> bestmove e8g8 ponder d4c5
+[Engine] [18:57:50.234863] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.234891] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.234934] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.234962] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.234969] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8
+[Engine] [18:57:50.234976] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.235010] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.235016] <     139788905723584>  Berserk B <--- go wtime 1070 btime 1070 winc 10 binc 10
+[Engine] [18:57:50.235563] <     139788905723584>  Berserk B ---> bestmove b1c3 ponder c5d4
+[Engine] [18:57:50.235570] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.235598] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.235648] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.235672] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.235679] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3
+[Engine] [18:57:50.235684] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.235721] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.235727] <     139788905723584>  BerserkA <--- go wtime 1080 btime 1070 winc 10 binc 10
+[Engine] [18:57:50.236022] <     139788905723584>  BerserkA ---> bestmove c5d4 ponder f3d4
+[Engine] [18:57:50.236025] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.236051] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.236089] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.236116] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.236122] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4
+[Engine] [18:57:50.236128] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.236164] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.236170] <     139788905723584>  Berserk B <--- go wtime 1080 btime 1080 winc 10 binc 10
+[Engine] [18:57:50.236552] <     139788905723584>  Berserk B ---> bestmove e3d4 ponder d7d5
+[Engine] [18:57:50.236558] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.236577] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.236620] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.236653] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.236668] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4
+[Engine] [18:57:50.236675] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.236713] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.236719] <     139788905723584>  BerserkA <--- go wtime 1090 btime 1080 winc 10 binc 10
+[Engine] [18:57:50.237027] <     139788905723584>  BerserkA ---> bestmove d7d5 ponder c4d5
+[Engine] [18:57:50.237030] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.237069] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.237111] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.237137] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.237144] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5
+[Engine] [18:57:50.237149] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.237187] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.237193] <     139788905723584>  Berserk B <--- go wtime 1090 btime 1090 winc 10 binc 10
+[Engine] [18:57:50.237743] <     139788905723584>  Berserk B ---> bestmove h2h3 ponder d5c4
+[Engine] [18:57:50.237756] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.237784] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.237827] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.237854] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.237860] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3
+[Engine] [18:57:50.237865] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.237904] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.237910] <     139788905723584>  BerserkA <--- go wtime 1100 btime 1090 winc 10 binc 10
+[Engine] [18:57:50.238085] <     139788905723584>  BerserkA ---> bestmove c8e6 ponder c4d5
+[Engine] [18:57:50.238091] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.238113] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.238146] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.238167] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.238173] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6
+[Engine] [18:57:50.238178] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.238218] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.238223] <     139788905723584>  Berserk B <--- go wtime 1100 btime 1100 winc 10 binc 10
+[Engine] [18:57:50.238702] <     139788905723584>  Berserk B ---> bestmove c4c5 ponder b7b6
+[Engine] [18:57:50.238708] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.238727] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.238763] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.238784] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.238790] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5
+[Engine] [18:57:50.238795] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.238834] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.238840] <     139788905723584>  BerserkA <--- go wtime 1110 btime 1100 winc 10 binc 10
+[Engine] [18:57:50.239372] <     139788905723584>  BerserkA ---> bestmove e6f5 ponder f1e1
+[Engine] [18:57:50.239379] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.239412] <     139788905723584>  BerserkA ---> readyok
+[WARN  ] [18:57:50.239464] <                    > fastchess --- Warning; Bestmove does not match beginning of last PV - move e6f5 from BerserkA
+Info; info depth 5 seldepth 5 multipv 1 score cp 37 wdl 113 877 10 nodes 166 nps 166000 hashfull 0 tbhits 0 time 1 pv f6e4 f1e1 
+Position; startpos
+Moves; e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5
+
+[Engine] [18:57:50.239475] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.239503] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.239510] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5
+[Engine] [18:57:50.239515] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.239562] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.239568] <     139788905723584>  Berserk B <--- go wtime 1110 btime 1110 winc 10 binc 10
+[Engine] [18:57:50.240065] <     139788905723584>  Berserk B ---> bestmove e2b5 ponder f5d7
+[Engine] [18:57:50.240068] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.240089] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.240129] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.240159] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.240166] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5
+[Engine] [18:57:50.240172] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.240220] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.240226] <     139788905723584>  BerserkA <--- go wtime 1120 btime 1110 winc 10 binc 10
+[Engine] [18:57:50.240709] <     139788905723584>  BerserkA ---> bestmove a7a6 ponder b5c6
+[Engine] [18:57:50.240714] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.240739] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.240773] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.240800] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.240807] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6
+[Engine] [18:57:50.240812] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.240858] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.240864] <     139788905723584>  Berserk B <--- go wtime 1120 btime 1120 winc 10 binc 10
+[Engine] [18:57:50.241059] <     139788905723584>  Berserk B ---> bestmove b5a4 ponder c6a5
+[Engine] [18:57:50.241063] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.241092] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.241126] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.241154] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.241160] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4
+[Engine] [18:57:50.241166] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.241216] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.241222] <     139788905723584>  BerserkA <--- go wtime 1130 btime 1120 winc 10 binc 10
+[Engine] [18:57:50.241677] <     139788905723584>  BerserkA ---> bestmove a8b8 ponder a4c6
+[Engine] [18:57:50.241683] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.241706] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.241742] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.241769] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.241776] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8
+[Engine] [18:57:50.241782] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.241837] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.241843] <     139788905723584>  Berserk B <--- go wtime 1130 btime 1130 winc 10 binc 10
+[Engine] [18:57:50.242291] <     139788905723584>  Berserk B ---> bestmove c1f4 ponder b8a8
+[Engine] [18:57:50.242295] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.242320] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.242355] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.242383] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.242390] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4
+[Engine] [18:57:50.242395] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.242449] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.242455] <     139788905723584>  BerserkA <--- go wtime 1140 btime 1130 winc 10 binc 10
+[Engine] [18:57:50.243057] <     139788905723584>  BerserkA ---> bestmove b8c8 ponder a4c6
+[Engine] [18:57:50.243065] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.243098] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.243154] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.243181] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.243189] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8
+[Engine] [18:57:50.243194] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.243249] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.243255] <     139788905723584>  Berserk B <--- go wtime 1140 btime 1140 winc 10 binc 10
+[Engine] [18:57:50.243771] <     139788905723584>  Berserk B ---> bestmove d1b3 ponder f6h5
+[Engine] [18:57:50.243776] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.243803] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.243837] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.243866] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.243873] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3
+[Engine] [18:57:50.243879] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.243940] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.243945] <     139788905723584>  BerserkA <--- go wtime 1150 btime 1140 winc 10 binc 10
+[Engine] [18:57:50.244409] <     139788905723584>  BerserkA ---> bestmove f6h5 ponder a4c6
+[Engine] [18:57:50.244413] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.244449] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.244502] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.244528] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.244536] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5
+[Engine] [18:57:50.244541] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.244602] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.244608] <     139788905723584>  Berserk B <--- go wtime 1150 btime 1150 winc 10 binc 10
+[Engine] [18:57:50.245282] <     139788905723584>  Berserk B ---> bestmove f4e3 ponder c6a5
+[Engine] [18:57:50.245291] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.245321] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.245365] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.245395] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.245405] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3
+[Engine] [18:57:50.245413] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.245477] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.245484] <     139788905723584>  BerserkA <--- go wtime 1160 btime 1150 winc 10 binc 10
+[Engine] [18:57:50.246050] <     139788905723584>  BerserkA ---> bestmove e7e5 ponder a4c6
+[Engine] [18:57:50.246056] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.246081] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.246124] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.246155] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.246163] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5
+[Engine] [18:57:50.246169] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.246241] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.246250] <     139788905723584>  Berserk B <--- go wtime 1160 btime 1160 winc 10 binc 10
+[Engine] [18:57:50.246739] <     139788905723584>  Berserk B ---> bestmove f3e5 ponder c6e5
+[Engine] [18:57:50.246745] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.246771] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.246808] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.246834] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.246841] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5
+[Engine] [18:57:50.246846] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.246910] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.246916] <     139788905723584>  BerserkA <--- go wtime 1170 btime 1160 winc 10 binc 10
+[Engine] [18:57:50.247143] <     139788905723584>  BerserkA ---> bestmove c6e5 ponder b3b7
+[Engine] [18:57:50.247147] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.247175] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.247210] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.247238] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.247245] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5
+[Engine] [18:57:50.247251] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.247316] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.247322] <     139788905723584>  Berserk B <--- go wtime 1170 btime 1170 winc 10 binc 10
+[Engine] [18:57:50.247781] <     139788905723584>  Berserk B ---> bestmove b3b7 ponder e5d3
+[Engine] [18:57:50.247787] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.247811] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.247849] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.247877] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.247884] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7
+[Engine] [18:57:50.247890] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.247963] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.247969] <     139788905723584>  BerserkA <--- go wtime 1180 btime 1170 winc 10 binc 10
+[Engine] [18:57:50.248157] <     139788905723584>  BerserkA ---> bestmove e5c4 ponder b7d5
+[Engine] [18:57:50.248160] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.248185] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.248221] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.248251] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.248258] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4
+[Engine] [18:57:50.248264] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.248332] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.248338] <     139788905723584>  Berserk B <--- go wtime 1180 btime 1180 winc 10 binc 10
+[Engine] [18:57:50.248829] <     139788905723584>  Berserk B ---> bestmove b7d5 ponder c4b2
+[Engine] [18:57:50.248835] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.248857] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.248895] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.248921] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.248928] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5
+[Engine] [18:57:50.248933] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.249004] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.249011] <     139788905723584>  BerserkA <--- go wtime 1190 btime 1180 winc 10 binc 10
+[Engine] [18:57:50.249489] <     139788905723584>  BerserkA ---> bestmove c4b2 ponder a4b3
+[Engine] [18:57:50.249494] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.249522] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.249555] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.249585] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.249591] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2
+[Engine] [18:57:50.249598] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.249668] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.249673] <     139788905723584>  Berserk B <--- go wtime 1190 btime 1190 winc 10 binc 10
+[Engine] [18:57:50.250282] <     139788905723584>  Berserk B ---> bestmove a4b3 ponder c8b8
+[Engine] [18:57:50.250291] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.250319] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.250358] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.250387] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.250394] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3
+[Engine] [18:57:50.250399] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.250471] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.250477] <     139788905723584>  BerserkA <--- go wtime 1200 btime 1190 winc 10 binc 10
+[Engine] [18:57:50.250939] <     139788905723584>  BerserkA ---> bestmove d8h4 ponder a2a4
+[Engine] [18:57:50.250942] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.250971] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.251009] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.251040] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.251048] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3 d8h4
+[Engine] [18:57:50.251054] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.251133] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.251139] <     139788905723584>  Berserk B <--- go wtime 1200 btime 1200 winc 10 binc 10
+[Engine] [18:57:50.251688] <     139788905723584>  Berserk B ---> bestmove g2g4 ponder h4h3
+[Engine] [18:57:50.251694] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.251722] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.251758] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.251786] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.251793] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3 d8h4 g2g4
+[Engine] [18:57:50.251799] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.251879] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.251885] <     139788905723584>  BerserkA <--- go wtime 1210 btime 1200 winc 10 binc 10
+[Engine] [18:57:50.252246] <     139788905723584>  BerserkA ---> bestmove f5e6 ponder d5b7
+[Engine] [18:57:50.252249] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.252274] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.252309] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.252340] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.252348] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3 d8h4 g2g4 f5e6
+[Engine] [18:57:50.252353] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.252431] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.252437] <     139788905723584>  Berserk B <--- go wtime 1210 btime 1210 winc 10 binc 10
+[Engine] [18:57:50.252918] <     139788905723584>  Berserk B ---> bestmove d5g2 ponder b2d3
+[Engine] [18:57:50.252924] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.252947] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.252982] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.253009] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.253018] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3 d8h4 g2g4 f5e6 d5g2
+[Engine] [18:57:50.253023] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.253115] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.253121] <     139788905723584>  BerserkA <--- go wtime 1220 btime 1210 winc 10 binc 10
+[Engine] [18:57:50.253652] <     139788905723584>  BerserkA ---> bestmove h5f6 ponder b3e6
+[Engine] [18:57:50.253658] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.253680] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.253723] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.253755] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.253763] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3 d8h4 g2g4 f5e6 d5g2 h5f6
+[Engine] [18:57:50.253769] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.253852] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.253857] <     139788905723584>  Berserk B <--- go wtime 1220 btime 1220 winc 10 binc 10
+[Engine] [18:57:50.254061] <     139788905723584>  Berserk B ---> bestmove f1b1 ponder c8b8
+[Engine] [18:57:50.254064] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.254089] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.254123] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.254147] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.254155] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3 d8h4 g2g4 f5e6 d5g2 h5f6 f1b1
+[Engine] [18:57:50.254160] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.254255] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.254263] <     139788905723584>  BerserkA <--- go wtime 1230 btime 1220 winc 10 binc 10
+[Engine] [18:57:50.254782] <     139788905723584>  BerserkA ---> bestmove b2c4 ponder b3c4
+[Engine] [18:57:50.254787] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.254808] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.254847] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.254876] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.254884] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3 d8h4 g2g4 f5e6 d5g2 h5f6 f1b1 b2c4
+[Engine] [18:57:50.254890] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.254980] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.254986] <     139788905723584>  Berserk B <--- go wtime 1230 btime 1230 winc 10 binc 10
+[Engine] [18:57:50.255284] <     139788905723584>  Berserk B ---> bestmove e3f4 ponder h7h5
+[Engine] [18:57:50.255288] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.255314] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.255347] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.255372] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.255380] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3 d8h4 g2g4 f5e6 d5g2 h5f6 f1b1 b2c4 e3f4
+[Engine] [18:57:50.255388] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.255474] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.255479] <     139788905723584>  BerserkA <--- go wtime 1240 btime 1230 winc 10 binc 10
+[Engine] [18:57:50.255998] <     139788905723584>  BerserkA ---> bestmove c8d8 ponder b3c4
+[Engine] [18:57:50.256003] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.256023] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.256065] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.256097] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.256105] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3 d8h4 g2g4 f5e6 d5g2 h5f6 f1b1 b2c4 e3f4 c8d8
+[Engine] [18:57:50.256110] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.256201] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.256207] <     139788905723584>  Berserk B <--- go wtime 1240 btime 1240 winc 10 binc 10
+[Engine] [18:57:50.256794] <     139788905723584>  Berserk B ---> bestmove f4g3 ponder h4h6
+[Engine] [18:57:50.256800] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.256824] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.256865] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.256897] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.256905] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3 d8h4 g2g4 f5e6 d5g2 h5f6 f1b1 b2c4 e3f4 c8d8 f4g3
+[Engine] [18:57:50.256911] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.257015] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.257039] <     139788905723584>  BerserkA <--- go wtime 1250 btime 1240 winc 10 binc 10
+[Engine] [18:57:50.257531] <     139788905723584>  BerserkA ---> bestmove h4g5 ponder c5c6
+[Engine] [18:57:50.257538] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.257566] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.257606] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.257636] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.257644] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3 d8h4 g2g4 f5e6 d5g2 h5f6 f1b1 b2c4 e3f4 c8d8 f4g3 h4g5
+[Engine] [18:57:50.257651] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.257757] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.257763] <     139788905723584>  Berserk B <--- go wtime 1250 btime 1250 winc 10 binc 10
+[Engine] [18:57:50.258070] <     139788905723584>  Berserk B ---> bestmove b1e1 ponder d8d4
+[Engine] [18:57:50.258073] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.258104] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.258149] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.258180] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.258189] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3 d8h4 g2g4 f5e6 d5g2 h5f6 f1b1 b2c4 e3f4 c8d8 f4g3 h4g5 b1e1
+[Engine] [18:57:50.258195] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.258301] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.258310] <     139788905723584>  BerserkA <--- go wtime 1260 btime 1250 winc 10 binc 10
+[Engine] [18:57:50.258865] <     139788905723584>  BerserkA ---> bestmove d8d4 ponder e1e6
+[Engine] [18:57:50.258871] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.258895] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.258936] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.258963] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.258970] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3 d8h4 g2g4 f5e6 d5g2 h5f6 f1b1 b2c4 e3f4 c8d8 f4g3 h4g5 b1e1 d8d4
+[Engine] [18:57:50.258976] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.259105] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.259111] <     139788905723584>  Berserk B <--- go wtime 1260 btime 1260 winc 10 binc 10
+[Engine] [18:57:50.259629] <     139788905723584>  Berserk B ---> bestmove c5c6 ponder f6g4
+[Engine] [18:57:50.259635] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.259670] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.259708] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.259738] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.259745] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3 d8h4 g2g4 f5e6 d5g2 h5f6 f1b1 b2c4 e3f4 c8d8 f4g3 h4g5 b1e1 d8d4 c5c6
+[Engine] [18:57:50.259751] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.259850] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.259856] <     139788905723584>  BerserkA <--- go wtime 1270 btime 1260 winc 10 binc 10
+[Engine] [18:57:50.260118] <     139788905723584>  BerserkA ---> bestmove g5d2 ponder c3e2
+[Engine] [18:57:50.260121] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.260146] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.260178] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.260211] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.260227] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3 d8h4 g2g4 f5e6 d5g2 h5f6 f1b1 b2c4 e3f4 c8d8 f4g3 h4g5 b1e1 d8d4 c5c6 g5d2
+[Engine] [18:57:50.260238] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.260344] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.260352] <     139788905723584>  Berserk B <--- go wtime 1270 btime 1270 winc 10 binc 10
+[Engine] [18:57:50.260865] <     139788905723584>  Berserk B ---> bestmove g2f3 ponder f6g4
+[Engine] [18:57:50.260872] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.260904] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.260938] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.260968] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.260976] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3 d8h4 g2g4 f5e6 d5g2 h5f6 f1b1 b2c4 e3f4 c8d8 f4g3 h4g5 b1e1 d8d4 c5c6 g5d2 g2f3
+[Engine] [18:57:50.260981] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.261100] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.261106] <     139788905723584>  BerserkA <--- go wtime 1280 btime 1270 winc 10 binc 10
+[Engine] [18:57:50.261697] <     139788905723584>  BerserkA ---> bestmove d4d3 ponder b3c4
+[Engine] [18:57:50.261703] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.261734] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.261774] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.261808] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.261816] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3 d8h4 g2g4 f5e6 d5g2 h5f6 f1b1 b2c4 e3f4 c8d8 f4g3 h4g5 b1e1 d8d4 c5c6 g5d2 g2f3 d4d3
+[Engine] [18:57:50.261822] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.261928] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.261934] <     139788905723584>  Berserk B <--- go wtime 1280 btime 1280 winc 10 binc 10
+[Engine] [18:57:50.262388] <     139788905723584>  Berserk B ---> bestmove c3e4 ponder d3f3
+[Engine] [18:57:50.262392] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.262417] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.262454] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.262487] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.262495] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3 d8h4 g2g4 f5e6 d5g2 h5f6 f1b1 b2c4 e3f4 c8d8 f4g3 h4g5 b1e1 d8d4 c5c6 g5d2 g2f3 d4d3 c3e4
+[Engine] [18:57:50.262501] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.262616] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.262622] <     139788905723584>  BerserkA <--- go wtime 1290 btime 1280 winc 10 binc 10
+[Engine] [18:57:50.263151] <     139788905723584>  BerserkA ---> bestmove f6e4 ponder f3e4
+[Engine] [18:57:50.263154] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.263187] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.263229] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.263261] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.263273] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3 d8h4 g2g4 f5e6 d5g2 h5f6 f1b1 b2c4 e3f4 c8d8 f4g3 h4g5 b1e1 d8d4 c5c6 g5d2 g2f3 d4d3 c3e4 f6e4
+[Engine] [18:57:50.263283] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.263398] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.263405] <     139788905723584>  Berserk B <--- go wtime 1290 btime 1290 winc 10 binc 10
+[Engine] [18:57:50.263872] <     139788905723584>  Berserk B ---> bestmove f3d3 ponder d2d3
+[Engine] [18:57:50.263879] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.263906] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.263940] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.263977] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.263985] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3 d8h4 g2g4 f5e6 d5g2 h5f6 f1b1 b2c4 e3f4 c8d8 f4g3 h4g5 b1e1 d8d4 c5c6 g5d2 g2f3 d4d3 c3e4 f6e4 f3d3
+[Engine] [18:57:50.263991] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.264119] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.264125] <     139788905723584>  BerserkA <--- go wtime 1300 btime 1290 winc 10 binc 10
+[Engine] [18:57:50.264655] <     139788905723584>  BerserkA ---> bestmove d2d3 ponder a1d1
+[Engine] [18:57:50.264660] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.264689] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.264730] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.264760] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.264769] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3 d8h4 g2g4 f5e6 d5g2 h5f6 f1b1 b2c4 e3f4 c8d8 f4g3 h4g5 b1e1 d8d4 c5c6 g5d2 g2f3 d4d3 c3e4 f6e4 f3d3 d2d3
+[Engine] [18:57:50.264774] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.264912] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.264918] <     139788905723584>  Berserk B <--- go wtime 1300 btime 1300 winc 10 binc 10
+[Engine] [18:57:50.265259] <     139788905723584>  Berserk B ---> bestmove a1d1 ponder e4f2
+[Engine] [18:57:50.265263] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.265291] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.265332] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.265368] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.265377] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3 d8h4 g2g4 f5e6 d5g2 h5f6 f1b1 b2c4 e3f4 c8d8 f4g3 h4g5 b1e1 d8d4 c5c6 g5d2 g2f3 d4d3 c3e4 f6e4 f3d3 d2d3 a1d1
+[Engine] [18:57:50.265383] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.265508] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.265518] <     139788905723584>  BerserkA <--- go wtime 1310 btime 1300 winc 10 binc 10
+[Engine] [18:57:50.265962] <     139788905723584>  BerserkA ---> bestmove c4d2 ponder e1e4
+[Engine] [18:57:50.265967] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.265997] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.266040] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.266074] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.266082] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3 d8h4 g2g4 f5e6 d5g2 h5f6 f1b1 b2c4 e3f4 c8d8 f4g3 h4g5 b1e1 d8d4 c5c6 g5d2 g2f3 d4d3 c3e4 f6e4 f3d3 d2d3 a1d1 c4d2
+[Engine] [18:57:50.266088] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.266203] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.266209] <     139788905723584>  Berserk B <--- go wtime 1310 btime 1310 winc 10 binc 10
+[Engine] [18:57:50.266698] <     139788905723584>  Berserk B ---> bestmove g1g2 ponder e6b3
+[Engine] [18:57:50.266703] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.266727] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.266761] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.266795] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.266803] <     139788905723584>  BerserkA <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3 d8h4 g2g4 f5e6 d5g2 h5f6 f1b1 b2c4 e3f4 c8d8 f4g3 h4g5 b1e1 d8d4 c5c6 g5d2 g2f3 d4d3 c3e4 f6e4 f3d3 d2d3 a1d1 c4d2 g1g2
+[Engine] [18:57:50.266815] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.266940] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.266946] <     139788905723584>  BerserkA <--- go wtime 1320 btime 1310 winc 10 binc 10
+[Engine] [18:57:50.267220] <     139788905723584>  BerserkA ---> bestmove d3f3 ponder g2g1
+[Engine] [18:57:50.267226] <     139788905723584>  BerserkA <--- isready
+[Engine] [18:57:50.267258] <     139788905723584>  BerserkA ---> readyok
+[Engine] [18:57:50.267304] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.267336] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.267347] <     139788905723584>  Berserk B <--- position startpos moves e2e3 c7c5 g1f3 b8c6 f1e2 g7g6 c2c4 f8g7 e1g1 g8f6 d2d4 e8g8 b1c3 c5d4 e3d4 d7d5 h2h3 c8e6 c4c5 e6f5 e2b5 a7a6 b5a4 a8b8 c1f4 b8c8 d1b3 f6h5 f4e3 e7e5 f3e5 c6e5 b3b7 e5c4 b7d5 c4b2 a4b3 d8h4 g2g4 f5e6 d5g2 h5f6 f1b1 b2c4 e3f4 c8d8 f4g3 h4g5 b1e1 d8d4 c5c6 g5d2 g2f3 d4d3 c3e4 f6e4 f3d3 d2d3 a1d1 c4d2 g1g2 d3f3
+[Engine] [18:57:50.267354] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.267485] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.267494] <     139788905723584>  Berserk B <--- go wtime 1320 btime 1320 winc 10 binc 10
+[Engine] [18:57:50.268065] <     139788905723584>  Berserk B ---> bestmove g2h2 ponder e4g3
+[Engine] [18:57:50.268075] <     139788905723584>  Berserk B <--- isready
+[Engine] [18:57:50.268103] <     139788905723584>  Berserk B ---> readyok
+[Engine] [18:57:50.268607] <     139788905723584>  BerserkC <--- uci
+[Engine] [18:57:50.287243] <     139788905723584>  BerserkC ---> id name Berserk 20260906
+[Engine] [18:57:50.287284] <     139788905723584>  BerserkC ---> id author Jay Honnold
+[Engine] [18:57:50.287287] <     139788905723584>  BerserkC ---> option name Hash type spin default 16 min 2 max 33554432
+[Engine] [18:57:50.287290] <     139788905723584>  BerserkC ---> option name Threads type spin default 1 min 1 max 2048
+[Engine] [18:57:50.287292] <     139788905723584>  BerserkC ---> option name SyzygyPath type string default <empty>
+[Engine] [18:57:50.287295] <     139788905723584>  BerserkC ---> option name MultiPV type spin default 1 min 1 max 256
+[Engine] [18:57:50.287297] <     139788905723584>  BerserkC ---> option name Ponder type check default false
+[Engine] [18:57:50.287300] <     139788905723584>  BerserkC ---> option name UCI_ShowWDL type check default true
+[Engine] [18:57:50.287302] <     139788905723584>  BerserkC ---> option name UCI_Chess960 type check default false
+[Engine] [18:57:50.287305] <     139788905723584>  BerserkC ---> option name MoveOverhead type spin default 50 min 0 max 10000
+[Engine] [18:57:50.287307] <     139788905723584>  BerserkC ---> option name Contempt type spin default 0 min -100 max 100
+[Engine] [18:57:50.287309] <     139788905723584>  BerserkC ---> option name EvalFile type string default <empty>
+[Engine] [18:57:50.287312] <     139788905723584>  BerserkC ---> option name Minimal type check default false
+[Engine] [18:57:50.287316] <     139788905723584>  BerserkC ---> option name Normalize type check default true
+[Engine] [18:57:50.287321] <     139788905723584>  BerserkC ---> option name SoftNodes type check default false
+[Engine] [18:57:50.287327] <     139788905723584>  BerserkC ---> uciok
