@@ -16,7 +16,7 @@ changing reply/targeting logic, or touching the FEN/time/score/PV encoding in
     across LOGOFF/re-LOGON), FIFO queue, one message in flight (stop-and-wait; a window would
     land a resend behind a newer id and node-tlcv drops any id ≤ last seen). A slow client never
     stalls another. Retransmit uses an adaptive RTO (RFC 6298 estimator, Karn's rule, clamped
-    50 ms–2 s, doubling per retransmit of one item). Give-up after 10 s: a *game* item is
+    50 ms–2 s, doubling per retransmit of one item; an ACK of a retransmitted item lifts the next RTO by at most 2x, since it is ambiguous under Karn). Queued PV/clock items are replaced by a newer one only while no numbered item is queued after them, so a PV is never delivered behind the move it precedes. Give-up after 30 s (not 10 s: at 25% loss each way a 10 s give-up restarts a ~500-message replay that can itself give up): a *game* item is
     replaced by a replay of its game under new ids; a *control* item is dropped (`onGiveUp`);
     the `result` is retried until 60 s then dropped with an error. Queues over `maxQueue` are
     coalesced to replays when shorter. Game data is dropped only for a *stalled* client (no

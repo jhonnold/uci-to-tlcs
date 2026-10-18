@@ -161,8 +161,15 @@ export class ReliableSender {
           this.hooks.rawSend(item.body, d);
           continue;
         }
-        const i = c.queue.findIndex((q) => q.latest === item.latest);
-        if (i >= 0) c.queue.splice(i, 1);
+        // Replace a queued same-key item only inside the trailing run of latest items: an
+        // older PV/clock queued before a numbered item belongs before it, so moving it
+        // behind that item would mislabel the move (node-tlcv "(Book)", no eval).
+        for (let i = c.queue.length - 1; i >= 0 && c.queue[i].latest; i--) {
+          if (c.queue[i].latest === item.latest) {
+            c.queue.splice(i, 1);
+            break;
+          }
+        }
         c.queue.push(item);
         continue;
       }
@@ -343,7 +350,7 @@ export class ReliableSender {
   }
 
   /** Replace epoch `e`'s queued items by its replay (at the first removed index, else the head). */
-  private splice(dest: string, c: ClientState, e: number): number {
+  private splice(dest: string, c: ClientState, e: number, replayed?: Outbound[] | null): number {
     let at = -1;
     let kept = 0;
     let withResult = false;
@@ -356,7 +363,7 @@ export class ReliableSender {
       if (it.critical) withResult = true;
       return false;
     });
-    const r = this.hooks.replay(e, withResult);
+    const r = replayed ?? this.hooks.replay(e, withResult);
     if (!r) {
       logger.error(`give-up/coalesce ${dest}: no record for game ${e}`);
       return 0;
@@ -365,6 +372,8 @@ export class ReliableSender {
     return r.length;
   }
 
+  // Cost note (T10/T12): once over maxQueue, every game enqueue re-measures each queued
+  // epoch's replay; an unfinished `cur` is not cached, so that is O(stream) per enqueue.
   private maybeCoalesce(dest: string, c: ClientState): void {
     if (c.queue.length <= this.opts.maxQueue) return;
     for (const e of this.queuedEpochs(c)) {
@@ -377,7 +386,7 @@ export class ReliableSender {
       }
       const r = this.hooks.replay(e, hasCritical);
       if (!r || r.length >= n) continue;
-      this.splice(dest, c, e);
+      this.splice(dest, c, e, r); // same withResult as hasCritical, so r is reusable
       const msg = `coalesced ${dest} game ${e}: ${n} -> ${r.length}`;
       if (c.coalesceLogged.has(e)) logger.debug(msg);
       else {
@@ -401,6 +410,8 @@ export class ReliableSender {
    * The ONLY path that discards game data: keep just the newest queued epoch. Runs when a
    * stall episode starts (`announce`) and again for each new epoch queued while stalled.
    */
+  // Note: a give-up of an in-flight item from an epoch dropped here re-inserts that epoch's
+  // replay at the head; the next new-epoch enqueue drops it again (harmless, bounded churn).
   private dropStalled(dest: string, c: ClientState, announce = false): void {
     const epochs = this.queuedEpochs(c);
     let dropped = 0;

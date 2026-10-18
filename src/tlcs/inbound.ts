@@ -17,7 +17,7 @@ export function parseAck(body: string): number | null {
 
 /** Per-source ring of the last N inbound ids, to drop retransmitted duplicates. */
 export class InboundDeduper {
-  private seen = new Map<string, { set: Set<number>; order: number[] }>();
+  private seen = new Map<string, { set: Set<number>; order: number[]; logonId?: number }>();
 
   constructor(private readonly ringSize = 256) {}
 
@@ -32,6 +32,19 @@ export class InboundDeduper {
     e.set.add(id);
     e.order.push(id);
     if (e.order.length > this.ringSize) e.set.delete(e.order.shift()!);
+    return false;
+  }
+
+  /**
+   * A numbered LOGONv15: a retransmit of the LOGON just accepted is a duplicate; any other
+   * LOGON restarts the source's counter, so forget the ring first and record the LOGON's id.
+   */
+  isDuplicateLogon(key: string, id: number): boolean {
+    const e = this.seen.get(key);
+    if (e && e.logonId === id && e.order.length === 1) return true; // nothing accepted since it
+    this.reset(key);
+    this.isDuplicate(key, id);
+    this.seen.get(key)!.logonId = id;
     return false;
   }
 

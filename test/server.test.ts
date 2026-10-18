@@ -291,6 +291,22 @@ test('server: numbered inbound PING/CHAT are ACKed on every copy and deduped', a
   }
 });
 
+test('server: a retransmitted numbered LOGON is dispatched once', async () => {
+  const { server, port } = await startServer();
+  const a = await TestClient.create(port, 'carol');
+  try {
+    a.send('<1>LOGONv15:carol');
+    await waitFor(() => a.received.includes('LOGON SUCCESSFUL'));
+    a.send('<1>LOGONv15:carol');
+    await waitFor(() => a.raw.filter((m) => m === 'ACK: 1').length === 2);
+    await sleep(60);
+    assert.equal(a.received.filter((m) => m === 'LOGON SUCCESSFUL').length, 1, JSON.stringify(a.received));
+  } finally {
+    a.close();
+    server.close();
+  }
+});
+
 test('server: a lossy client still gets every move, in order, with increasing ids', async () => {
   const { server, port } = await startServer({ minRtoMs: 10, maxRtoMs: 80, initialRtoMs: 20 });
   const c = await TestClient.create(port, 'lossy');
@@ -490,6 +506,9 @@ test('server: records are garbage-collected once every client has caught up', as
   }
 });
 
+// Not covered: a re-LOGON while an xMOVE is the in-flight item. That item is kept and reaches a
+// fresh node-tlcv before the replay's FEN; it recovers (warn + resetFromFen). Here the client is
+// paused from the start, so the in-flight item is always WPLAYER.
 test('server: BMOVE never precedes a FEN after a re-LOGON on a backlogged client', async () => {
   const { server, port } = await startServer();
   const c = await TestClient.create(port, 'c');

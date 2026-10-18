@@ -25,3 +25,12 @@ test('InboundDeduper: duplicates, independent keys, ring eviction, reset', () =>
   d.reset('a');
   assert.equal(d.isDuplicate('a', 5), false);
 });
+
+test('InboundDeduper.isDuplicateLogon: retransmitted LOGON is a duplicate, a restarted counter is not', () => {
+  const d = new InboundDeduper();
+  assert.equal(d.isDuplicateLogon('a', 1), false);
+  assert.equal(d.isDuplicateLogon('a', 1), true, 'retransmit of the same LOGON');
+  assert.equal(d.isDuplicate('a', 2), false);
+  assert.equal(d.isDuplicateLogon('a', 1), false, 'client restarted: counter back at 1');
+  assert.equal(d.isDuplicate('a', 2), false, 'ring was reset');
+});

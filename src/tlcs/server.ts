@@ -331,15 +331,19 @@ export class TlcsServer {
     const known = this.clients.get(dest);
     if (known) known.lastSeen = Date.now();
 
-    if (msg.startsWith('<')) {
+    const numbered = msg.startsWith('<');
+    if (numbered) {
       const n = parseNumbered(msg);
       if (!n) {
         logger.debug(`Malformed numbered message from ${dest}: ${msg}`);
         return;
       }
       this.rawSend(P.ack(n.id), ip, port); // ACK every copy, even duplicates
-      if (this.dedupe.isDuplicate(dest, n.id)) return;
       msg = n.body.trim();
+      const dup = msg.startsWith('LOGONv15')
+        ? this.dedupe.isDuplicateLogon(dest, n.id)
+        : this.dedupe.isDuplicate(dest, n.id);
+      if (dup) return;
     }
 
     const ackId = parseAck(msg);
@@ -347,7 +351,7 @@ export class TlcsServer {
       this.sender.ack(dest, ackId);
       return;
     }
-    if (msg.startsWith('LOGONv15')) this.dedupe.reset(dest);
+    if (!numbered && msg.startsWith('LOGONv15')) this.dedupe.reset(dest);
     this.dispatch(msg, ip, port);
   }
 

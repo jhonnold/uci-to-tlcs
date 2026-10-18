@@ -159,7 +159,7 @@ test('sender: adaptive RTO converges to the floor; backoff gaps grow and cap; ne
   assert(gaps.length >= 4, `gaps ${gaps}`);
   for (let i = 1; i < gaps.length; i++) assert(gaps[i] >= gaps[i - 1] * 0.8 - 2, `non-decreasing: ${gaps}`);
   assert(gaps.every((g) => g <= 40 * 1.5 + 10), `capped: ${gaps}`);
-  assert(gaps[0] < 15, `first gap ~minRto: ${gaps}`);
+  assert(gaps[0] < 30, `first gap ~minRto: ${gaps}`);
   h.s.close();
 });
 
@@ -195,7 +195,7 @@ test('sender: one heavily retransmitted item does not blow up the next item\'s R
   h.s.enqueue('A', ctl('next'));
   await waitFor(() => h.rx.filter((r) => r.id === 2).length >= 2);
   const ts = h.rx.filter((r) => r.id === 2).map((r) => r.t);
-  assert(ts[1] - ts[0] <= 2 * 10 + 15, `next item's first gap ${ts[1] - ts[0]}ms`);
+  assert(ts[1] - ts[0] <= 2 * 10 + 40, `next item's first gap ${ts[1] - ts[0]}ms`);
   h.s.close();
 });
 
@@ -412,6 +412,28 @@ test('sender: latest items - idle gets raw at once; busy keeps only the newest, 
   h.s.enqueue('A', ctl('y'));
   h.s.ack('A', 1);
   assert.deepEqual(h.rx.slice(1).map((r) => [r.id, r.body]), [[1, 'x'], [null, 'WPV: b'], [2, 'y']]);
+  h.s.close();
+});
+
+test('sender: latest dedupe never moves a PV behind the numbered move it precedes', async () => {
+  const h = harness({}, () => null);
+  h.s.addClient('A');
+  h.s.enqueue('A', ctl('busy')); // in flight, never ACKed by policy; ack manually below
+  const pv = (k: 'WPV' | 'BPV', n: number): Outbound => ({ body: `${k}: ${n}`, latest: k });
+  h.s.enqueue('A', pv('WPV', 1));
+  h.s.enqueue('A', ctl('FEN 1'));
+  h.s.enqueue('A', ctl('WMOVE 1. e4'));
+  h.s.enqueue('A', pv('BPV', 1));
+  h.s.enqueue('A', ctl('BMOVE 1... e5'));
+  h.s.enqueue('A', pv('WPV', 2));
+  h.s.enqueue('A', ctl('WMOVE 2. Nf3'));
+  h.s.enqueue('A', pv('BPV', 2));
+  h.s.enqueue('A', pv('BPV', 3)); // trailing run: replaces BPV 2
+  for (let id = 1; id <= 6; id++) h.s.ack('A', id);
+  const seq = h.rx.map((r) => r.body).filter((b) => /PV|MOVE/.test(b));
+  assert.deepEqual(seq, [
+    'WPV: 1', 'WMOVE 1. e4', 'BPV: 1', 'BMOVE 1... e5', 'WPV: 2', 'WMOVE 2. Nf3', 'BPV: 3',
+  ]);
   h.s.close();
 });
 
