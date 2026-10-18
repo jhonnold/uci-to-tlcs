@@ -56,23 +56,78 @@ alive; node-tlcv keeps kibitzing until killed.
 
 Artifacts: `/tmp/node-tlcv-pgns/uci-to-tlcs/*.pgn` (ground truth), `/tmp/uci-to-tlcs.log`
 (bridge), `/tmp/node-tlcv.log` (kibitzer), `/tmp/fc.log` (raw UCI), `/tmp/fastchess.log`
-(fastchess results). Verify:
+(fastchess results), plus fastchess's own `-pgnout file=/tmp/games.pgn` (add it to the
+fastchess command in §3). Compare them mechanically:
+
+```bash
+npm run e2e-check -- --fastchess /tmp/games.pgn --pgns /tmp/node-tlcv-pgns
+```
+
+It checks game count, White/Black, Result, the full SAN list and that no `*` results
+remain; games are matched by content (not by node-tlcv's game number, which is unreliable
+until T07). It prints `PASS` or `FAIL n finding(s)` then one line per game (`DIFF [moves]
+... first divergence at ply 10: exp X got Y`, `MISSING`, `EXTRA`, `COUNT`, `STAR`).
+Exit 0 pass, 1 mismatch, 2 usage/IO error (including an empty `--pgns` dir). Other flags:
+`--allow-star`, `--strict-numbers` (filename `N_` prefix must equal the fastchess game
+index), `--expect-contiguous`, `--json`, and `--transcript <f.jsonl>` (repeatable) to check
+mock transcripts (see below).
+
+Then eyeball the logs:
 
 - **Names** — `[White]`/`[Black]` are real engine names (not `Engine1`/`Engine2`);
   colours = side-to-move at start; stable across rounds.
-- **Results** — `[Result]`/`[Termination]` real (`1-0`/`0-1`/`1/2-1/2`); the count of `*`
-  (board couldn't derive a result) should be 0 for normal games.
-- **Count** — PGN files == fastchess's reported game count == bridge `new game` events.
-- **Clocks** — `WTIME`/`BTIME` present and decreasing.
 - **Registration** — exactly one client in `/tmp/uci-to-tlcs.log` (`LOGONv15`); 0 =
   LOGON-race, >1 = node-tlcv restarted.
-- **Retries** — `reliable send … unacked, retrying` count: 0 = clean, many = a slow
+- **Retries** — `reliable send ... unacked, retrying` count: 0 = clean, many = a slow
   consumer (gaps.md J).
+- **Clocks** — `WTIME`/`BTIME` present and decreasing.
 - **Errors** — `grep -iE 'error|warn|uncaught|unhandled' /tmp/uci-to-tlcs.log /tmp/node-tlcv.log /tmp/fastchess.log`.
+
+**Caveat:** until T07, node-tlcv names files `1_<white>_vs_<black>.pgn`, so the same
+ordered pair overwrites its earlier game. Use tournaments whose ordered pairs are unique
+(e.g. 3 engines, `-rounds 1 -games 2`), or the checker will report MISSING.
 
 ## 6. Tear down
 
 Kill the background jobs; `rm /tmp/{fc,uci-to-tlcs,node-tlcv,fastchess}.log`.
+
+## Mock client modes
+
+`npm run mock-client -- [flags]` (`--help` lists them). It binds, in precedence order:
+`--local-port n` (fixed local port) > `--ephemeral` (OS port) > legacy same-port on
+`127.0.0.2:<--port>`; `--ephemeral` with `--local-port` is a usage error.
+
+| Flag | Meaning |
+|---|---|
+| `--mode node-tlcv` (default) | node-tlcv's rules: trim, `isIdRestart` + drop-if-not-increasing, ACK everything (`ACK: <idString>`), plain `PING` every 10 s, re-LOGON on an `MSG` containing "no longer connected" (rate-limited, only live data counts as recovery) and on the 600 s data watchdog |
+| `--mode desktop` | TLCV 2.1c: untrimmed fixed-position parsing, ignores everything until `LOGON SUCCESSFUL`, last-100 duplicate ring, numbered `< N>PING` every 20 s once `FEATURE: PING` is seen, silence states at 10/30/50/70 s (exit 3 at 70 s) |
+| `--force-ping` / `--no-disconnect` / `--chat <t>` | desktop only: ping without FEATURE, never exit on silence, send a numbered CHAT after logon |
+| `--relogin-min <s>` (60), `--data-timeout <s>` (600) | node-tlcv re-LOGON floor / watchdog |
+| `--drop <p>`, `--reorder <p>`, `--seed <n>` | seeded loss / 100-500 ms delay in both directions. Outbound `LOGON*` is exempt (node-tlcv never retries a lost LOGON) |
+| `--transcript <f.jsonl>` | one JSON line per datagram/event: `ts, t, mode, user, session, dir, raw, id, body, verdict` (`accepted restart out-of-order unnumbered gated duplicate injected-drop injected-delay`) or `event` (`logon logon-ok relogon logoff silent-start silent-end disconnect ping-giveup logon-failed exit`) |
+| `--logoff-after <s>` [`--logon-again-after <s>`] | LOGOFF, then re-LOGON (new `session`) or exit 0 |
+| `--silent-after <s>` [`--silent-for <s>`] | send nothing (tests reaping) |
+| `--exit-after <s>`, `--quiet` | LOGOFF + exit 0 / no pretty-print |
+
+Desktop pretty-print shows the `Mid()`-parsed field (`SITE -> [ My Event]`; the leading
+space is real: `Mid(body, 6)` of `SITE: x`).
+
+Today's server answers only a bare `PING` with `PONG`; a desktop `< N>PING` gets no reply, so
+`ping-giveup` events in a desktop transcript are expected until T06.
+
+## Launch / teardown pattern
+
+Put every long-running process in its own process group and record the group id; never
+`pkill -f` (it can match your own shell):
+
+```bash
+setsid bash -c 'echo $$ > "$S/name.pgid"; exec <cmd>' > "$S/name.log" 2>&1 &
+trap 'cleanup' EXIT; trap 'exit 130' INT TERM      # cleanup: kill -TERM -- -$(cat "$S/name.pgid")
+```
+
+node-tlcv is a shared checkout: take `mkdir .../.tasks/locks/node-tlcv.lock`, and avoid editing its
+config by running it with `CONFIG_DIR=<dir with config.json> PORT=... PGNS_DIR=... LOG_LEVEL=...`
+(env beats `.env`).
 
 ## Variants
 

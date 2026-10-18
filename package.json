@@ -15,6 +15,7 @@
     "start": "tsx src/main.ts",
     "dev": "tsx watch src/main.ts",
     "mock-client": "tsx scripts/mock-client.ts",
+    "e2e-check": "tsx scripts/e2e-check.ts",
     "test": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
