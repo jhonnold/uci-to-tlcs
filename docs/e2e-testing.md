@@ -10,7 +10,7 @@ to verify a move/result/name/clock bug end-to-end.
 
 ## 1. Prerequisites
 
-- `fastchess` (`~/projects/fastchess`, `make -j4`) and `berserk`
+- `fastchess` (`~/projects/engine-testing/fastchess`, `make -j4`) and `berserk`
   (`~/projects/berserk`, `make CC=gcc build`) both on `PATH` (symlinked into
   `~/.local/bin`).
 - `uci-to-tlcs`: `npm ci` (runs via `tsx`, no build needed). `node-tlcv`: `npm ci`.
