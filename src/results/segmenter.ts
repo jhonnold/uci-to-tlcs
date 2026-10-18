@@ -1,6 +1,6 @@
 /**
  * Mirrors the Pipeline's tagged-path game-boundary rule (onUciNewGame +
- * maybeBindBlack + onGo binding state) so a log can be scanned for game starts
+ * maybeBindColours + onGo binding state) so a log can be scanned for game starts
  * without driving a Pipeline. Tracks only WHEN collecting ends, not colours. A
  * parity test pins it to the Pipeline; update both together.
  */
