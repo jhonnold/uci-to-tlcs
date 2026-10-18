@@ -1,6 +1,6 @@
 import { parseLine, type GoEvent, type PositionEvent } from './uci/parser.js';
 import { scoreToCentipawns, type UciInfo } from './uci/info.js';
-import { GameState } from './game/game-state.js';
+import { GameState, STARTPOS_TRUNC } from './game/game-state.js';
 import { msToCs, type ColorCode } from './tlcs/protocol.js';
 import type { NormalizedLine } from './source/log-source.js';
 
@@ -23,13 +23,25 @@ export interface BroadcastSink {
   emitClocks(whiteCs: number, blackCs: number): void;
   emitPv(color: ColorCode, depth: number, scoreCp: number, timeCs: number, nodes: number, sanPv: string[]): void;
   emitResult(result: string): void;
+  /** WinBoard-format `level <mps> <base> <inc>` text. Optional: absent until the server supports it. */
+  emitLevel?(text: string): void;
 }
 
 export interface PipelineMeta {
   white: string;
   black: string;
   site: string;
+  /** Non-startpos games: precede the base FEN with a synthetic `(setup)` move so node-tlcv loads it. Default true. */
+  fenSetupMove?: boolean;
 }
+
+/**
+ * Synthetic SAN for the setup move. node-tlcv's `onMove` fails to apply it in chess.js and
+ * its catch runs `resetFromFen()`, which loads the preceding `FEN` header onto a board that
+ * is already loaded (a bare non-startpos FEN is otherwise only stored as a backup). Desktop
+ * TLCV appends move text unvalidated, so it shows `1. (setup)` once; its board is correct.
+ */
+const SETUP_SAN = '(setup)';
 
 /** PGN result token for an unfinished/adjudicated game (no board-terminal result). */
 const RESULT_UNKNOWN = '*';
@@ -47,8 +59,9 @@ const DEFAULT_BLACK = 'Black';
  * engine identity + direction (a tagged producer like fastchess) or not (a bare
  * stripped transcript):
  *
- * - **Tagged**: each game's White is the engine that receives `position startpos`
- *   + the first `go`; Black is the other `ucinewgame` participant. Both are known
+ * - **Tagged**: the engine receiving the first `go` plays the side to move of its
+ *   `position` (fastchess sends the first `go` to the side to move); the other
+ *   `ucinewgame` participant plays the other colour. Both are known
  *   before move 1, which matters because node-tlcv wipes shown moves if WPLAYER/
  *   BPLAYER arrive after a move. Player + initial-FEN emission is deferred to the
  *   first `go` so both names land first.
@@ -56,7 +69,9 @@ const DEFAULT_BLACK = 'Black';
  *   defaults for the first game only); the header is emitted at the first position.
  *
  * Per-game emit order: (synthesized `result: *` for the previous game if it ended
- * without a board result) → WPLAYER → BPLAYER → startpos FEN (+FMR) → moves.
+ * without a board result) → WPLAYER → BPLAYER → base position (startpos FEN+FMR; for a
+ * non-startpos base also FEN X+FMR and the `(setup)` move) → opening/book moves → `level`
+ * (first `go`) → moves.
  */
 export class Pipeline {
   private readonly site: string;
@@ -76,13 +91,19 @@ export class Pipeline {
   private gameActive = false; // a game's header has been emitted and not yet closed
   private pendingHeader = true; // players + initial FEN still owed for the current game
   private currentMoves: string[] = []; // coordinate moves applied, for reset detection
+  private openingMoves: string[] = []; // book / pre-join prefix, replayed after the base position
+  private levelPending = false; // emit `level` at the next tagged `go`
 
   // Per-game colour binding (tagged path).
   private participants = new Set<string>(); // engineIds seen via `ucinewgame`
   private collectingParticipants = false;
   private awaitingFirstGo = false;
+  private firstGoId?: string; // engine that got the first `go`
+  private firstGoStm: ColorCode = 'w'; // side to move at that engine's `position`
+  private positionStm?: ColorCode; // side to move after the latest game-start `position`
   private whiteId?: string;
   private blackId?: string;
+  private readonly fenSetupMove: boolean;
 
   constructor(
     private sink: BroadcastSink,
@@ -91,6 +112,7 @@ export class Pipeline {
     this.site = meta.site;
     this.fallbackWhite = meta.white;
     this.fallbackBlack = meta.black;
+    this.fenSetupMove = meta.fenSetupMove ?? true;
   }
 
   handleLine(n: NormalizedLine): void {
@@ -117,7 +139,7 @@ export class Pipeline {
         this.onGo(ev, n);
         break;
       case 'info':
-        this.onInfo(ev.info);
+        this.onInfo(ev.info, n);
         break;
       case 'bestmove':
         this.onBestMove(ev.move);
@@ -136,28 +158,33 @@ export class Pipeline {
       this.participants.clear();
       this.whiteId = undefined;
       this.blackId = undefined;
+      this.firstGoId = undefined;
+      this.positionStm = undefined;
       this.awaitingFirstGo = true;
       this.beginNewGame();
     }
     if (engineId) this.participants.add(engineId);
-    this.maybeBindBlack();
+    this.maybeBindColours();
   }
 
   /**
-   * Bind Black and emit the game header once White and exactly one other participant
-   * are known. Called both after a participant joins (`ucinewgame`) and after White is
-   * bound (first `go`), so it fires whichever comes last: fastchess batches both
+   * Bind colours and emit the game header once the first-`go` engine and exactly one other
+   * participant are known. The first-`go` engine takes the side to move recorded at its
+   * `position`; the other participant takes the other colour. Called both after a
+   * participant joins (`ucinewgame`) and after the first `go`, so it fires whichever comes
+   * last: fastchess batches both
    * `ucinewgame`s before the first `go` (binds at `go`); myracle inits engines one at a
-   * time, so the second participant's `ucinewgame` can arrive *after* White's `go`
+   * time, so the second participant's `ucinewgame` can arrive *after* the first `go`
    * (binds there). Deferring the header until both names are known upholds node-tlcv's
    * resetMoves invariant (a move shown before WPLAYER/BPLAYER is wiped); `onBestMove`
    * is the backstop if a producer never reveals the second participant.
    */
-  private maybeBindBlack(): void {
-    if (!this.whiteId || this.blackId) return;
-    const others = [...this.participants].filter((id) => id !== this.whiteId);
+  private maybeBindColours(): void {
+    if (!this.firstGoId || (this.whiteId && this.blackId)) return;
+    const others = [...this.participants].filter((id) => id !== this.firstGoId);
     if (others.length !== 1) return;
-    this.blackId = others[0];
+    [this.whiteId, this.blackId] =
+      this.firstGoStm === 'b' ? [others[0], this.firstGoId] : [this.firstGoId, others[0]];
     this.collectingParticipants = false;
     this.awaitingFirstGo = false;
     this.emitGameHeaderIfReady();
@@ -201,21 +228,38 @@ export class Pipeline {
       return;
     }
 
-    if (!this.game.setPosition(ev.startpos, ev.fen, ev.moves)) return;
-    this.currentMoves = ev.moves.slice();
+    if (!this.game.setPosition(ev.startpos, ev.fen, ev.moves)) return; // validates the whole line
+    this.positionStm = this.game.turn();
+    if (!this.gameActive) {
+      // Game start: rewind to the base; the prefix (book / pre-join moves) is replayed at
+      // header time so clients see the moves, not just the post-book position.
+      this.game.setPosition(ev.startpos, ev.fen, []);
+      this.openingMoves = ev.moves.slice();
+      this.currentMoves = [];
+    } else {
+      this.currentMoves = ev.moves.slice();
+    }
 
     // Untagged: emit the header now (nothing to wait for). Tagged: defer to `go`.
     if (!this.tagged) this.emitGameHeaderIfReady();
   }
 
   private onGo(ev: GoEvent, n: NormalizedLine): void {
-    // First `go` to an engine after a reset binds that engine to White. Black + the
-    // header are bound by maybeBindBlack once the other participant is known — which,
-    // for a sequential-init producer (myracle), can be after this first `go`.
+    // First `go` to an engine after a reset: that engine plays the side to move of its
+    // `position`. Colours + the header are bound by maybeBindColours once the other
+    // participant is known — which, for a sequential-init producer (myracle), can be after
+    // this first `go`.
     if (this.awaitingFirstGo && n.direction === 'in' && n.engineId) {
-      this.whiteId = n.engineId;
+      this.firstGoId = n.engineId;
+      this.firstGoStm = this.positionStm ?? 'w';
       this.awaitingFirstGo = false;
-      this.maybeBindBlack();
+      this.maybeBindColours();
+    }
+
+    if (this.levelPending && this.gameActive && this.tagged) {
+      this.levelPending = false;
+      const lvl = formatLevel(ev, this.game.turn());
+      if (lvl) this.sink.emitLevel?.(lvl);
     }
 
     if (ev.wtimeMs !== undefined && ev.btimeMs !== undefined) {
@@ -251,15 +295,50 @@ export class Pipeline {
 
     const [white, black] = this.resolveNames();
     this.sink.setPlayers(white, black);
-    this.sink.emitInitialPosition(this.game.fenTruncated(), this.game.halfmoveClock());
+    this.emitBasePosition();
 
     this.pendingHeader = false;
     this.positionEmitted = true;
     this.firstHeaderEmitted = true;
     this.gameActive = true;
+
+    const opening = this.openingMoves;
+    this.openingMoves = [];
+    for (const m of opening) this.applyAndEmit(m); // no PV before → node-tlcv tags "(Book)"
+    this.levelPending = true;
   }
 
-  private onInfo(info: UciInfo): void {
+  /** The game's base position: plain FEN, or startpos reset + FEN + setup move (see SETUP_SAN). */
+  private emitBasePosition(): void {
+    const fen = this.game.fenTruncated();
+    const fmr = this.game.halfmoveClock();
+    if (fen === STARTPOS_TRUNC || !this.fenSetupMove) {
+      this.sink.emitInitialPosition(fen, fmr);
+      return;
+    }
+    this.sink.emitInitialPosition(STARTPOS_TRUNC, 0); // node-tlcv reset()
+    this.sink.emitInitialPosition(fen, fmr); // stored as the backup FEN + fmr
+    this.sink.emitMove({
+      fenTruncated: fen,
+      color: this.game.turn(),
+      fullMoveNumber: this.game.fullMoveNumber(),
+      san: SETUP_SAN,
+      fmr,
+    }); // fails in chess.js → resetFromFen() loads the FEN
+  }
+
+  private onInfo(info: UciInfo, n: NormalizedLine): void {
+    if (!this.gameActive) return;
+    if (n.direction === 'in') return; // engine info is 'out'; an 'in' line would be a GUI echo
+    // Stale-PV guard: drop info from the engine that is not on move.
+    if (
+      n.engineId &&
+      this.whiteId &&
+      this.blackId &&
+      n.engineId !== (this.game.turn() === 'w' ? this.whiteId : this.blackId)
+    ) {
+      return;
+    }
     if (info.multipv !== 1) return; // only the primary line is the broadcast eval
 
     const color = this.game.turn(); // side to move = the thinking side
@@ -322,4 +401,26 @@ function isPrefixExtension(prev: string[], next: string[]): boolean {
     if (next[i] !== prev[i]) return false;
   }
   return true;
+}
+
+/**
+ * WinBoard `level <mps> <base> <inc>` from a clock-bearing `go`. fastchess adds the
+ * increment before the first move, so base = time − inc. Undefined unless both clocks are
+ * present and equal (a fresh game).
+ */
+export function formatLevel(ev: GoEvent, stm: ColorCode): string | undefined {
+  if (ev.wtimeMs === undefined || ev.btimeMs === undefined || ev.wtimeMs !== ev.btimeMs) return undefined;
+  const incMs = (stm === 'w' ? ev.wincMs : ev.bincMs) ?? 0;
+  let baseMs = ev.wtimeMs - incMs;
+  if (baseMs <= 0) baseMs = ev.wtimeMs;
+  return `${ev.movestogo ?? 0} ${formatBase(baseMs)} ${incMs / 1000}`;
+}
+
+function formatBase(ms: number): string {
+  if (ms % 60000 === 0) return String(ms / 60000);
+  const m = Math.floor(ms / 60000);
+  const sec = (ms % 60000) / 1000;
+  const [whole, frac] = sec.toFixed(3).split('.');
+  const f = frac.replace(/0+$/, '');
+  return `${m}:${whole.padStart(2, '0')}${f ? '.' + f : ''}`;
 }

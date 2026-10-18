@@ -28,6 +28,7 @@ export interface GoEvent {
   movetimeMs?: number;
   depth?: number;
   nodes?: number;
+  movestogo?: number;
   infinite?: boolean;
 }
 
@@ -96,10 +97,13 @@ function parseGo(tokens: string[]): GoEvent {
       case 'nodes':
         ev.nodes = parseInt(tokens[++i], 10);
         break;
+      case 'movestogo':
+        ev.movestogo = parseInt(tokens[++i], 10);
+        break;
       case 'infinite':
         ev.infinite = true;
         break;
-      // movestogo / ponder / searchmoves / mate: not needed for the broadcast.
+      // ponder / searchmoves / mate: not needed for the broadcast.
     }
   }
   return ev;

@@ -272,6 +272,7 @@ real comment syntax: unmatched lines, including those starting with `'`, are ign
 | `TOURNEYPGN=` | — | PGN for `RESULTTABLE`/`GAMELIST` | Same, plus a built-in results store (§9.6) |
 | `MAILSERVER=`, `RETURNADD=` | — | Email | Ignored |
 | `FORMAT=` | auto | Log producer: `auto`, `raw`, `fastchess` (`winboard`, `myracle`, `uci` are possible future values) | Rebuild extension |
+| `FENSETUPMOVE=` | 1 | — | Non-startpos games: synthetic `(setup)` move so node-tlcv loads the FEN (`--fen-setup-move`) | Rebuild extension |
 | `BIND=` | 0.0.0.0 | Local bind address | Rebuild extension |
 | `STATEFILE=` | — | Persisted state file | Rebuild extension |
 | `CLIENTTIMEOUT=` | 70 | Idle-client reap timeout, seconds | Rebuild extension |

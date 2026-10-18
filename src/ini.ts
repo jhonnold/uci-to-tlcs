@@ -24,6 +24,7 @@ export interface IniValues {
   menus?: string[];
   tourneyPgn?: string;
   saveDebug?: boolean;
+  fenSetupMove?: boolean;
   stateFile?: string;
   clientTimeoutMs?: number;
   adminPass?: string;
@@ -129,6 +130,13 @@ export function parseIni(text: string, baseDir: string): IniResult {
         const t = v.trim();
         if (t === '1') values.saveDebug = true;
         else if (t === '0' || t === '') values.saveDebug = false;
+        else fail(n, key, v);
+        break;
+      }
+      case 'FENSETUPMOVE': {
+        const t = v.trim();
+        if (t === '1') values.fenSetupMove = true;
+        else if (t === '0' || t === '') values.fenSetupMove = false;
         else fail(n, key, v);
         break;
       }

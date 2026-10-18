@@ -22,6 +22,7 @@ test('defaults without --ini', () => {
     delayMs: 100,
     delayAfterMoveMs: 0,
     delayAfterGameMs: 0,
+    fenSetupMove: true,
     menus: [],
     saveDebug: false,
     clientTimeoutMs: 70000,
@@ -65,4 +66,13 @@ test('--pgn and --delay-after-*', () => {
   assert.equal(c.delayAfterMoveMs, 25);
   assert.equal(c.delayAfterGameMs, 7);
   assert.throws(() => parseConfig(['--log', 'x', '--delay-after-move', '-1']), /delay-after-move/);
+});
+
+test('--fen-setup-move overrides FENSETUPMOVE in the ini; invalid values rejected', () => {
+  const off = path.join(dir, 'off.ini');
+  writeFileSync(off, 'PATH=g.log\nFENSETUPMOVE=0\n');
+  assert.equal(parseConfig(['--ini', off]).fenSetupMove, false);
+  assert.equal(parseConfig(['--ini', off, '--fen-setup-move', '1']).fenSetupMove, true);
+  assert.equal(parseConfig(['--log', 'x']).fenSetupMove, true);
+  assert.throws(() => parseConfig(['--log', 'x', '--fen-setup-move', 'yes']), /fen-setup-move/);
 });

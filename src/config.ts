@@ -26,6 +26,8 @@ export interface Config {
   /** Pause after each game, ms (reference default 1000; ours 0). */
   delayAfterGameMs: number;
   /** MENU lines, verbatim, ascending id (max 10). */
+  /** Extension: non-startpos games get a synthetic `(setup)` move so node-tlcv loads the FEN. */
+  fenSetupMove: boolean;
   menus: string[];
   /** PGN served for RESULTTABLE/GAMELIST (TOURNEYPGN= / --pgn). */
   tourneyPgn?: string;
@@ -57,6 +59,7 @@ Options:
   --pgn <path>       Tournament PGN (TOURNEYPGN=)
   --delay-after-move <ms>  Pause after each move (default 0)
   --delay-after-game <ms>  Pause after each game (default 0)
+  --fen-setup-move <0|1>   Non-startpos games: synthetic "(setup)" move so node-tlcv loads the FEN (default 1)
   --from-end         Only broadcast appends made after startup (default: from start)
   -h, --help         Show this help
 `;
@@ -79,6 +82,7 @@ export function parseConfig(argv: string[]): Config {
     delayMs: 100,
     delayAfterMoveMs: 0,
     delayAfterGameMs: 0,
+    fenSetupMove: true,
     menus: [],
     saveDebug: false,
     clientTimeoutMs: 70000,
@@ -143,6 +147,12 @@ export function parseConfig(argv: string[]): Config {
       case '--delay-after-game':
         cfg.delayAfterGameMs = nonNegInt('--delay-after-game', argv[++i]);
         break;
+      case '--fen-setup-move': {
+        const v = argv[++i];
+        if (v !== '0' && v !== '1') throw new Error(`Invalid --fen-setup-move: ${v} (use 0 or 1)`);
+        cfg.fenSetupMove = v === '1';
+        break;
+      }
       case '--from-end':
         cfg.fromStart = false;
         break;

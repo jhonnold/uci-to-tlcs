@@ -12,7 +12,9 @@ export interface AppliedMove {
   san: string;
 }
 
-const STARTPOS_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+export const STARTPOS_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+/** The first three FEN fields of the standard start (what TLCS sends). */
+export const STARTPOS_TRUNC = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq';
 
 /**
  * Authoritative board state, reconstructed from the UCI transcript. The `position`
@@ -73,6 +75,11 @@ export class GameState {
   /** First three FEN fields only (board, side-to-move, castling) — what TLCS sends. */
   fenTruncated(): string {
     return this.chess.fen().split(' ').slice(0, 3).join(' ');
+  }
+
+  /** Full move number of the side to move (FEN field 6). */
+  fullMoveNumber(): number {
+    return this.chess.moveNumber();
   }
 
   /** Fifty-move-rule halfmove clock (FEN field 5). */

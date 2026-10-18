@@ -66,7 +66,8 @@ npm start -- --log path/to/game.uci --port 16066 --white "Engine A" --black "Eng
 Options: `--log <path>` (required), `--format auto|raw|fastchess|myracle` (auto),
 `--port` (16066), `--bind` (0.0.0.0), `--white`/`--black`/`--site`, `--from-end` (skip
 existing content), `--ini <path>` (reference-style `server.ini`, see below),
-`--pgn <path>`, `--delay-after-move <ms>`, `--delay-after-game <ms>`. `LOG_LEVEL=debug` logs every UDP message.
+`--pgn <path>`, `--delay-after-move <ms>`, `--delay-after-game <ms>`,
+`--fen-setup-move <0|1>` (default 1: non-startpos games send a synthetic `(setup)` move so node-tlcv loads the FEN; desktop TLCV shows `1. (setup)` once, board correct). `LOG_LEVEL=debug` logs every UDP message.
 
 With `--format fastchess` (or `myracle`) you point `--log` at the engine/tournament log
 itself; with `--format raw` you point it at a pre-stripped transcript. `--white`/`--black`
@@ -97,6 +98,7 @@ against the ini's directory.
 | `MENU ID=n …` | — | none | Up to 10, ids 1..10, kept verbatim |
 | `TOURNEYPGN` | — | — | Tournament PGN (`--pgn`) |
 | `SAVEDEBUG` | 0 | 0 | `1` or `0` |
+| `FENSETUPMOVE` | — | 1 | Extension, `1` or `0` (`--fen-setup-move`) |
 | `ICSMODE`, `MAILSERVER`, `RETURNADD` | — | — | Accepted, warned, ignored |
 | `FORMAT`* | — | auto | `auto`, `raw`, `fastchess` (`--format`) |
 | `BIND`* | — | 0.0.0.0 | `--bind` |

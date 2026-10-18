@@ -2,6 +2,7 @@ import { parseConfig } from './config.js';
 import { FileTailer } from './tail.js';
 import { TlcsServer } from './tlcs/server.js';
 import { Pipeline } from './pipeline.js';
+import { PacedSink } from './paced-sink.js';
 import { makeSource } from './source/index.js';
 import { logger } from './util/logger.js';
 
@@ -12,7 +13,13 @@ function main(): void {
   const server = new TlcsServer({ port: cfg.port, bindAddr: cfg.bindAddr });
   server.start();
 
-  const pipeline = new Pipeline(server, { white: cfg.white, black: cfg.black, site: cfg.site });
+  const sink = new PacedSink(server, cfg);
+  const pipeline = new Pipeline(sink, {
+    white: cfg.white,
+    black: cfg.black,
+    site: cfg.site,
+    fenSetupMove: cfg.fenSetupMove,
+  });
   const source = makeSource(cfg.format);
   const tailer = new FileTailer(
     cfg.logPath,
@@ -21,6 +28,7 @@ function main(): void {
       if (n) pipeline.handleLine(n);
     },
     cfg.fromStart,
+    () => sink.setLive(),
   );
   tailer.start();
 
