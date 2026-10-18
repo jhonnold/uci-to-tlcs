@@ -1,80 +1,95 @@
-// A tiny stand-in for node-tlcv, for fast local iteration on the server.
+// A stand-in for node-tlcv (default) or the desktop TLCV client (--mode desktop),
+// for fast local iteration on the server and for e2e scenarios.
 //
-// It does what node-tlcv's transport does: sends LOGONv15, pings every 10s, ACKs
-// every `<NNN>` message, and pretty-prints what it receives.
-//
-// By default it binds the broadcast port like node-tlcv. To avoid the same-host
-// bind clash, either run server and client on different loopback addresses
-// (server --bind 127.0.0.1, client --bind 127.0.0.2), OR pass --ephemeral so the
-// client binds an OS-assigned port — this server replies to the source port, so
-// no alias is needed and many clients can share one host:
+// Binding, in precedence order (--ephemeral with --local-port is a usage error):
+//   --local-port <n>  bind <--bind or 127.0.0.1>:<n>
+//   --ephemeral       bind <--bind or 127.0.0.1>:0 (OS port; the server replies to the source port)
+//   neither           bind <--bind or 127.0.0.2>:<--port> (legacy same-port mode; needs a loopback alias)
 //
 //   tsx scripts/mock-client.ts --server 127.0.0.1 --port 16066 --ephemeral
+//
+// Modes: node-tlcv (default; plain PING every 10 s, node-tlcv's id rules and re-LOGON
+// logic) and desktop (TLCV 2.1c: gated until LOGON SUCCESSFUL, numbered PING).
+// See docs/e2e-testing.md for the full flag table. --help lists the flags.
 
-import { createSocket } from 'node:dgram';
+import { MockSession, type SessionOpts } from './lib/mock-session.js';
+import { resolveBind } from './lib/mock-core.js';
 
-interface Opts {
-  server: string;
-  port: number;
-  bind: string;
-  user: string;
-  ephemeral: boolean;
-}
+const HELP = `Usage: tsx scripts/mock-client.ts [options]
+  --server <host>        server host (127.0.0.1)         --port <n>   server port (16066)
+  --bind <addr>          local bind address              --local-port <n>   bind a fixed local port
+  --ephemeral            OS-assigned local port          --user <name>   (tester)
+  --mode node-tlcv|desktop   client model (node-tlcv)
+  --drop <p> --reorder <p> --seed <n>   seeded loss/delay injection, both directions.
+                         Outbound LOGON* is never dropped or delayed.
+  --transcript <file.jsonl>   record every datagram and event
+  --quiet                suppress pretty-print
+  --logoff-after <s> [--logon-again-after <s>]   LOGOFF, then optionally re-LOGON
+  --silent-after <s> [--silent-for <s>]          stop sending anything (test reaping)
+  --exit-after <s>       LOGOFF and exit 0
+  --relogin-min <s> (60) --data-timeout <s> (600)   node-tlcv re-LOGON tuning
+  desktop only: --force-ping (ping without FEATURE: PING)  --no-disconnect  --chat <text>
+`;
 
-function parseOpts(argv: string[]): Opts {
-  const o: Opts = { server: '127.0.0.1', port: 16066, bind: '', user: 'tester', ephemeral: false };
+function parseOpts(argv: string[]): Omit<SessionOpts, 'onExit'> {
+  const o: Omit<SessionOpts, 'onExit'> = {
+    server: '127.0.0.1', port: 16066, bind: '', ephemeral: false, user: 'tester', mode: 'node-tlcv',
+    drop: 0, reorder: 0, seed: 1, quiet: false, reloginMin: 60, dataTimeout: 600, forcePing: false, noDisconnect: false,
+  };
+  const num = (s: string | undefined, flag: string): number => {
+    const n = Number(s);
+    if (s === undefined || Number.isNaN(n)) usage(`${flag} needs a number`);
+    return n;
+  };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--server') o.server = argv[++i];
-    else if (a === '--port') o.port = parseInt(argv[++i], 10);
-    else if (a === '--bind') o.bind = argv[++i];
-    else if (a === '--user') o.user = argv[++i];
-    else if (a === '--ephemeral') o.ephemeral = true;
+    const v = () => argv[++i];
+    switch (a) {
+      case '--server': o.server = v(); break;
+      case '--port': o.port = num(v(), a); break;
+      case '--bind': o.bind = v(); break;
+      case '--local-port': o.localPort = num(v(), a); break;
+      case '--user': o.user = v(); break;
+      case '--ephemeral': o.ephemeral = true; break;
+      case '--mode': {
+        const m = v();
+        if (m !== 'node-tlcv' && m !== 'desktop') usage('--mode must be node-tlcv or desktop');
+        o.mode = m;
+        break;
+      }
+      case '--drop': o.drop = num(v(), a); break;
+      case '--reorder': o.reorder = num(v(), a); break;
+      case '--seed': o.seed = num(v(), a); break;
+      case '--transcript': o.transcript = v(); break;
+      case '--quiet': o.quiet = true; break;
+      case '--logoff-after': o.logoffAfter = num(v(), a); break;
+      case '--logon-again-after': o.logonAgainAfter = num(v(), a); break;
+      case '--silent-after': o.silentAfter = num(v(), a); break;
+      case '--silent-for': o.silentFor = num(v(), a); break;
+      case '--exit-after': o.exitAfter = num(v(), a); break;
+      case '--relogin-min': o.reloginMin = num(v(), a); break;
+      case '--data-timeout': o.dataTimeout = num(v(), a); break;
+      case '--force-ping': o.forcePing = true; break;
+      case '--no-disconnect': o.noDisconnect = true; break;
+      case '--chat': o.chat = v(); break;
+      case '--help': console.log(HELP); process.exit(0);
+      default: usage(`unknown option ${a}`);
+    }
   }
-  // Default bind: a loopback alias for the same-port case, the server's host for
-  // the ephemeral case (no alias needed).
-  if (!o.bind) o.bind = o.ephemeral ? '127.0.0.1' : '127.0.0.2';
+  try {
+    resolveBind(o);
+  } catch (e) {
+    usage((e as Error).message);
+  }
   return o;
 }
 
-const opts = parseOpts(process.argv.slice(2));
-const sock = createSocket('udp4');
-let lastId: number | undefined;
+function usage(msg: string): never {
+  console.error(`mock-client: ${msg}\n\n${HELP}`);
+  process.exit(2);
+}
 
-const send = (msg: string) => sock.send(msg, opts.port, opts.server);
-
-sock.on('listening', () => {
-  const a = sock.address();
-  console.log(`[mock] bound ${a.address}:${a.port}, logging on to ${opts.server}:${opts.port} as "${opts.user}"`);
-  send(`LOGONv15:${opts.user}`);
-  send('RESULTTABLE');
-  setInterval(() => send('PING'), 10000);
-});
-
-sock.on('message', (buf) => {
-  const raw = buf.toString().trim();
-  if (raw.startsWith('<')) {
-    const idStr = raw.slice(1, raw.indexOf('>'));
-    const id = parseInt(idStr, 10);
-    send(`ACK: ${id}`);
-    if (lastId !== undefined && id < lastId) {
-      console.log(`[mock] !! out-of-order id ${id} (last ${lastId}) — node-tlcv would DROP this`);
-    }
-    lastId = id;
-    console.log(`[mock] <${id}> ${raw.slice(raw.indexOf('>') + 1)}`);
-  } else {
-    console.log(`[mock]     ${raw}`);
-  }
-});
-
-sock.on('error', (err) => {
-  console.error(`[mock] socket error: ${err}`);
-  process.exit(1);
-});
-
-sock.bind(opts.ephemeral ? 0 : opts.port, opts.bind);
-
-process.on('SIGINT', () => {
-  send('LOGOFF');
-  setTimeout(() => process.exit(0), 100);
-});
+const session = new MockSession({ ...parseOpts(process.argv.slice(2)), onExit: (c) => process.exit(c) });
+session.start();
+process.on('SIGINT', () => session.exit(0));
+process.on('SIGTERM', () => session.exit(0));
