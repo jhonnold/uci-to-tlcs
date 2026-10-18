@@ -1,4 +1,7 @@
+import { resolve } from 'node:path';
 import { isFormat, type Format } from './source/index.js';
+import { loadIni } from './ini.js';
+import { logger } from './util/logger.js';
 
 export interface Config {
   /** Path to the UCI transcript / engine log to tail. */
@@ -14,6 +17,27 @@ export interface Config {
   site: string;
   /** Process the file from the beginning (default) vs. only new appends. */
   fromStart: boolean;
+  /** Reference-style server.ini this config was loaded from (CLI flags override it). */
+  iniPath?: string;
+  /** DELAY= (reference: UDP receive timeout / main-loop pacing), ms. */
+  delayMs: number;
+  /** Pause after each move, ms (reference default 300; ours 0). */
+  delayAfterMoveMs: number;
+  /** Pause after each game, ms (reference default 1000; ours 0). */
+  delayAfterGameMs: number;
+  /** MENU lines, verbatim, ascending id (max 10). */
+  menus: string[];
+  /** PGN served for RESULTTABLE/GAMELIST (TOURNEYPGN= / --pgn). */
+  tourneyPgn?: string;
+  saveDebug: boolean;
+  /** Extension: persisted-state file. */
+  stateFile?: string;
+  /** Extension: idle-client reap timeout, ms. */
+  clientTimeoutMs: number;
+  /** Extension: admin password. */
+  adminPass?: string;
+  /** Extension: max concurrent clients (0 = unlimited). */
+  maxClients: number;
 }
 
 const USAGE = `uci-to-tlcs — broadcast a raw UCI transcript as TLCS over UDP
@@ -29,9 +53,18 @@ Options:
   --white <name>     White player name (default "White")
   --black <name>     Black player name (default "Black")
   --site <name>      Site / tournament label (default "uci-to-tlcs")
+  --ini <path>       Reference-style server.ini (CLI flags override it)
+  --pgn <path>       Tournament PGN (TOURNEYPGN=)
+  --delay-after-move <ms>  Pause after each move (default 0)
+  --delay-after-game <ms>  Pause after each game (default 0)
   --from-end         Only broadcast appends made after startup (default: from start)
   -h, --help         Show this help
 `;
+
+function nonNegInt(flag: string, v: string | undefined): number {
+  if (v === undefined || !/^\d+$/.test(v)) throw new Error(`Invalid ${flag}: ${v}`);
+  return Number(v);
+}
 
 export function parseConfig(argv: string[]): Config {
   const cfg: Config = {
@@ -43,7 +76,33 @@ export function parseConfig(argv: string[]): Config {
     black: 'Black',
     site: 'uci-to-tlcs',
     fromStart: true,
+    delayMs: 100,
+    delayAfterMoveMs: 0,
+    delayAfterGameMs: 0,
+    menus: [],
+    saveDebug: false,
+    clientTimeoutMs: 70000,
+    maxClients: 0,
   };
+
+  // --ini is pre-scanned so the CLI overrides it regardless of argument order.
+  const iniIdx = argv.indexOf('--ini');
+  if (iniIdx >= 0) {
+    const p = argv[iniIdx + 1];
+    if (!p) throw new Error(`--ini requires a path\n\n${USAGE}`);
+    let res;
+    try {
+      res = loadIni(p);
+    } catch (err) {
+      if (err instanceof Error && 'code' in err) throw new Error(`Cannot read --ini ${p}: ${err.message}`);
+      throw err;
+    }
+    for (const [k, v] of Object.entries(res.values)) {
+      if (v !== undefined) (cfg as unknown as Record<string, unknown>)[k] = v;
+    }
+    cfg.iniPath = resolve(p);
+    for (const w of res.warnings) logger.warn(`server.ini: ${w}`);
+  }
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -72,6 +131,18 @@ export function parseConfig(argv: string[]): Config {
       case '--site':
         cfg.site = argv[++i];
         break;
+      case '--ini':
+        i++; // already handled by the pre-scan
+        break;
+      case '--pgn':
+        cfg.tourneyPgn = resolve(process.cwd(), argv[++i]);
+        break;
+      case '--delay-after-move':
+        cfg.delayAfterMoveMs = nonNegInt('--delay-after-move', argv[++i]);
+        break;
+      case '--delay-after-game':
+        cfg.delayAfterGameMs = nonNegInt('--delay-after-game', argv[++i]);
+        break;
       case '--from-end':
         cfg.fromStart = false;
         break;
@@ -85,7 +156,7 @@ export function parseConfig(argv: string[]): Config {
     }
   }
 
-  if (!cfg.logPath) throw new Error(`Missing required --log <path>\n\n${USAGE}`);
+  if (!cfg.logPath) throw new Error(`Missing log path: pass --log <path> or PATH= in --ini\n\n${USAGE}`);
   if (!Number.isInteger(cfg.port) || cfg.port <= 0 || cfg.port > 65535) {
     throw new Error(`Invalid --port: ${cfg.port}`);
   }

@@ -65,13 +65,44 @@ npm start -- --log path/to/game.uci --port 16066 --white "Engine A" --black "Eng
 
 Options: `--log <path>` (required), `--format auto|raw|fastchess|myracle` (auto),
 `--port` (16066), `--bind` (0.0.0.0), `--white`/`--black`/`--site`, `--from-end` (skip
-existing content). `LOG_LEVEL=debug` logs every UDP message.
+existing content), `--ini <path>` (reference-style `server.ini`, see below),
+`--pgn <path>`, `--delay-after-move <ms>`, `--delay-after-game <ms>`. `LOG_LEVEL=debug` logs every UDP message.
 
 With `--format fastchess` (or `myracle`) you point `--log` at the engine/tournament log
 itself; with `--format raw` you point it at a pre-stripped transcript. `--white`/`--black`
 are only used as the fallback names for the raw/untagged path. To attach to a log that is
 *already running*, keep the default (read from start) so the top-of-file engine names are
 learned — `--from-end` would skip them and the myracle path would fall back to `first`/`second`.
+
+### server.ini
+
+`npm start -- --ini server.ini` loads a reference-style (TLCS 1.6a) `server.ini`; `--log` becomes
+optional (`PATH=` supplies it). Precedence: **CLI flags > ini > built-in defaults**, whatever the argument
+order. See `server.ini.example` (for a fastchess tournament) and spec §8.1.
+
+Parse rules: a key is an UPPERCASE `KEY=` at column 0 (case-sensitive, no space before `=`; the value is the
+rest of the line). Lines starting with `'`, blank lines and unmatched lines are ignored (unmatched lines are
+logged as warnings). CR, CRLF and LF all end a line; a later duplicate key wins. Numbers must be plain digits
+(spaces around are trimmed) and in range, otherwise startup fails naming the line. Relative paths resolve
+against the ini's directory.
+
+| Key | Ref default | Our default | Notes |
+| --- | --- | --- | --- |
+| `PATH` | — | — | Log to tail (`--log`) |
+| `PORT` | 16000 | 16066 | `--port` |
+| `SITE` | Tom's live chess viewer | uci-to-tlcs | Verbatim (`--site`) |
+| `DELAY` | 100 | 100 | ms |
+| `DELAYAFTERMOVE` | 300 | 0 | ms (`--delay-after-move`) |
+| `DELAYAFTERGAME` | 1000 | 0 | ms (`--delay-after-game`) |
+| `MENU ID=n …` | — | none | Up to 10, ids 1..10, kept verbatim |
+| `TOURNEYPGN` | — | — | Tournament PGN (`--pgn`) |
+| `SAVEDEBUG` | 0 | 0 | `1` or `0` |
+| `ICSMODE`, `MAILSERVER`, `RETURNADD` | — | — | Accepted, warned, ignored |
+| `FORMAT`* | — | auto | `auto`, `raw`, `fastchess` (`--format`) |
+| `BIND`* | — | 0.0.0.0 | `--bind` |
+| `STATEFILE`*, `CLIENTTIMEOUT`* (s), `ADMINPASS`*, `MAXCLIENTS`* (0 = unlimited) | — | 70 s / 0 | Parsed now, consumed by later features |
+
+\* uci-to-tlcs extension, not in the reference server.
 
 Point node-tlcv at it via `config/config.json`:
 `{ "connections": ["<host>:16066"] }`.

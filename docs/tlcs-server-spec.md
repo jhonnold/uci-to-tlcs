@@ -255,22 +255,96 @@ Every adapter produces the same event stream: `players`, `newGame{startFen}`, `c
 
 ## 8. Configuration
 
-The rebuild MUST read a reference-style `server.ini` (exact, case-sensitive key prefixes; lines starting with
-`'` are comments) and MAY additionally read a modern config file.
+The rebuild MUST read a reference-style `server.ini` (exact, case-sensitive column-0 key prefixes; there is no
+real comment syntax: unmatched lines, including those starting with `'`, are ignored; see §8.1) and MAY additionally read a modern config file.
 
 | Key | Default | Meaning | Rebuild |
 | --- | --- | --- | --- |
-| `PATH=` | — | Log file to tail | Plus `FORMAT=` (`winboard`, `myracle`, `fastchess`, `uci`, `auto`) |
+| `PATH=` | — | Log file to tail | Same; `FORMAT=` extension below |
 | `PORT=` | 16000 | Listen and broadcast port | Same |
 | `SITE=` | — | Event name | Same |
-| `DELAY=` | 100 | Main-loop pacing in ms *(inferred: socket timeout)* | Poll interval |
+| `DELAY=` | 100 | UDP receive timeout passed to UDP OPEN (`0x402d93`) | Poll interval |
 | `DELAYAFTERMOVE=` | 300 | Pause after a move in ms | SHOULD default to 0 (§9.7) |
-| `DELAYAFTERGAME=` | 1000 | Used after a result *(unverified)* | Pause before the next game's burst |
+| `DELAYAFTERGAME=` | 1000 | Used after a result | Pause before the next game's burst |
 | `ICSMODE=1` | off | ICS relay mode *(effect not traced)* | Ignored, logged as unsupported |
 | `SAVEDEBUG=1` | off | Copy each game's log to `Debug-<white>_vs_<black>….log` | Same |
 | `MENU ID=n …` | — | Up to 10 viewer menu entries | Same |
 | `TOURNEYPGN=` | — | PGN for `RESULTTABLE`/`GAMELIST` | Same, plus a built-in results store (§9.6) |
 | `MAILSERVER=`, `RETURNADD=` | — | Email | Ignored |
+| `FORMAT=` | auto | Log producer: `auto`, `raw`, `fastchess` (`winboard`, `myracle`, `uci` are possible future values) | Rebuild extension |
+| `BIND=` | 0.0.0.0 | Local bind address | Rebuild extension |
+| `STATEFILE=` | — | Persisted state file | Rebuild extension |
+| `CLIENTTIMEOUT=` | 70 | Idle-client reap timeout, seconds | Rebuild extension |
+| `ADMINPASS=` | — | Admin password | Rebuild extension |
+| `MAXCLIENTS=` | 0 | Max clients, 0 = unlimited | Rebuild extension |
+
+### 8.1 server.ini parsing (reference, RE)
+
+Static reading of `tlc_server16a.exe`. O = observed, I = inferred, U = unverified.
+
+**Helpers.** `0x419974` string `=` (`repe cmpsb` over min length, then length compare: byte-exact,
+case-sensitive) O; `0x418ed4` `MID$` I; `0x4196de` `VAL` then `fistp` (lenient: leading blanks skipped, junk
+gives 0) I; `0x4153d1` OPEN I; `0x414bf8` LINE INPUT O.
+
+**Loop.** Init sub `0x4012bf`, loop `0x4024f1`..`0x402a05`: `OPEN "server.ini"` (relative to the CWD),
+`WHILE NOT EOF: LINE INPUT L$`, then every test below runs in order with no `ELSE`, so a later duplicate
+overwrites (last wins) O.
+
+| Test on `L$` | Action | Addr |
+| --- | --- | --- |
+| `LEFT$(,5)="PATH="` | PATH = rest of line, verbatim | `0x40255f` |
+| `"PORT="` | PORT = VAL(rest) | `0x4025c8` |
+| `"SITE="` | SITE = rest, verbatim | `0x402632` |
+| `"DELAY="` | DELAY = VAL | `0x40269b` |
+| `"DELAYAFTERMOVE="` | VAL | `0x402705` |
+| `"DELAYAFTERGAME="` | VAL | `0x40276f` |
+| `"MAILSERVER="`, `"RETURNADD="` | rest | `0x4027d9`, `0x402842` |
+| `"ICSMODE=1"` | ICSMODE = 1 (prefix literal: `ICSMODE=10` also sets it, nothing sets 0) | `0x4028ab` |
+| `"SAVEDEBUG=1"` | SAVEDEBUG = 1 (same quirk) | `0x4028e4` |
+| `"MENU "` | see below | `0x40291d` |
+
+**Defaults** (O, `0x4012d5`..`0x4024e7`): PORT 16000, PATH "", SITE "Tom's live chess viewer", DELAY 100,
+DELAYAFTERMOVE 300, DELAYAFTERGAME 1000, ICSMODE 0, SAVEDEBUG 0, MENU(1..10) "".
+
+**Matching consequences** (O): keys are exact column-0 prefixes: `port=`, ` PORT=`, `PORT =` never match. No
+trimming of key or value. There is no comment syntax: `'` lines, blank lines and unknown keys are all silently
+unmatched.
+
+**MENU** (`0x402932`..`0x402a00`, O): `p = INSTR(1,L,"ID=")` (ignore if `p<=1`); `q = INSTR(p,L," ")` (ignore if
+none, so a space must follow the id); `id = VAL(MID$(L,p+3,q-p-2))` (ignore unless 1..10);
+`MENU(id) = L` (whole line, verbatim, last duplicate wins). At logon (`0x40913e`..`0x4091b2`) the non-empty
+entries are sent numbered, in ascending id order.
+
+**After the loop** (`0x402a0a`..`0x402b1e`, O): `server.log` gets `Path=`, `Port=`, `Site=`, `Delay=`,
+`Delay after move=`, `Delay after game=`. UDP OPEN is called with PORT and DELAY (`0x402d87`..`0x402d99`).
+`ICSMODE=1` prints "ICS Mode" (`0x402dd8`).
+
+**TOURNEYPGN** (`0x40e50e` RESULTTABLE handler; same at `0x410610`, `0x411043`, O): not read at startup. On
+every request `server.ini` is reopened and scanned for `TOURNEYPGN=`, and the **first** match wins (`jmp
+0x40e5d3`). Empty gives `CT:Sorry, this server is not configured to send the results table.` Edits therefore
+apply live.
+
+**Line ends / file** (O): CR ends a line and one following LF is swallowed; a bare LF is not a terminator;
+Ctrl-Z (`0x1A`) ends input; the last line need not be terminated (I). A missing `server.ini` has no error trap
+(U: defaults).
+
+**Paths** (I): opened as given, relative to the CWD (in practice the ini's directory).
+
+**Rebuild behaviour** (deviations from the above):
+- D1: CR, CRLF and bare LF all end a line (Linux-written inis).
+- D2: unmatched, unknown-key and invalid-MENU lines are ignored but logged as warnings; `'` and blank lines
+  stay silent.
+- D3: numbers are strict: trimmed digits, in range (PORT 1..65535), else startup fails naming the line, key and
+  value. The reference's `VAL` would accept `PORT=16000x` and turn `PORT=abc` into 0.
+- D4: `MENU ... ID=n` needs no trailing space after `n`.
+- D5: missing keys use uci-to-tlcs defaults: PORT 16066, SITE `uci-to-tlcs`, DELAYAFTERMOVE 0, DELAYAFTERGAME 0
+  (DELAY stays 100).
+- D6: TOURNEYPGN is read once at startup and the last duplicate wins.
+- D7: `SAVEDEBUG=0` turns the flag off, last wins.
+- D8: CLI flags override the ini; relative ini paths resolve against the ini's directory; `--ini` naming a
+  missing file is a hard error.
+- D9: FORMAT, BIND, STATEFILE, CLIENTTIMEOUT, ADMINPASS and MAXCLIENTS are extensions.
+- D10: ICSMODE, MAILSERVER and RETURNADD are parsed and warned about, then ignored.
 
 ## 9. Improvements over the Reference
 

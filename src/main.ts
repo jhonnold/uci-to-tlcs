@@ -7,6 +7,7 @@ import { logger } from './util/logger.js';
 
 function main(): void {
   const cfg = parseConfig(process.argv.slice(2));
+  logger.info('config: ' + JSON.stringify({ ...cfg, adminPass: cfg.adminPass ? '***' : undefined }));
 
   const server = new TlcsServer({ port: cfg.port, bindAddr: cfg.bindAddr });
   server.start();
