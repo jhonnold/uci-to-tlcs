@@ -187,6 +187,18 @@ test('sender: RTT stepping above the RTO still converges (no permanent retransmi
   h.s.close();
 });
 
+test('sender: one heavily retransmitted item does not blow up the next item\'s RTO', async () => {
+  // item 1 needs 5 copies (elapsed ~ 10+20+40+40+40 ms); item 2's first timer must stay <= 2x the old RTO
+  const h = harness({ initialRtoMs: 10, minRtoMs: 5 }, (_d, id, copy) => (id === 1 ? (copy >= 5 ? 0 : null) : id === 2 ? null : 0));
+  h.s.addClient('A');
+  h.s.enqueue('A', ctl('slow'));
+  h.s.enqueue('A', ctl('next'));
+  await waitFor(() => h.rx.filter((r) => r.id === 2).length >= 2);
+  const ts = h.rx.filter((r) => r.id === 2).map((r) => r.t);
+  assert(ts[1] - ts[0] <= 2 * 10 + 15, `next item's first gap ${ts[1] - ts[0]}ms`);
+  h.s.close();
+});
+
 test('sender: game give-up replaces the epoch tail with a replay under new ids', async () => {
   const r = [game('r1', 1), game('r2', 1)];
   const h = harness({}, (_d, id) => (performance.now() > T0 + 200 || id > 1 ? 0 : null), (e) => (e === 1 ? r : null));

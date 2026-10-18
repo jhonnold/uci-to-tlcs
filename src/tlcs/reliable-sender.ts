@@ -187,10 +187,12 @@ export class ReliableSender {
     } else {
       // Karn: the sample is ambiguous, so srtt is untouched. But if the RTT has stepped
       // above the RTO every item would retransmit forever and the estimator would never
-      // learn; lift the RTO to what this item actually took (the next clean sample
-      // recomputes it from srtt).
+      // learn; lift the RTO towards what this item actually took. At most x2 per ambiguous
+      // ACK: under random loss the elapsed time includes the backoff waits, and adopting it
+      // outright feeds back (a long RTO makes the next item's loss cost even longer). The
+      // next clean sample recomputes the RTO from srtt.
       const base = c.srtt !== undefined ? this.rtoFromEstimate(c) : c.rto;
-      c.rto = this.clampRto(Math.max(base, t - f.firstSentAt));
+      c.rto = this.clampRto(Math.min(Math.max(base, t - f.firstSentAt), 2 * c.rto));
     }
     c.lastProgressAt = t;
     if (c.stalled) {
