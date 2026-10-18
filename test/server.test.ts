@@ -23,6 +23,15 @@ class TestClient {
   readonly sock: Socket;
   port = 0;
   readonly received: string[] = [];
+  /** Ids of the first-seen numbered messages, parallel to the numbered entries of `received`. */
+  readonly ids: number[] = [];
+  /** Every datagram, raw, in arrival order (including retransmitted copies). */
+  readonly raw: string[] = [];
+  /** Drop (do not ACK or record) the first copy of every Nth id; 0 = never. */
+  dropEvery = 0;
+  /** While true, receive and record nothing and ACK nothing (a client that went deaf). */
+  paused = false;
+  private seenIds = new Set<number>();
   private pinger: NodeJS.Timeout | null = null;
 
   private constructor(
@@ -45,14 +54,26 @@ class TestClient {
   }
 
   private onMessage(raw: string): void {
+    if (this.paused) return;
+    this.raw.push(raw);
     if (raw.startsWith('<')) {
       const close = raw.indexOf('>');
-      this.send(`ACK: ${raw.slice(1, close)}`);
+      const id = Number(raw.slice(1, close));
+      if (this.dropEvery && id % this.dropEvery === 0 && !this.seenIds.has(id) && !this.droppedOnce.has(id)) {
+        this.droppedOnce.add(id);
+        return;
+      }
+      this.send(`ACK: ${id}`);
+      if (this.seenIds.has(id)) return; // retransmitted copy: ACKed, not re-processed
+      this.seenIds.add(id);
+      this.ids.push(id);
       this.received.push(raw.slice(close + 1));
     } else {
       this.received.push(raw);
     }
   }
+
+  private droppedOnce = new Set<number>();
 
   send(msg: string): void {
     this.sock.send(msg, this.serverPort, HOST);
@@ -71,6 +92,8 @@ class TestClient {
     this.sock.close();
   }
 }
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /** Poll until `pred` holds, or reject after `timeoutMs`. */
 function waitFor(pred: () => boolean, timeoutMs = 1000): Promise<void> {
@@ -130,7 +153,10 @@ test('server: keys clients by ip:port so two clients on one host both get moves'
   }
 });
 
-test('server: mid-game LOGON replays site, players, latest position, clocks and PV before further moves', async () => {
+// Every LOGON now gets a FULL replay (not a board-only snapshot): a snapshot cannot repair
+// a client whose board is already loaded (node-tlcv after a server restart or a reap), so
+// the server replays players, the start position, every SAN and the latest position.
+test('server: mid-game LOGON replays site, players, full move history, latest position, clocks and PV before further moves', async () => {
   const { server, port } = await startServer();
   const early = await TestClient.create(port, 'early');
   const late = await TestClient.create(port, 'late');
@@ -173,14 +199,19 @@ test('server: mid-game LOGON replays site, players, latest position, clocks and 
     assert(idx('WPLAYER: Engine W') !== -1);
     assert(idx('BPLAYER: Engine B') !== -1);
     assert(idx(fen2) !== -1);
-    assert(!late.received.includes('FEN: rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq'));
 
-    // Snapshot order: SITE -> players -> FEN -> FMR -> clocks -> PV, all before the next move.
+    // Replay order: SITE -> players -> first position -> both SANs -> latest FEN/FMR -> clocks -> PV.
+    const e4fen = 'FEN: rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq';
     assert(idx('SITE: Midgame Arena') < idx('WPLAYER: Engine W'));
     assert(idx('WPLAYER: Engine W') < idx('BPLAYER: Engine B'));
-    assert(idx('BPLAYER: Engine B') < idx(fen2));
-    assert(idx(fen2) < idx('FMR: 0'));
-    assert(idx('FMR: 0') < idx('WTIME: 98000 otim 97500'));
+    assert(idx('BPLAYER: Engine B') < idx(e4fen));
+    assert(idx(e4fen) < idx('WMOVE: 1. e4'));
+    assert(idx('WMOVE: 1. e4') < idx('BMOVE: 1... e5'));
+    // fen2 is the LAST FEN, after the SANs and before the clocks.
+    assert.equal(late.received.lastIndexOf(fen2), late.received.map((m) => m.startsWith('FEN:')).lastIndexOf(true));
+    assert(idx('BMOVE: 1... e5') < late.received.lastIndexOf(fen2));
+    assert(late.received.lastIndexOf('FMR: 0') < idx('WTIME: 98000 otim 97500'));
+    assert(late.received.lastIndexOf(fen2) < late.received.lastIndexOf('FMR: 0'));
     assert(idx('WTIME: 98000 otim 97500') < idx('WPV: 5 12 100 100 Nf3'));
 
     // The next live move lands only after the snapshot is complete.
@@ -192,7 +223,7 @@ test('server: mid-game LOGON replays site, players, latest position, clocks and 
       fmr: 1,
     });
     await waitFor(() => late.received.some((m) => m.startsWith('WMOVE') && m.includes('Nf3')));
-    assert(idx('WPV: 5 12 100 100 Nf3') < late.received.findIndex((m) => m.startsWith('WMOVE')));
+    assert(idx('WPV: 5 12 100 100 Nf3') < late.received.findIndex((m) => m.startsWith('WMOVE') && m.includes('Nf3')));
   } finally {
     early.close();
     late.close();
@@ -218,6 +249,267 @@ test('server: reaps a silent client after the idle timeout', async () => {
   } finally {
     alice.close();
     bob.close();
+    server.close();
+  }
+});
+
+const FEN_E4 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq';
+const FEN_START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq';
+const mv = (server: TlcsServer, n: number): void =>
+  server.emitMove({ fenTruncated: `${FEN_E4}-${n}`, color: n % 2 ? 'w' : 'b', fullMoveNumber: Math.ceil(n / 2), san: `m${n}`, fmr: n });
+const bodiesFrom = (c: TestClient, from: string): string[] => c.received.slice(c.received.indexOf(from));
+
+test('server: numbered inbound PING/CHAT are ACKed on every copy and deduped', async () => {
+  const { server, port } = await startServer();
+  const a = await TestClient.create(port, 'alice');
+  const b = await TestClient.create(port, 'bob');
+  try {
+    a.logon();
+    b.logon();
+    await waitFor(() => a.received.includes('LOGON SUCCESSFUL') && b.received.includes('LOGON SUCCESSFUL'));
+    a.send('< 7>PING');
+    await waitFor(() => a.raw.includes('ACK: 7') && a.received.includes('PONG'));
+    a.send('< 7>PING');
+    await waitFor(() => a.raw.filter((m) => m === 'ACK: 7').length === 2);
+    await sleep(40);
+    assert.equal(a.received.filter((m) => m === 'PONG').length, 1, 'duplicate not re-dispatched');
+
+    a.send('<8>CHAT: hi');
+    a.send('<8>CHAT: hi');
+    await waitFor(() => b.received.includes('CHAT: alice: hi'));
+    await sleep(60);
+    assert.equal(b.received.filter((m) => m === 'CHAT: alice: hi').length, 1);
+
+    a.send('LOGONv15:alice'); // re-LOGON resets the dedupe ring (restarted desktop counter)
+    await sleep(40);
+    a.send('< 7>PING');
+    await waitFor(() => a.received.filter((m) => m === 'PONG').length === 2);
+  } finally {
+    a.close();
+    b.close();
+    server.close();
+  }
+});
+
+test('server: a lossy client still gets every move, in order, with increasing ids', async () => {
+  const { server, port } = await startServer({ minRtoMs: 10, maxRtoMs: 80, initialRtoMs: 20 });
+  const c = await TestClient.create(port, 'lossy');
+  try {
+    c.logon();
+    await waitFor(() => c.received.includes('LOGON SUCCESSFUL'));
+    c.dropEvery = 3;
+    server.setPlayers('W', 'B');
+    for (let n = 1; n <= 10; n++) mv(server, n);
+    await waitFor(() => c.received.filter((m) => m.startsWith('FMR:')).length === 10, 4000);
+    const moves = c.received.filter((m) => /^[WB]MOVE/.test(m));
+    assert.deepEqual(moves.map((m) => m.split(' ').pop()), Array.from({ length: 10 }, (_, i) => `m${i + 1}`));
+    assert(c.ids.every((id, i) => i === 0 || id > c.ids[i - 1]));
+  } finally {
+    c.close();
+    server.close();
+  }
+});
+
+test('server: a client that stops ACKing gets a replay under new ids after give-up; others are unaffected', async () => {
+  const { server, port } = await startServer({ giveUpMs: 60, minRtoMs: 10, initialRtoMs: 15, maxRtoMs: 30 });
+  const a = await TestClient.create(port, 'a');
+  const b = await TestClient.create(port, 'b');
+  try {
+    a.logon();
+    b.logon();
+    await waitFor(() => a.received.includes('LOGON SUCCESSFUL') && b.received.includes('LOGON SUCCESSFUL'));
+    await sleep(40);
+    a.paused = true;
+    server.setPlayers('W', 'B');
+    server.emitInitialPosition(FEN_START, 0);
+    for (let n = 1; n <= 3; n++) mv(server, n);
+    await waitFor(() => b.received.filter((m) => m.startsWith('FMR:')).length === 4, 1000); // b is prompt
+    await sleep(150); // past giveUpMs
+    const before = Math.max(0, ...a.ids);
+    const n0 = a.ids.length;
+    a.paused = false;
+    await waitFor(() => a.received.filter((m) => m.startsWith('FMR:')).length >= 1 && a.received.includes('WMOVE: 2. m3'), 3000);
+    assert(a.ids.length > n0 && a.ids.slice(n0).every((id) => id > before), JSON.stringify([before, a.ids]));
+    assert.deepEqual(
+      a.received.filter((m) => m.startsWith('WPLAYER') || m.startsWith('BPLAYER')),
+      ['WPLAYER: W', 'BPLAYER: B'],
+    );
+    assert.equal(a.received.filter((m) => /^[WB]MOVE/.test(m)).length, 3, 'each SAN exactly once');
+    assert.equal(a.received.filter((m) => m.startsWith('FEN:')).at(-1), `FEN: ${FEN_E4}-3`);
+  } finally {
+    a.close();
+    b.close();
+    server.close();
+  }
+});
+
+test('server: ids continue across a re-LOGON of the same client', async () => {
+  const { server, port } = await startServer();
+  const c = await TestClient.create(port, 'c');
+  try {
+    c.logon();
+    await waitFor(() => c.received.includes('LOGON SUCCESSFUL'));
+    server.setPlayers('W', 'B');
+    await waitFor(() => c.received.includes('BPLAYER: B'));
+    const last = Math.max(...c.ids);
+    c.logon();
+    await waitFor(() => c.ids.length > 2 && Math.max(...c.ids) > last);
+    assert(c.ids.every((id, i) => i === 0 || id > c.ids[i - 1]), `ids ${c.ids}`);
+  } finally {
+    c.close();
+    server.close();
+  }
+});
+
+test('server: re-LOGON with pending moves and a pending result replays both games, result once', async () => {
+  const { server, port } = await startServer();
+  const c = await TestClient.create(port, 'c');
+  try {
+    c.logon();
+    await waitFor(() => c.received.includes('LOGON SUCCESSFUL'));
+    await sleep(30);
+    c.paused = true;
+    server.setPlayers('W1', 'B1');
+    server.emitInitialPosition(FEN_START, 0);
+    mv(server, 1);
+    mv(server, 2);
+    server.emitResult('1-0 {done}');
+    server.setPlayers('W2', 'B2');
+    server.emitInitialPosition(FEN_START, 0);
+    mv(server, 3);
+    await sleep(50);
+    c.paused = false;
+    c.logon();
+    await waitFor(() => c.received.includes('FEN: ' + FEN_E4 + '-3'), 3000);
+    await sleep(50);
+    const r = bodiesFrom(c, 'WPLAYER: W1');
+    assert.equal(r.filter((m) => m.startsWith('result:')).length, 1, JSON.stringify(r));
+    assert(r.indexOf('result: 1-0 {done}') < r.indexOf('WPLAYER: W2'));
+    // the in-flight WPLAYER (sent before the pause) may legitimately precede its own replay
+    assert(r.filter((m) => m === 'WPLAYER: W1').length <= 2);
+    assert.equal(r.filter((m) => m === 'WPLAYER: W2').length, 1);
+    assert.equal(r.filter((m) => /^[WB]MOVE/.test(m)).length, 3);
+  } finally {
+    c.close();
+    server.close();
+  }
+});
+
+test('server: re-LOGON of an up-to-date client gets a full replay before the next live move', async () => {
+  const { server, port } = await startServer();
+  const c = await TestClient.create(port, 'c');
+  try {
+    c.logon();
+    await waitFor(() => c.received.includes('LOGON SUCCESSFUL'));
+    server.setPlayers('W', 'B');
+    server.emitInitialPosition(FEN_START, 0);
+    mv(server, 1);
+    await waitFor(() => c.received.includes('FMR: 1'));
+    const n0 = c.received.length;
+    c.logon();
+    await waitFor(() => c.received.slice(n0).includes('FMR: 1'));
+    const again = c.received.slice(n0);
+    assert(again.indexOf('WPLAYER: W') < again.indexOf('WMOVE: 1. m1'));
+    mv(server, 2);
+    await waitFor(() => c.received.includes('BMOVE: 1... m2'));
+    assert(c.received.lastIndexOf('WMOVE: 1. m1') < c.received.indexOf('BMOVE: 1... m2'));
+  } finally {
+    c.close();
+    server.close();
+  }
+});
+
+test('server: a fresh client after a finished game gets no stale WPLAYER/result', async () => {
+  const { server, port } = await startServer();
+  const c = await TestClient.create(port, 'late');
+  try {
+    server.setSite('Arena');
+    server.setPlayers('W', 'B');
+    server.emitInitialPosition(FEN_START, 0);
+    mv(server, 1);
+    server.emitResult('1/2-1/2');
+    c.logon();
+    await waitFor(() => c.received.includes('LOGON SUCCESSFUL') && c.received.includes('SITE: Arena'), 1000).catch(() => undefined);
+    await sleep(80);
+    assert(!c.received.some((m) => m.startsWith('WPLAYER') || m.startsWith('result:')));
+    server.setPlayers('W2', 'B2');
+    await waitFor(() => c.received.includes('BPLAYER: B2'));
+  } finally {
+    c.close();
+    server.close();
+  }
+});
+
+test('server: replay keeps the mover PV before each SAN (so node-tlcv does not label them Book)', async () => {
+  const { server, port } = await startServer();
+  const c = await TestClient.create(port, 'late');
+  try {
+    server.setPlayers('W', 'B');
+    server.emitInitialPosition(FEN_START, 0);
+    server.emitPv('w', 9, 20, 100, 5000, ['e4']);
+    mv(server, 1);
+    mv(server, 2); // black: book move, no PV
+    server.emitPv('w', 11, 25, 100, 9000, ['Nf3']);
+    mv(server, 3);
+    c.logon();
+    await waitFor(() => c.received.includes('FMR: 3'), 2000);
+    const r = c.received;
+    const i1 = r.indexOf('WMOVE: 1. m1');
+    assert.equal(r[i1 - 1].startsWith('WPV: 9 20'), true, 'PV directly before the first SAN (verbatim prefix)');
+    const i3 = r.indexOf('WMOVE: 2. m3');
+    assert.equal(r[i3 - 1].startsWith('WPV: 11 25'), true, 'PV directly before a later SAN');
+    const i2 = r.indexOf('BMOVE: 1... m2');
+    assert(!r[i2 - 1].startsWith('BPV'), 'no PV invented for a book move');
+  } finally {
+    c.close();
+    server.close();
+  }
+});
+
+test('server: records are garbage-collected once every client has caught up', async () => {
+  const { server, port } = await startServer({ minRtoMs: 10, initialRtoMs: 15, maxRtoMs: 40 });
+  const c = await TestClient.create(port, 'slow');
+  try {
+    c.logon();
+    await waitFor(() => c.received.includes('LOGON SUCCESSFUL'));
+    c.dropEvery = 2;
+    for (let g = 1; g <= 3; g++) {
+      server.setPlayers(`W${g}`, `B${g}`);
+      server.emitInitialPosition(FEN_START, 0);
+      mv(server, 1);
+      server.emitResult(`1-0 {g${g}}`);
+    }
+    assert(server.recordEpochs().length > 1, 'slow client keeps older epochs alive');
+    await waitFor(() => c.received.filter((m) => m.startsWith('result:')).length === 3, 4000);
+    server.setPlayers('W4', 'B4');
+    assert.deepEqual(server.recordEpochs().length, 1);
+    assert.deepEqual(c.received.filter((m) => m.startsWith('result:')), ['result: 1-0 {g1}', 'result: 1-0 {g2}', 'result: 1-0 {g3}']);
+  } finally {
+    c.close();
+    server.close();
+  }
+});
+
+test('server: BMOVE never precedes a FEN after a re-LOGON on a backlogged client', async () => {
+  const { server, port } = await startServer();
+  const c = await TestClient.create(port, 'c');
+  try {
+    c.logon();
+    await waitFor(() => c.received.includes('LOGON SUCCESSFUL'));
+    await sleep(30);
+    c.paused = true;
+    server.setPlayers('W', 'B');
+    server.emitInitialPosition(FEN_START, 0);
+    for (let n = 1; n <= 6; n++) mv(server, n);
+    c.paused = false;
+    c.logon();
+    await waitFor(() => c.received.includes('FMR: 6'), 3000);
+    const afterLogon = c.received.slice(c.received.indexOf('LOGON SUCCESSFUL', 1) === -1 ? 0 : c.received.indexOf('LOGON SUCCESSFUL', 1));
+    const firstFen = afterLogon.findIndex((m) => m.startsWith('FEN:'));
+    const firstMove = afterLogon.findIndex((m) => /^[WB]MOVE/.test(m));
+    assert(firstFen !== -1 && firstFen < firstMove, 'a FEN precedes the first move after re-LOGON');
+  } finally {
+    c.close();
     server.close();
   }
 });

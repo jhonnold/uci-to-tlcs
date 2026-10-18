@@ -65,8 +65,9 @@ grow it into the full server (§10) rather than start a new codebase.
 
 - One datagram = one message. ANSI/Latin-1 text, no terminator, no newline. Empty datagrams are ignored.
 - A **numbered** message is `"<" + STR$(id) + ">" + body`. PowerBASIC `STR$` prefixes non-negative numbers with
-  a space, so the reference sends `< 42>FEN: …`. **Rebuild MUST emit the space** (`< 42>`) to match. Both
-  reference parsers use `VAL`, which tolerates either form, so the rebuild MUST accept `<42>` and `< 42>` on input.
+  a space, so the reference sends `< 42>FEN: …`. **Deliberate deviation: uci-to-tlcs emits `<42>FEN: …` with
+  no space** (simpler; node-tlcv's `split('>')` and the desktop client's `Val()` both parse either form).
+  The rebuild MUST accept `<42>` and `< 42>` on input.
 - An **ACK** is `"ACK:" + STR$(id)` → `ACK: 42`. Accept any amount of whitespace after the colon on input
   (node-tlcv sends `ACK:  42`).
 
@@ -431,7 +432,7 @@ Where uci-to-tlcs stands against this spec (as of `1057bd7`), and what to change
 | Spec item | uci-to-tlcs today | Work |
 | --- | --- | --- |
 | §4.1 addressing | Replies to source `ip:port` | Add a `clientIP:PORT` mode for strict compatibility |
-| §4.2 framing | Sends `<N>` without the space | Emit `< N>`; accept both (cosmetic: both clients parse either) |
+| §4.2 framing | Sends `<N>` without the space | Deliberate deviation: emit `<N>` (no space); accept both on input (both clients parse either). Done in T02 |
 | §4.3 numbered client messages | Compares raw text (`msg === 'PING'`, `startsWith('CHAT')`) | Strip `< id>`, ACK, dedupe. The desktop client sends `PING`/`CHAT`/`VOTE`/`CHANGE` numbered, so today they go unanswered |
 | §4.4 numbering | One global stop-and-wait queue, 4 tries × 750 ms, then skip ahead | Per-client in-order queues, backoff, resync on give-up (§9.3–9.4); fixes gap **J** |
 | §5.1 commands | `LOGONv15`, `PING`, `RESULTTABLE` (stub), `CHAT`, `LOGOFF`, `ACK` | `LOGON:` refusal, `CHANGE:`, `GAMELIST`, `CHAT: <…>` queries, admin |

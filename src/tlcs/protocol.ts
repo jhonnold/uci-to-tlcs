@@ -1,12 +1,25 @@
 // Builders for the TLCS server->client wire messages, decoded from what node-tlcv
 // accepts (src/game-service.ts). These return bare message bodies; ID-wrapping for
-// the reliable channel is applied by ReliableSender.
+// the reliable channel is applied by ReliableSender using frame() below.
 
 export type ColorCode = 'w' | 'b';
 
 /** UCI/TLCS time fields are centiseconds on the wire; convert from milliseconds. */
 export function msToCs(ms: number): number {
   return Math.round(ms / 10);
+}
+
+/** Reliable-channel framing. NO space after `>` (deliberate deviation from the reference `< N>`). */
+export function frame(id: number, body: string): string {
+  return `<${id}>${body}`;
+}
+
+export function ack(id: number): string {
+  return `ACK: ${id}`;
+}
+
+export function level(text: string): string {
+  return `level ${text}`;
 }
 
 export function site(s: string): string {

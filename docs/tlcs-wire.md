@@ -10,12 +10,24 @@ changing reply/targeting logic, or touching the FEN/time/score/PV encoding in
   changing any wire format — there is no official spec. For what the original
   server (TLCS 1.6a) does, see `docs/tlcs-server-spec.md`.
 
-- **Two send channels, different rules** (`tlcs/server.ts`):
-  - *Reliable* (`sender.enqueue`) — ID-wrapped `<N>MSG`, ACKed, **stop-and-wait with
-    strictly monotonic ids** (node-tlcv drops any id ≤ last seen). Used for
-    state-critical msgs: SITE / PLAYER / FEN / MOVE / FMR / result / user / chat.
-  - *Unwrapped* (`broadcastUnwrapped`) — fire-and-forget, high frequency: WPV / BPV /
-    WTIME / BTIME. Don't move a message between channels casually.
+- **Two send channels, different rules** (`tlcs/server.ts`, `tlcs/reliable-sender.ts`):
+  - *Reliable* (`sender.enqueue`) — ID-wrapped `<N>MSG` (no space), ACKed. **Per client**: own
+    id counter (starts at 1, strictly increasing, never reset while the process lives, even
+    across LOGOFF/re-LOGON), FIFO queue, one message in flight (stop-and-wait; a window would
+    land a resend behind a newer id and node-tlcv drops any id ≤ last seen). A slow client never
+    stalls another. Retransmit uses an adaptive RTO (RFC 6298 estimator, Karn's rule, clamped
+    50 ms–2 s, doubling per retransmit of one item). Give-up after 10 s: a *game* item is
+    replaced by a replay of its game under new ids; a *control* item is dropped (`onGiveUp`);
+    the `result` is retried until 60 s then dropped with an error. Queues over `maxQueue` are
+    coalesced to replays when shorter. Game data is dropped only for a *stalled* client (no
+    ACK progress for 60 s while busy), logged at error. Used for SITE / PLAYER / FEN / MOVE /
+    FMR / level / result / user / chat.
+  - *Unnumbered* — fire-and-forget, latest-only per key: WPV / BPV / WTIME / BTIME. An idle
+    client gets them at once; a busy client has them held in queue order (so a position always
+    precedes its clock/PV). Never retransmitted. Don't move a message between channels casually.
+  - *Inbound numbered*: a datagram `<N>body` / `< N>body` is ACKed (`ACK: N`) on **every** copy,
+    deduped per source (ring of 256, reset on `LOGONv15`), then dispatched. ACK parsing is
+    `ACK:\s*N`.
 
 - **Replies go to the source `ip:port`, not the broadcast port** (`tlcs/server.ts`).
   Strict TLCS ignores the source port and streams to `clientIP:<broadcastPort>`; we
@@ -34,14 +46,14 @@ changing reply/targeting logic, or touching the FEN/time/score/PV encoding in
   real TLCS, **no** White-POV flip; only `multipv 1` is the broadcast eval; mate
   mapped to ±(100000 − n) so node-tlcv renders it decisive.
 
-- **Mid-game join** (`tlcs/server.ts` `sendSnapshot`): on `LOGONv15` the server unicasts a
-  snapshot of the live game — SITE → WPLAYER → BPLAYER → FEN → FMR → clocks → last PV — all on
-  the reliable channel in that order, so a late client lands on the current board/players/site
-  without waiting for the next move (node-tlcv's first-FEN `resetFromFen` path). Board-only: no
-  move history is replayed (matches existing TLCS servers). Re-LOGON replays it too. The
-  snapshot's clocks/PV on the reliable channel is the one exception to the unwrapped rule
-  above; a slow-ACKing joiner can briefly stall the global stop-and-wait queue for existing
-  clients (worst case ~3s per unacked msg).
+- **Mid-game join** (`tlcs/server.ts` `resync`): every successful `LOGONv15` (new or known)
+  gets a full replay of the current game on the reliable channel — SITE, WPLAYER, BPLAYER, the
+  setup sequence (start FEN, setup moves, `level`), every SAN (each preceded by the mover's last
+  PV so node-tlcv's archive does not label replayed moves "(Book)"), the latest FEN/FMR — then the
+  clocks and last PV as latest items. A board-only snapshot cannot repair a client whose board is
+  already loaded (node-tlcv after a server restart or a reap), so history is always replayed. A
+  finished game whose result is already delivered or in flight is not replayed. Game records are
+  kept for every epoch some client's queue still references and dropped when none does.
 
 - **Non-startpos new game** (`FENSETUPMOVE`, default on): `WPLAYER`/`BPLAYER` → `FEN startpos`/`FMR 0`
   → `FEN X`/`FMR f` → `FEN X`/`xMOVE n. (setup)`/`FMR f` → book moves. node-tlcv's `onMove` fails
