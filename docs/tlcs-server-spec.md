@@ -1,0 +1,399 @@
+# TLCS Rebuild Specification
+
+A specification for rebuilding **Tom's Live Chess Server (TLCS)**: the UDP broadcast server that the desktop
+TLCV viewer and node-tlcv connect to. The original source is lost; this spec is derived from static reverse
+engineering of the last published build, plus what the official viewer and node-tlcv expect.
+
+Status: draft, 2026-10-16.
+
+## 1. Sources and Confidence
+
+| Artifact | Identity | Role |
+| --- | --- | --- |
+| `server.zip` (Wayback snapshot 2006-12-19 of `home.pacific.net.au/~tommyinoz/server.zip`) | sha256 `607629164afb9826adde7cca3215c66da2d9d56f1bdfd43821131117f58543fc` | Distribution |
+| `tlc_server16a.exe` ("Version 1.6a", PowerBASIC Console Compiler) | sha256 `8d10d311b5f59e3dc1d9286aadd0877f172118099acce2b9e2d8b2ed84d37588` | **Reference server** |
+| `server.ini` (sample in the zip) | — | Reference config |
+| `chess_viewer.exe` 2.01.0003 (TLCV v2.1c) | sha256 `28513524586fd63da28610852ae0da3cbf21f2fea6605e26ca0e40a848081609` | Reference client |
+| [`../node-tlcv/docs/official-client.md`](../../node-tlcv/docs/official-client.md) | — | Client-side protocol notes |
+
+All behavior below was read from disassembly; nothing was executed. Statements are **observed** unless
+marked *(inferred)* or *(unverified)*. Function addresses in `tlc_server16a.exe` are given so claims can be
+re-checked. Note that PowerBASIC relocates its literal pool at startup (`0x4136c6`, moving `0x2164` bytes from
+`0x41b028` to `0x41b558`), so string references only resolve against that relocated image.
+
+## 2. Goals
+
+1. **Wire-compatible** with the unmodified desktop TLCV 2.1c client and with node-tlcv.
+2. **Behaviorally faithful** where a client can observe the difference (formats, ordering guarantees, logon
+   burst, keepalive), and **better** where the original was fragile (section 9).
+3. **Pluggable input**: the original only understood a WinBoard debug log. The rebuild treats that as one
+   source adapter among several (WinBoard, myracle, fastchess, raw UCI).
+4. Operable in 2026: config file, metrics, structured logs, persistence across restarts.
+
+Non-goals: emailing PGNs (`gbmail.exe`, `MAILSERVER=`/`RETURNADD=`, `EMAIL:`/`SEND:`), the console UI, ICS
+relay mode (until its behavior is traced; see §11).
+
+## 3. Architecture
+
+```
+  log file(s) ──tail──▶ SourceAdapter ──events──▶ GameEngine (board, SAN, FEN, clocks, PVs)
+                                                        │
+                                                        ▼
+                         Broadcaster (per-client queues, numbering, ACK, retransmit, coalescing)
+                                                        │ UDP
+                                                        ▼
+                                    viewers (desktop TLCV, node-tlcv, …)
+```
+
+uci-to-tlcs already implements this shape (`src/source`, `src/game`, `src/tlcs`). The recommended path is to
+grow it into the full server (§10) rather than start a new codebase.
+
+## 4. Transport
+
+### 4.1 Addressing
+
+- One UDP socket bound to `PORT` (default **16000**). It receives client datagrams and sends everything.
+- **Reference behavior:** every send goes to `clientIP:PORT`. The client's source port is ignored, and clients
+  are identified by **IP only** (`RecvAndAck` `0x4083cf`, `RawSend` `0x4080e2`).
+- **Rebuild MUST** send to `clientIP:PORT` by default, so clients that bind the broadcast port keep working.
+- **Rebuild SHOULD** key clients by `ip:port` and offer a per-server option to reply to the source port
+  (uci-to-tlcs's behavior). Clients that send from the broadcast port see no difference.
+- Loopback (`127.0.0.1`) is reserved in the reference for a file bridge (`in.dat`/`out.dat`). The rebuild MAY
+  drop the bridge but MUST NOT treat loopback specially otherwise.
+
+### 4.2 Framing
+
+- One datagram = one message. ANSI/Latin-1 text, no terminator, no newline. Empty datagrams are ignored.
+- A **numbered** message is `"<" + STR$(id) + ">" + body`. PowerBASIC `STR$` prefixes non-negative numbers with
+  a space, so the reference sends `< 42>FEN: …`. **Rebuild MUST emit the space** (`< 42>`) to match. Both
+  reference parsers use `VAL`, which tolerates either form, so the rebuild MUST accept `<42>` and `< 42>` on input.
+- An **ACK** is `"ACK:" + STR$(id)` → `ACK: 42`. Accept any amount of whitespace after the colon on input
+  (node-tlcv sends `ACK:  42`).
+
+### 4.3 Receiving numbered messages (`0x4083cf`)
+
+For a datagram whose first character is `<`:
+
+1. `p = INSTR(2, msg, ">")`. Continue only if `p > 2`.
+2. `id = VAL(MID$(msg, 2, p - 2))`. Continue only if `id > 0`.
+3. Reply `ACK: <id>`, unnumbered, to the sender. Every copy is ACKed, including duplicates.
+4. `body = MID$(msg, p + 1)`.
+5. **Dedupe:** the reference keeps a ring of the last **100** `(id, ip)` pairs. A repeat yields an empty body.
+   Rebuild MUST dedupe per client; SHOULD use a larger window or per-client high-water mark plus a recent set.
+
+### 4.4 Sending numbered messages (`SafeSend` `0x4122f5`)
+
+Reference:
+
+| Property | Reference | Rebuild |
+| --- | --- | --- |
+| Id source | One **global** counter for all clients, incremented per (message × client); never reset while running | MUST be strictly increasing per client and MUST NOT reset on re-LOGON. SHOULD be per-client and persisted across restarts (§9.2) |
+| Queue | 1000 slots `{id, body (fixed 100 chars), ip, lastSent, tries, acked}`, many in flight at once | Per-client queue, delivered **in id order** (§9.3), no truncation |
+| ACK match | `ACK:` body → `VAL(MID$(body,5))` → mark slot acked (`0x412577`) | Match on `(client, id)` |
+| Resend pass | Runs every 11th idle main-loop iteration; resends at most 6 slots per pass (`0x412657`) | Timer-driven, per client |
+
+**Reference retransmit schedule** (times are lower bounds; the pass runs only when the loop is idle):
+
+| Send # | When | Rule |
+| --- | --- | --- |
+| 1 | t = 0 | — |
+| 2 | > 2 s after #1 | — |
+| 3 | > 2 s after #2 | after this send, next check is pushed +4 s |
+| 4 | ~ t + 10 s | — |
+| give up | ~ t + 16 s | non-`CHAT` message is dropped. If the client has also been silent > 60 s it is removed and `CHAT: [SERVER]- Lost connection with <name>` is broadcast |
+| `CHAT` only | keeps resending ~every 6 s | after 11 sends the client is removed (regardless of activity), and the slot keeps resending |
+
+The `CHAT` path is a bug (it repeatedly removes the client and never clears the slot); see §9.4.
+
+**Overload fallback (reference):** the server counts slots sent more than once and still unacked. While that
+count is **> 20**, every numbered send degrades to an unnumbered send and every broadcast goes out raw to all
+clients; PV flushes are suppressed (`0x411823` top, `0x4032fe`). Rebuild MUST NOT copy this global switch
+(§9.3).
+
+### 4.5 Client table (reference)
+
+Up to **500** clients `{ip, name (30 chars), lastHeard}` (`0x41bc24`). `lastHeard` is refreshed by **any**
+datagram from that IP. The table is kept compacted; broadcasts iterate until the first empty slot.
+
+## 5. Session Protocol
+
+### 5.1 Client → server
+
+Matched in this order by the dispatcher (`ClientCmd` `0x411823`). Exact match unless a prefix length is given.
+
+| Message | Match | Reference handling | Rebuild |
+| --- | --- | --- | --- |
+| `LOGON:…` | 6-char prefix | Plain `MSG:Connection refused.  The broadcast server does not support the version of the viewer you are using.` | Same |
+| `LOGONv15:<name>` | 9-char prefix | Logon (§5.2) | Same |
+| `LOGOFF` | exact | Remove client by IP; broadcast `DELUSER: <name>` and `CHAT: [SERVER] - <name> has left!` | Remove by client key |
+| `RESULTTABLE` | exact | Plain `CTRESET` then `CT:` lines built from `TOURNEYPGN` (§7.3) | Same, but numbered or paced (§9.6) |
+| `GAMELIST` | exact | Plain `GL:` lines from `TOURNEYPGN`, or a `MSG:` error | Same |
+| `CHANGE:<newname>` | 7-char prefix | Rename; broadcast `DELUSER:`, `ADDUSER:`, `CHAT:[SERVER] - Alias changed from <old> to <new>` | Same |
+| `CHAT: <who>` / `<time>` / `<ver>` / `<stats>` / `<q>` | exact | Plain, private `CHAT:[SERVER] …` replies (user count, date/time, `Version 1.6a`, counters, queue sizes) | Same; `<ver>` reports the rebuild version |
+| `VOTE: <text>` | — | No handler found in the reference (the desktop client can send it) | Accept and ignore, or implement polls |
+| `CHAT:<text>` | contains `CHAT:`, starts with it | From a known client: numbered broadcast `CHAT: [<name>] - <text>`. From an unknown IP: plain `MSG: You are no longer connected to the server.  Please re-connect.` | Same |
+| `EMAIL:<addr>` / `SEND:…` | 6 / 5-char prefix | Email PGN | Non-goal: reply `MSG:` "not supported" |
+| `PING` | exact | Numbered `PONG` to sender. **No login check** | Answer, but see §9.1 |
+| `ACK: <id>` | 4-char prefix | Mark queued message acked | Same |
+| `SECURITY` | exact | Admin list → `SECUSER:` lines | Authenticated admin only (§9.8) |
+| `BOOT:<user>` / `SRBOOT:<user>` | 5 / 7-char prefix | Admin kick | Authenticated admin only |
+
+### 5.2 Logon (`0x4087ce`)
+
+1. Name = text after `LOGONv15:`. Empty → `Anonymous`. If the name is taken, append `STR$(n)` (`name 1`, …).
+2. Slot = first slot whose IP is empty or equals the sender's IP (so a re-logon from the same IP reuses it).
+3. Plain `LOGON SUCCESSFUL` to the client.
+4. Numbered, to the client, in this order:
+   1. `WPLAYER: <white>`
+   2. `BPLAYER: <black>`
+   3. `SITE:<site>`
+   4. `FEN: <game start FEN>`
+   5. `FEATURE: PING`
+   6. the last `WMOVE:`/`BMOVE:` message, if any
+   7. `FEN: <current FEN>`
+   8. one more stored message *(unverified; global `0x41b490`)*
+5. Numbered broadcast `ADDUSER: <name>` to all clients, including the new one.
+6. For each other client: numbered `ADDUSER: <their name>` to the new client, and numbered
+   `CHAT: [Server] <new name> has arrived!` to that client.
+7. Numbered, to the client: each configured `MENU …` line (up to 10).
+
+Rebuild MUST keep steps 3–7 and their order. The desktop client ignores everything before `LOGON SUCCESSFUL`
+and enables its keepalive only after `FEATURE: PING`.
+
+### 5.3 Keepalive
+
+- Clients that saw `FEATURE: PING` send `PING` (desktop: numbered, every 20 s; node-tlcv: plain, every 10 s).
+- Reference removes a client only when a retransmit gives up **and** the client has been silent > 60 s, or via
+  the `CHAT` bug. Rebuild MUST reap clients silent for longer than `CLIENT_TIMEOUT` (default 70 s, which covers
+  the desktop client's 20 s PING with margin) and MUST NOT reap on ACK timeout alone.
+
+## 6. Server → Client Messages
+
+| Message | Delivery | Format | Source |
+| --- | --- | --- | --- |
+| `WPLAYER: <name>` / `BPLAYER: <name>` | numbered, all | Name from engine `feature myname=` or the launch command line | §7.2 |
+| `SITE:<text>` | numbered, all | **Reference has no space** after the colon. Rebuild MUST send `SITE: <text>` (§9.5) | `SITE=` |
+| `FEN: <board> <stm> <castling>` | numbered, all | **Three fields only**; the desktop client compares the start position against exactly `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq` | Server's own board |
+| `WMOVE: <n>. <san>` / `BMOVE: <n>. ... <san>` | numbered, all | SAN from the server's own board | Engine `move` |
+| `FMR: <n>` | numbered, all | Fifty-move counter *(reference value derivation unverified; it divides a ply counter by 2)* | Server's own board |
+| `WTIME: <cs> otim <cs>` / `BTIME: …` | **unnumbered**, all | Centiseconds as sent to the engine. Prefix = color of the engine about to move. **`otim` is required** by the desktop client | `time` + `otim` |
+| `WPV: <depth> <score> <cs> <nodes> <pv…>` / `BPV: …` | **unnumbered**, all, **coalesced** | Engine's own output; score in the engine's own point of view (no White-POV flip) | Engine thinking line |
+| `result <res> {<reason>}` | numbered, all | Passed through from WinBoard's `result` command | `>first : result` |
+| `level <args>` | numbered, all | Passed through | `>first : level` |
+| `ADDUSER: <n>` / `DELUSER: <n>` | numbered | — | Logon / logoff |
+| `CHAT: …` | numbered (relay) / plain (server replies) | — | — |
+| `MENU ID=<n> WIDTH=<w> HEIGHT=<h> NAME="<name>" URL="<url>"` | numbered, at logon | Verbatim `server.ini` line; NAME/URL may contain spaces | `MENU ` |
+| `FEATURE: PING` | numbered, at logon | — | — |
+| `CTRESET`, `CT:<line>` | plain, requester | Crosstable text | `RESULTTABLE` |
+| `GL:<line>` | plain, requester | Game list | `GAMELIST` |
+| `MSG: <text>` / `MSG:<text>` | plain | Modal popup in the desktop client | various |
+| `LOGON SUCCESSFUL` | plain | — | Logon |
+| `PONG` | numbered, sender | — | `PING` |
+| `ACK: <id>` | plain | — | Every numbered client message |
+
+### 6.1 Ordering guarantees
+
+Within one client's stream, the reference produces, per move:
+
+1. `xTIME` as soon as the `otim` line is read.
+2. `xPV` coalesced: each thinking line overwrites a per-color slot; slots flush only when the reader reaches end
+   of file.
+3. `FEN`, then `xMOVE`, then `FMR`, as soon as the move line is read, then pause `DELAYAFTERMOVE`.
+
+Consequence: the engine's last PV usually arrives **after** its move. node-tlcv has a special "trailing PV"
+patch for this. Rebuild SHOULD flush the moving side's pending PV **before** `FEN`/`xMOVE` (§9.7); this is
+compatible with both clients.
+
+Retransmissions arrive out of order relative to newer messages. Clients must expect late ids.
+
+## 7. Input: Source Adapters
+
+### 7.1 Tailing contract (all file sources)
+
+From the reference main loop (`0x402e90`):
+
+- Poll: open the file, read its length, read new bytes from the last offset. CR is ignored, LF ends a line.
+- A NUL byte means the writer hasn't flushed; stop and retry next poll.
+- **Truncation** (length < offset) means a new session: reset game state, broadcast a start `FEN`, reread from
+  offset 0 with broadcasting disabled.
+- **Startup catch-up:** read the existing file from offset 0 with broadcasting **disabled** (state is tracked,
+  nothing is sent). On reaching EOF, send one numbered burst to all clients (`WPLAYER`, `BPLAYER`, `SITE`, last
+  move, `FEN`) and enable broadcasting.
+- Rebuild MUST implement truncation and catch-up. It SHOULD also detect rotation (inode change) and SHOULD offer
+  `--from-end`.
+
+### 7.2 WinBoard debug log (reference adapter)
+
+`>first :`/`>second:` = GUI → engine, `<first :`/`<second:` = engine → GUI. Lines may carry a numeric
+timestamp prefix *(handling not fully traced)*.
+
+| Line | Action |
+| --- | --- |
+| `StartChildProcess (dir=…) <cmd>` | Engine N launched; default display name from the command (`Human` is special-cased) |
+| `<first : feature … myname="X"` | Engine display name → re-broadcast `WPLAYER`/`BPLAYER` |
+| `>first : white` / `black`; `>first : go` / `>second: go` | Assign colors to engines; re-broadcast players |
+| `>first : new` | New game: reset board, broadcast start `FEN` |
+| `>first : level …` | Broadcast `level …` |
+| `>first : time N` then `>first : otim M` (or `second`) | Broadcast `xTIME: N otim M` for that engine's color |
+| `<first : <d> <score> <cs> <nodes> <pv>` (post format) | Store as that engine color's `xPV` |
+| `<first : move <coord>` | Apply to board; emit `FEN`, `xMOVE`, `FMR`. Unknown move → log error, keep running |
+| `>first : result <res> {…}` | Broadcast `result …` |
+| `>first : quit` / `>second : quit` | Clear player names |
+| `>first : force/post/hard/easy/xboard/ping/computer/ics`, `: usermove` | Ignored for broadcast |
+
+Other formats the reference normalizes into WinBoard form before matching (`0x40d131`, `0x40dfbd`):
+`1:`/`2:` prefixed logs, UCI output (`info depth … score cp … time … nodes … pv`, `bestmove`, `ucinewgame`),
+`WHITE<<`/`BLACK>>` markers, and French "Démarre module N" banners.
+
+### 7.3 Other adapters
+
+The rebuild SHOULD ship: WinBoard (above), myracle `.debug`, fastchess `-log … engine=true`, raw UCI. These are
+all present in uci-to-tlcs except WinBoard.
+
+Every adapter produces the same event stream: `players`, `newGame{startFen}`, `clock{color,cs,otherCs}`,
+`pv{color,depth,cp|mate,cs,nodes,pv[]}`, `move{color,uci|san}`, `result{res,reason}`, `level{text}`.
+
+## 8. Configuration
+
+The rebuild MUST read a reference-style `server.ini` (exact, case-sensitive key prefixes; lines starting with
+`'` are comments) and MAY additionally read a modern config file.
+
+| Key | Default | Meaning | Rebuild |
+| --- | --- | --- | --- |
+| `PATH=` | — | Log file to tail | Plus `FORMAT=` (`winboard`, `myracle`, `fastchess`, `uci`, `auto`) |
+| `PORT=` | 16000 | Listen and broadcast port | Same |
+| `SITE=` | — | Event name | Same |
+| `DELAY=` | 100 | Main-loop pacing in ms *(inferred: socket timeout)* | Poll interval |
+| `DELAYAFTERMOVE=` | 300 | Pause after a move in ms | SHOULD default to 0 (§9.7) |
+| `DELAYAFTERGAME=` | 1000 | Used after a result *(unverified)* | Pause before the next game's burst |
+| `ICSMODE=1` | off | ICS relay mode *(effect not traced)* | Ignored, logged as unsupported |
+| `SAVEDEBUG=1` | off | Copy each game's log to `Debug-<white>_vs_<black>….log` | Same |
+| `MENU ID=n …` | — | Up to 10 viewer menu entries | Same |
+| `TOURNEYPGN=` | — | PGN for `RESULTTABLE`/`GAMELIST` | Same, plus a built-in results store (§9.6) |
+| `MAILSERVER=`, `RETURNADD=` | — | Email | Ignored |
+
+## 9. Improvements over the Reference
+
+Each item is compatible with both clients unless stated.
+
+### 9.1 Recoverable sessions
+
+- **Problem:** `PING` is answered without a login check, so a client the server has forgotten (restart, kick,
+  same-IP `LOGOFF`) keeps getting `PONG` and nothing else. The "no longer connected" notice is only sent in reply
+  to `CHAT`.
+- **Rebuild:** answer `PING` from an unknown client with plain `MSG: You are no longer connected to the server.
+  Please re-connect.` instead of `PONG`. node-tlcv re-logs in on that notice; the desktop client shows it.
+
+### 9.2 Ids and persistence
+
+- Per-client, strictly increasing ids, never reset on re-LOGON.
+- Persist the id high-water mark and finished-games store across restarts. After a restart, start above the last
+  persisted id so existing clients don't mistake new messages for duplicates.
+
+### 9.3 Per-client ordered delivery and flow control (replaces overload fallback)
+
+- **Each client MUST receive its numbered messages in id order.** A message is not sent until every earlier
+  message to that client is ACKed or superseded (stop-and-wait, or a window that never lets a resend land behind
+  a newer id).
+  - The reference violates this: many messages are in flight under one counter, so a resend arrives behind newer
+    ids and node-tlcv discards it as out of order (after ACKing it).
+  - uci-to-tlcs's stop-and-wait sender already satisfies it, but with one global queue (next point).
+- One slow client MUST NOT stall delivery to the others. Queues and in-flight state are per client.
+- No global "send everything raw" switch.
+- Per-client queue cap. When a client is behind, coalesce: replace any queued `FEN`/`xMOVE`/`FMR` for that
+  client with a fresh snapshot (players + current `FEN` + last move) rather than dropping state.
+- PVs and clocks are never queued for retransmit; only the latest per color is sent.
+
+### 9.4 Retransmit policy
+
+- Exponential backoff (e.g. 0.5 s, 1 s, 2 s, 4 s, 8 s), uniform for all message types.
+- On give-up: discard that client's pending game-state messages and send a resync snapshot under new, higher
+  ids. Never skip ahead and leave the client missing a move. Remove the client only if it is also past
+  `CLIENT_TIMEOUT`.
+- No 100-character truncation; no `CHAT` special case.
+
+### 9.5 Format fixes
+
+- `SITE: <text>` with a space. The desktop client reads from character 6 and drops the first letter otherwise.
+- Clamp names to a documented maximum and strip `:` `<` `>` and control characters.
+
+### 9.6 Results and game list
+
+- Maintain a results store from `result` events (game number, white, black, result, PGN), persisted.
+- Answer `RESULTTABLE` from it (falling back to `TOURNEYPGN`), in the crosstable format node-tlcv's
+  `result-parser.ts` reads. Pace the dump, or send it numbered, so lines aren't lost.
+
+### 9.7 PV ordering
+
+- Flush the moving side's pending PV before emitting `FEN`/`xMOVE`, so the final PV precedes the move.
+- Drop `DELAYAFTERMOVE` (default 0); it only existed to throttle the 2006 loop.
+
+### 9.8 Admin and abuse
+
+- `SECURITY`, `BOOT:`, `SRBOOT:` require an admin secret (e.g. `ADMIN:<secret>` first) or are disabled.
+- Per-IP rate limit and max clients; optional ban list (the reference has an IP ban table at `0x41be68`).
+
+### 9.9 Operations
+
+- Prometheus metrics: clients, queue depth, retransmits, give-ups, resyncs, messages by type.
+- Structured logs instead of `server.log`.
+- Optionally several broadcasts (one per port) in one process.
+
+## 10. Plan: Evolving uci-to-tlcs
+
+Where uci-to-tlcs stands against this spec (as of `1057bd7`), and what to change.
+
+### 10.1 Already aligned
+
+- Source adapter → game state → server pipeline, with the server's own board.
+- `FEN` → `xMOVE` → `FMR`, numbered; PVs and clocks unnumbered; 3-field FEN; centiseconds; engine-POV scores.
+- Plain `LOGON SUCCESSFUL` followed by a numbered snapshot; truncation restarts the tail.
+- **Better than the reference:** clients keyed by `ip:port`; strictly in-order numbered delivery (§9.3);
+  `SITE: ` with a space (§9.5); both clocks on every `go`.
+
+### 10.2 Gaps
+
+| Spec item | uci-to-tlcs today | Work |
+| --- | --- | --- |
+| §4.1 addressing | Replies to source `ip:port` | Add a `clientIP:PORT` mode for strict compatibility |
+| §4.2 framing | Sends `<N>` without the space | Emit `< N>`; accept both (cosmetic: both clients parse either) |
+| §4.3 numbered client messages | Compares raw text (`msg === 'PING'`, `startsWith('CHAT')`) | Strip `< id>`, ACK, dedupe. The desktop client sends `PING`/`CHAT`/`VOTE`/`CHANGE` numbered, so today they go unanswered |
+| §4.4 numbering | One global stop-and-wait queue, 4 tries × 750 ms, then skip ahead | Per-client in-order queues, backoff, resync on give-up (§9.3–9.4); fixes gap **J** |
+| §5.1 commands | `LOGONv15`, `PING`, `RESULTTABLE` (stub), `CHAT`, `LOGOFF`, `ACK` | `LOGON:` refusal, `CHANGE:`, `GAMELIST`, `CHAT: <…>` queries, admin |
+| §5.2 logon | Snapshot SITE → players → FEN → FMR → clocks → PV; `ADDUSER` only to existing clients | Reference order including `FEATURE: PING`, last move, `MENU`; send every existing user to the newcomer and `ADDUSER` for the newcomer to all |
+| §5.3 keepalive | 30 s idle reap | 70 s default. Without `FEATURE: PING` the desktop client never pings and is reaped between games |
+| §6 `MENU`, `level` | Not emitted | Emit from config / time-control metadata |
+| §6 formats | `CHAT: <user>: <text>`, `CT: line`, `result: <r>` | `CHAT: [<user>] - <text>`, `CT:<line>`, `result <r> {<reason>}` to match the desktop client |
+| §7.1 restart | Replays the whole log as live traffic (gap **G**) | Silent catch-up, then one summary burst |
+| §7.2 adapters | fastchess, myracle, raw UCI | WinBoard/xboard adapter built on the myracle one (same `>first :`/`<first :` line shape). The GUI's `result` line also fixes gap **B** |
+| §9.1 | Answers `PONG` to unknown clients, which then never recover (gap **A**) | Reply with the `MSG` notice instead |
+| §9.6 | `RESULTTABLE` stub (gaps **E**, **G**) | Results store + crosstable |
+
+### 10.3 Suggested order
+
+1. Numbered client messages (§4.3) and `FEATURE: PING` in the logon snapshot: makes the desktop client work.
+2. `MSG` notice for `PING` from unknown clients (§9.1).
+3. Per-client in-order queues with resync (§9.3–9.4).
+4. Full user list on logon, `MENU`.
+5. WinBoard/xboard adapter.
+6. Silent catch-up on restart, persistent results store, real `RESULTTABLE`.
+
+## 11. Open Questions
+
+- Exact spacing inside reference `xTIME` lines, and how `FMR` is derived.
+- What reference `ICSMODE` changes.
+- Logon burst item 8 (global `0x41b490`).
+- Exact `CHAT:` relay text offset (whether a leading space is kept).
+- Whether to make §9.1 opt-in for strict compatibility testing.
+
+## 12. Acceptance Tests
+
+1. **Golden replay:** feed recorded WinBoard/myracle/fastchess logs; compare the emitted stream with a recorded
+   reference transcript (message types, order, field formats). Ids excluded.
+2. **Desktop client:** TLCV 2.1c under Wine connects, shows players, board, clocks, PVs, chat, user list,
+   menus, results table; keepalive stays green for 10 minutes.
+3. **node-tlcv:** connects in classic and ephemeral modes; survives server restart (re-logon via §9.1); survives
+   20 % injected packet loss with no lost moves (via resync).
+4. **Loss and reorder:** with a lossy proxy, every client converges on the current FEN within one retransmit
+   cycle.
+5. **Compatibility switches:** with improvements disabled, output matches the reference formats in §6.
