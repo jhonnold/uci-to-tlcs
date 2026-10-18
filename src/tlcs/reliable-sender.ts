@@ -38,7 +38,7 @@ export const DEFAULT_SENDER_OPTIONS: SenderOptions = {
   minRtoMs: 50,
   maxRtoMs: 2000,
   backoffFactor: 2,
-  giveUpMs: 10_000,
+  giveUpMs: 30_000,
   stallMs: 60_000,
   maxQueue: 256,
   hardCap: 1024,
