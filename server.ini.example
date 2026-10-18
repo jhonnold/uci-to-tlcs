@@ -1,0 +1,22 @@
+' uci-to-tlcs server.ini for a fastchess tournament.
+' Keys are UPPERCASE, start at column 0, no spaces around '='. Lines starting with ' are comments.
+' Relative paths resolve against this file's directory. CLI flags override these values.
+PATH=fc.log
+' ^ fastchess:  -log file=fc.log engine=true realtime=true
+TOURNEYPGN=games.pgn
+' ^ fastchess:  -pgnout file=games.pgn
+FORMAT=fastchess
+PORT=16000
+SITE=My fastchess tournament
+DELAY=100
+DELAYAFTERMOVE=0
+DELAYAFTERGAME=0
+SAVEDEBUG=0
+'MENU ID=1 WIDTH=12000 HEIGHT=6000 NAME="Schedule" URL="https://example.com/schedule"
+' Up to 10 MENU lines (ID=1..10), sent verbatim to viewers at logon.
+' Extensions (not in the reference server):
+'BIND=127.0.0.1
+'STATEFILE=state.json
+'CLIENTTIMEOUT=70
+'MAXCLIENTS=0
+'ADMINPASS=change-me
