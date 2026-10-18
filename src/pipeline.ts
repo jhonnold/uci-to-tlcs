@@ -41,7 +41,19 @@ export interface PipelineOpts {
   firstGameNumber?: number | (() => number);
   /** Registry polls a board-terminal game waits for its PGN entry before using the board result. */
   holdTicks?: number;
+  /** Min ms between PV conversions/emits per game (latest-wins coalescing). 0 = convert every info. Default 200. */
+  pvIntervalMs?: number;
 }
+
+/** Latest raw PV info awaiting conversion; tagged so a stale one is never converted against a different board. */
+interface PendingPv {
+  info: UciInfo;
+  color: ColorCode;
+  seq: number;
+  ply: number;
+}
+
+const DEFAULT_PV_INTERVAL_MS = 200;
 
 export interface PipelineMeta {
   white: string;
@@ -121,6 +133,13 @@ export class Pipeline {
   private blackId?: string;
   private readonly fenSetupMove: boolean;
 
+  // PV coalescing: only the latest info is kept; converted at most every pvIntervalMs, and always before a move.
+  private readonly pvIntervalMs: number;
+  private pendingPv?: PendingPv;
+  private lastPvAt = -Infinity;
+  private pvTimer?: ReturnType<typeof setTimeout>;
+  private gameSeq = 0;
+
   // PGN-authority state (inert without an authority).
   private gameNumber = 0;
   private numbered = false;
@@ -140,6 +159,18 @@ export class Pipeline {
     this.fallbackWhite = meta.white;
     this.fallbackBlack = meta.black;
     this.fenSetupMove = meta.fenSetupMove ?? true;
+    this.pvIntervalMs = opts.pvIntervalMs ?? DEFAULT_PV_INTERVAL_MS;
+  }
+
+  /** Drop any pending PV and its timer. Call before discarding this Pipeline (e.g. a session swap). */
+  close(): void {
+    this.clearPendingPv();
+  }
+
+  private clearPendingPv(): void {
+    this.pendingPv = undefined;
+    if (this.pvTimer) clearTimeout(this.pvTimer);
+    this.pvTimer = undefined;
   }
 
   handleLine(n: NormalizedLine): void {
@@ -233,6 +264,8 @@ export class Pipeline {
     this.emittedEntry = undefined;
     this.overrunWarned = false;
     this.boundNames = undefined;
+    this.gameSeq++;
+    this.clearPendingPv();
     this.game.reset();
     this.positionEmitted = false;
     this.resultEmitted = false;
@@ -250,6 +283,13 @@ export class Pipeline {
     // Untagged path detects boundaries here (tagged path already did at `ucinewgame`).
     if (this.gameActive && this.isGameReset(ev)) this.beginNewGame();
 
+    // Same base and moves as the live game: the rebuild would reproduce the current board
+    // (fastchess resends the full move list every ply), so skip the O(n) replay.
+    if (this.gameActive && this.game.sameBase(ev.startpos, ev.fen) && sameMoves(this.currentMoves, ev.moves)) {
+      this.positionStm = this.game.turn();
+      return;
+    }
+
     // Forward extension of the live game: a producer may reveal a move in the *next*
     // engine's `position` command before that engine logs its own `bestmove` (myracle
     // feeds the opponent its reply first). Apply & emit each newly-revealed move so it
@@ -266,6 +306,7 @@ export class Pipeline {
     }
 
     if (!this.game.setPosition(ev.startpos, ev.fen, ev.moves)) return; // validates the whole line
+    this.clearPendingPv(); // board replaced: a pending PV no longer matches it
     this.positionStm = this.game.turn();
     if (!this.gameActive) {
       // Game start: rewind to the base; the prefix (book / pre-join moves) is replayed at
@@ -380,16 +421,41 @@ export class Pipeline {
     }
     if (info.multipv !== 1) return; // only the primary line is the broadcast eval
 
-    const color = this.game.turn(); // side to move = the thinking side
+    // Latest-wins: only the newest info per move is ever converted (PVs are unnumbered, latest-only).
+    this.pendingPv = { info, color: this.game.turn(), seq: this.gameSeq, ply: this.currentMoves.length };
+    const wait = this.lastPvAt + this.pvIntervalMs - Date.now();
+    if (wait <= 0) {
+      this.flushPv();
+    } else if (!this.pvTimer) {
+      this.pvTimer = setTimeout(() => {
+        this.pvTimer = undefined;
+        try {
+          this.flushPv();
+        } catch (err) {
+          logger.warn(`PV flush failed: ${String(err)}`);
+        }
+      }, wait);
+      this.pvTimer.unref();
+    }
+  }
+
+  /** Convert + emit the pending PV against the current board, unless the board has moved on. */
+  private flushPv(): void {
+    const p = this.pendingPv;
+    if (!p) return;
+    this.pendingPv = undefined;
+    if (p.seq !== this.gameSeq || p.ply !== this.currentMoves.length || !this.gameActive) return;
+    const info = p.info;
     const scoreCp = scoreToCentipawns(info); // side-to-move (engine) POV, matching TLCS
     const sanPv = this.game.playoutPvToSan(info.pv);
     if (sanPv.length === 0) return;
-
-    this.sink.emitPv(color, info.depth, Math.round(scoreCp), msToCs(info.timeMs), info.nodes, sanPv);
+    this.lastPvAt = Date.now();
+    this.sink.emitPv(p.color, info.depth, Math.round(scoreCp), msToCs(info.timeMs), info.nodes, sanPv);
   }
 
   /** Apply one coordinate move to the authoritative board and broadcast it (+ result). */
   private applyAndEmit(move: string): void {
+    this.flushPv(); // the mover's final PV goes out before its move (§9.7), against the pre-move board
     const applied = this.game.applyMove(move);
     if (!applied) return;
     this.currentMoves.push(move);
@@ -540,6 +606,7 @@ export class Pipeline {
   }
 
   private onQuit(): void {
+    this.clearPendingPv();
     this.closeAtBoundary('quit');
   }
 
@@ -559,6 +626,10 @@ export class Pipeline {
       this.emitResultOnce(r);
     }
   }
+}
+
+function sameMoves(a: string[], b: string[]): boolean {
+  return a.length === b.length && isPrefixExtension(a, b);
 }
 
 /** Is `next` equal to `prev` followed by zero or more additional moves? */

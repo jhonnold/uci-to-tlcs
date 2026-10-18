@@ -40,6 +40,8 @@ export interface Config {
   adminPass?: string;
   /** Extension: max concurrent clients (0 = unlimited). */
   maxClients: number;
+  /** Extension: min ms between PV updates per game (0 = every engine info). */
+  pvIntervalMs: number;
 }
 
 const USAGE = `uci-to-tlcs — broadcast a raw UCI transcript as TLCS over UDP
@@ -60,6 +62,7 @@ Options:
   --delay-after-move <ms>  Pause after each move (default 0)
   --delay-after-game <ms>  Pause after each game (default 0)
   --fen-setup-move <0|1>   Non-startpos games: synthetic "(setup)" move so node-tlcv loads the FEN (default 1)
+  --pv-interval <ms>       Min ms between PV updates (default 200; 0 = every engine info)
   --from-end         Only broadcast appends made after startup (default: from start)
   -h, --help         Show this help
 `;
@@ -87,6 +90,7 @@ export function parseConfig(argv: string[]): Config {
     saveDebug: false,
     clientTimeoutMs: 70000,
     maxClients: 0,
+    pvIntervalMs: 200,
   };
 
   // --ini is pre-scanned so the CLI overrides it regardless of argument order.
@@ -153,6 +157,9 @@ export function parseConfig(argv: string[]): Config {
         cfg.fenSetupMove = v === '1';
         break;
       }
+      case '--pv-interval':
+        cfg.pvIntervalMs = nonNegInt('--pv-interval', argv[++i]);
+        break;
       case '--from-end':
         cfg.fromStart = false;
         break;

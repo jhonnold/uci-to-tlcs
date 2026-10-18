@@ -34,10 +34,11 @@ function main(): void {
     { white: cfg.white, black: cfg.black, site: cfg.site, fenSetupMove: cfg.fenSetupMove },
     registry
       ? {
+          pvIntervalMs: cfg.pvIntervalMs,
           authority: registry,
           firstGameNumber: cfg.fromStart ? 1 : () => (registry.refresh(), registry.finishedCount() + 1),
         }
-      : {},
+      : { pvIntervalMs: cfg.pvIntervalMs },
   );
   registry?.startPolling(() => pipeline.onAuthorityTick());
   const source = makeSource(cfg.format);
