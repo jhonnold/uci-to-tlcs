@@ -1,4 +1,5 @@
 import { logger } from '../util/logger.js';
+import { metrics } from '../metrics.js';
 import { frame } from './protocol.js';
 
 /** One message for a client. */
@@ -236,6 +237,7 @@ export class ReliableSender {
         }
       }
     }
+    metrics.inc('tlcs_resyncs_total', { kind: 'full' });
     logger.info(`resync ${dest}: ${note}`);
     this.pump(dest, c);
   }
@@ -307,6 +309,7 @@ export class ReliableSender {
     if (!c.stalled && t - Math.max(c.lastProgressAt, c.busySince) >= this.opts.stallMs) {
       c.stalled = true;
       this.dropStalled(dest, c, true);
+      metrics.inc('tlcs_stalls_total');
       this.hooks.onStalled?.(dest);
     }
 
@@ -321,6 +324,7 @@ export class ReliableSender {
     s.lastSentAt = t;
     this.hooks.rawSend(frame(s.id, s.item.body), dest);
     this.arm(dest, c);
+    metrics.inc('tlcs_retransmits_total');
     logger.debug(`retransmit ${s.id} -> ${dest} (send ${s.sends}, rto ${s.timerMs})`);
   }
 
@@ -332,12 +336,16 @@ export class ReliableSender {
     const secs = ((now() - s.firstSentAt) / 1000).toFixed(1);
     if (s.item.critical) {
       // No replay: delivery is ambiguous and a second save in node-tlcv is possible.
+      metrics.inc('tlcs_giveups_total', { kind: 'critical' });
       logger.error(`give-up critical ${s.id} -> ${dest} after ${secs}s (dropped): ${s.item.body}`);
     } else if (s.item.epoch === undefined) {
+      metrics.inc('tlcs_giveups_total', { kind: 'control' });
       logger.warn(`give-up ${s.id} -> ${dest} (control, dropped): ${s.item.body}`);
       s.item.onGiveUp?.(dest);
     } else {
       const n = this.splice(dest, c, s.item.epoch);
+      metrics.inc('tlcs_giveups_total', { kind: 'game' });
+      metrics.inc('tlcs_resyncs_total', { kind: 'giveup' });
       logger.warn(`give-up ${s.id} -> ${dest} after ${secs}s; resync game ${s.item.epoch} (${n} msgs)`);
     }
     this.pump(dest, c);
@@ -387,6 +395,7 @@ export class ReliableSender {
       const r = this.hooks.replay(e, hasCritical);
       if (!r || r.length >= n) continue;
       this.splice(dest, c, e, r); // same withResult as hasCritical, so r is reusable
+      metrics.inc('tlcs_coalesces_total');
       const msg = `coalesced ${dest} game ${e}: ${n} -> ${r.length}`;
       if (c.coalesceLogged.has(e)) logger.debug(msg);
       else {

@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import { isFormat, type Format } from './source/index.js';
 import { loadIni } from './ini.js';
-import { logger } from './util/logger.js';
+import { logger, setLogFormat } from './util/logger.js';
 
 export interface Config {
   /** Path to the UCI transcript / engine log to tail. */
@@ -44,6 +44,10 @@ export interface Config {
   bannedIps: string[];
   /** Extension: min ms between PV updates per game (0 = every engine info). */
   pvIntervalMs: number;
+  /** Extension: Prometheus /metrics port (unset = off). */
+  metricsPort?: number;
+  /** Extension: log line format. */
+  logFormat: 'human' | 'json';
 }
 
 const USAGE = `uci-to-tlcs — broadcast a raw UCI transcript as TLCS over UDP
@@ -65,6 +69,8 @@ Options:
   --delay-after-game <ms>  Pause after each game (default 0)
   --fen-setup-move <0|1>   Non-startpos games: synthetic "(setup)" move so node-tlcv loads the FEN (default 1)
   --pv-interval <ms>       Min ms between PV updates (default 200; 0 = every engine info)
+  --metrics-port <n> Serve Prometheus /metrics on this port (default off; METRICSPORT=)
+  --log-format <f>   Log format: human | json (default human; LOGFORMAT=)
   --from-end         Only broadcast appends made after startup (default: from start)
   -h, --help         Show this help
 `;
@@ -94,7 +100,9 @@ export function parseConfig(argv: string[]): Config {
     maxClients: 0,
     bannedIps: [],
     pvIntervalMs: 200,
+    logFormat: 'human',
   };
+  let iniWarnings: string[] = [];
 
   // --ini is pre-scanned so the CLI overrides it regardless of argument order.
   const iniIdx = argv.indexOf('--ini');
@@ -112,7 +120,7 @@ export function parseConfig(argv: string[]): Config {
       if (v !== undefined) (cfg as unknown as Record<string, unknown>)[k] = v;
     }
     cfg.iniPath = resolve(p);
-    for (const w of res.warnings) logger.warn(`server.ini: ${w}`);
+    iniWarnings = res.warnings;
   }
 
   for (let i = 0; i < argv.length; i++) {
@@ -163,6 +171,19 @@ export function parseConfig(argv: string[]): Config {
       case '--pv-interval':
         cfg.pvIntervalMs = nonNegInt('--pv-interval', argv[++i]);
         break;
+      case '--metrics-port': {
+        const v = argv[++i];
+        const x = v !== undefined && /^\d+$/.test(v) ? Number(v) : NaN;
+        if (!(x >= 1 && x <= 65535)) throw new Error(`Invalid --metrics-port: ${v}`);
+        cfg.metricsPort = x;
+        break;
+      }
+      case '--log-format': {
+        const v = argv[++i];
+        if (v !== 'human' && v !== 'json') throw new Error(`Invalid --log-format: ${v} (use human | json)`);
+        cfg.logFormat = v;
+        break;
+      }
       case '--from-end':
         cfg.fromStart = false;
         break;
@@ -181,5 +202,7 @@ export function parseConfig(argv: string[]): Config {
     throw new Error(`Invalid --port: ${cfg.port}`);
   }
 
+  setLogFormat(cfg.logFormat);
+  for (const w of iniWarnings) logger.warn(`server.ini: ${w}`);
   return cfg;
 }

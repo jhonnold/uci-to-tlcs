@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import { ReliableSender, type Outbound, type SenderOptions } from '../src/tlcs/reliable-sender.js';
 import { logger } from '../src/util/logger.js';
+import { metrics } from '../src/metrics.js';
 
 const BASE: Partial<SenderOptions> = {
   initialRtoMs: 10,
@@ -12,6 +13,8 @@ const BASE: Partial<SenderOptions> = {
   giveUpMs: 150,
   stallMs: 400,
 };
+
+const mg = (n: Parameters<typeof metrics.get>[0], l?: Record<string, string>) => metrics.get(n, l);
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -124,6 +127,7 @@ test('sender: stop-and-wait; wrong-id and unknown-dest ACKs are ignored', async 
 });
 
 test('sender: ordering under loss (every 2nd copy ACKed)', async () => {
+  const rt0 = mg('tlcs_retransmits_total');
   const h = harness({}, (_d, _id, copy) => (copy % 2 === 0 ? 0 : null));
   h.s.addClient('A');
   for (let i = 0; i < 20; i++) h.s.enqueue('A', ctl(`m${i}`));
@@ -131,6 +135,7 @@ test('sender: ordering under loss (every 2nd copy ACKed)', async () => {
   const fs = h.firstSeen('A');
   assert.deepEqual(fs.map((x) => x.body), Array.from({ length: 20 }, (_, i) => `m${i}`));
   assert(fs.every((x, i) => i === 0 || x.id > fs[i - 1].id));
+  assert(mg('tlcs_retransmits_total') - rt0 >= 1, 'retransmits counted');
   h.s.close();
 });
 
@@ -203,6 +208,8 @@ test('sender: game give-up replaces the epoch tail with a replay under new ids',
   const r = [game('r1', 1), game('r2', 1)];
   const h = harness({}, (_d, id) => (performance.now() > T0 + 200 || id > 1 ? 0 : null), (e) => (e === 1 ? r : null));
   const T0 = performance.now();
+  const gu0 = mg('tlcs_giveups_total', { kind: 'game' });
+  const rs0 = mg('tlcs_resyncs_total', { kind: 'giveup' });
   const log = captureLogs();
   try {
     h.s.addClient('A');
@@ -217,6 +224,8 @@ test('sender: game give-up replaces the epoch tail with a replay under new ids',
     assert.deepEqual(h.firstSeen('A').map((x) => x.body), ['g1', 'r1', 'r2', 'c1', 'h1', 'h2']);
     assert.deepEqual(h.replays[0], [1, false]);
     assert(log.count(/give-up .*resync game 1/) === 1);
+    assert.equal(mg('tlcs_giveups_total', { kind: 'game' }) - gu0, 1);
+    assert.equal(mg('tlcs_resyncs_total', { kind: 'giveup' }) - rs0, 1);
   } finally {
     log.done();
     h.s.close();
@@ -237,6 +246,7 @@ test('sender: replay is asked withResult=true when a queued result is spliced', 
 });
 
 test('sender: control give-up drops the item, calls onGiveUp once, continues', async () => {
+  const gc0 = mg('tlcs_giveups_total', { kind: 'control' });
   const h = harness({}, (_d, id) => (id === 1 ? null : 0));
   let gaveUp = 0;
   h.s.addClient('A');
@@ -244,11 +254,13 @@ test('sender: control give-up drops the item, calls onGiveUp once, continues', a
   h.s.enqueue('A', ctl('next'));
   await waitFor(() => h.firstSeen('A').length === 2, 1000);
   assert.equal(gaveUp, 1);
+  assert.equal(mg('tlcs_giveups_total', { kind: 'control' }) - gc0, 1);
   assert.equal(h.replays.length, 0);
   h.s.close();
 });
 
 test('sender: critical item survives giveUpMs and is dropped after stallMs with an error', async () => {
+  const gk0 = mg('tlcs_giveups_total', { kind: 'critical' });
   const log = captureLogs();
   try {
     const h = harness({ giveUpMs: 60, stallMs: 250 }, (_d, id) => (id === 1 ? null : 0));
@@ -259,6 +271,7 @@ test('sender: critical item survives giveUpMs and is dropped after stallMs with 
     assert.equal(h.firstSeen('A').length, 1, 'still retrying past giveUpMs');
     await waitFor(() => h.firstSeen('A').length === 2, 1000);
     assert(log.count(/error: give-up critical 1/) === 1);
+    assert.equal(mg('tlcs_giveups_total', { kind: 'critical' }) - gk0, 1);
     h.s.close();
 
     const h2 = harness({ giveUpMs: 60, stallMs: 250 }, (_d, id, copy) => (id === 1 && copy < 8 ? null : 0));
@@ -324,6 +337,7 @@ test('sender: a slow-but-ACKing client loses no result across coalesced epochs',
 test('sender: stalled client is bounded to the newest epoch, again for each new epoch, and unstalls on ACK', async () => {
   const log = captureLogs();
   try {
+    const st0 = mg('tlcs_stalls_total');
     const rec = fakeRecords();
     let stalled = 0;
     let ackOn = false;
@@ -344,6 +358,7 @@ test('sender: stalled client is bounded to the newest epoch, again for each new 
     push(3, 6);
     await waitFor(() => log.count(/error: stalled A/) >= 1, 1500);
     assert.equal(stalled, 1);
+    assert.equal(mg('tlcs_stalls_total') - st0, 1);
     assert.match(log.lines.find((l) => /error: stalled/.test(l))!, /\(\d+ results lost\)/);
     assert.deepEqual([...h.s.referencedEpochs()].sort(), [3, 1].sort()); // 1 stays only as the in-flight item
     // a new epoch while stalled drops the older queued one again
@@ -378,6 +393,7 @@ test('sender: a client idle longer than stallMs is not "stalled" by one lost fir
 });
 
 test('sender: coalescing collapses queued epochs only when the replay is shorter', async () => {
+  const co0 = mg('tlcs_coalesces_total');
   const replays = new Map<number, Outbound[]>([
     [1, [game('a1', 1), game('a2', 1), game('a3', 1)]],
     [2, [game('b1', 2), game('b2', 2), game('b3', 2)]],
@@ -390,6 +406,7 @@ test('sender: coalescing collapses queued epochs only when the replay is shorter
   assert.equal(h.s.depth('A'), 1 + 7, 'at the cap: nothing coalesced');
   h.s.enqueue('A', game('y3', 2)); // 8 > 7: both epochs collapse to their 3-item replays in one pass
   assert.equal(h.s.depth('A'), 1 + 3 + 3);
+  assert(mg('tlcs_coalesces_total') - co0 >= 1, 'coalesces counted');
 
   const longer = new Map<number, Outbound[]>([[1, Array.from({ length: 20 }, (_, i) => game(`L${i}`, 1))]]);
   const h2 = harness({ maxQueue: 5 }, () => null, (e) => longer.get(e) ?? null);
@@ -453,9 +470,11 @@ test('sender: ids never reset across remove/re-add; unknown dest is a no-op', as
 });
 
 test('sender: resync on an idle client appends cur replay; a finished cur with nothing queued appends nothing', async () => {
+  const rf0 = mg('tlcs_resyncs_total', { kind: 'full' });
   const h = harness({}, () => 0, (e) => [game(`r${e}`, e)]);
   h.s.addClient('A');
   h.s.resync('A', 2, false);
+  assert.equal(mg('tlcs_resyncs_total', { kind: 'full' }) - rf0, 1);
   await waitFor(() => h.firstSeen('A').length === 1);
   assert.deepEqual(h.replays, [[2, false]]);
   h.s.resync('A', 2, true);
@@ -502,5 +521,13 @@ test('sender: referencedEpochs reflects queued and in-flight items and empties w
   h.s.ack('A', 2);
   h.s.ack('B', 1);
   assert.equal(h.s.referencedEpochs().size, 0);
+  h.s.close();
+});
+
+test('sender: resync for an unknown dest does not count', () => {
+  const rf0 = mg('tlcs_resyncs_total', { kind: 'full' });
+  const h = harness();
+  h.s.resync('nobody', 1, false);
+  assert.equal(mg('tlcs_resyncs_total', { kind: 'full' }) - rf0, 0);
   h.s.close();
 });
