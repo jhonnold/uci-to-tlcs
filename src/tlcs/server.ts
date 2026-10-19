@@ -3,6 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { logger } from '../util/logger.js';
 import { ReliableSender, type Outbound, type SenderOptions } from './reliable-sender.js';
 import { InboundDeduper, parseAck, parseNumbered } from './inbound.js';
+import { SessionCommands } from './commands.js';
 import * as P from './protocol.js';
 import type { ColorCode } from './protocol.js';
 
@@ -10,11 +11,12 @@ export interface ServerOptions extends Partial<SenderOptions> {
   port: number;
   bindAddr: string;
   /**
-   * Drop a client that has sent nothing for this long. Defaults to 30s ≈ three
-   * missed 10s PINGs (node-tlcv's keepalive). Exposed mainly so tests can use a
-   * short timeout.
+   * Drop a client that has sent nothing for this long. Defaults to 70s: covers the
+   * desktop's 20s PING with margin (spec §5.3). Exposed so tests can use a short timeout.
    */
   clientTimeoutMs?: number;
+  /** MENU lines (verbatim) sent in every logon burst. */
+  menus?: string[];
   /** How often to scan for silent clients. Defaults to {@link REAP_INTERVAL_MS}. */
   reapIntervalMs?: number;
   /** Called once per stall episode (a busy client with no ACK progress for stallMs). */
@@ -23,9 +25,9 @@ export interface ServerOptions extends Partial<SenderOptions> {
 
 /** How often the reaper scans for silent clients (matches node-tlcv's PING interval). */
 const REAP_INTERVAL_MS = 10_000;
-const DEFAULT_CLIENT_TIMEOUT_MS = 30_000;
+const DEFAULT_CLIENT_TIMEOUT_MS = 70_000;
 
-interface ClientInfo {
+export interface ClientInfo {
   ip: string;
   port: number;
   user: string;
@@ -78,15 +80,18 @@ export class TlcsServer {
   private closed = false;
   private reaper: NodeJS.Timeout | null = null;
   private readonly clientTimeoutMs: number;
+  private readonly commands: SessionCommands;
 
   constructor(private opts: ServerOptions) {
     this.clientTimeoutMs = opts.clientTimeoutMs ?? DEFAULT_CLIENT_TIMEOUT_MS;
+    this.commands = new SessionCommands(this, { menus: opts.menus ?? [], clientTimeoutMs: this.clientTimeoutMs });
     this.records.set(0, this.cur);
     this.socket = createSocket('udp4');
     this.sender = new ReliableSender(
       {
         rawSend: (payload, dest) => this.sendRaw(dest, payload),
         replay: (e, withResult) => this.replay(e, withResult),
+        // Never reap on ACK timeout alone (spec §5.3): the idle reaper owns removal.
         onStalled: opts.onStalled,
       },
       opts,
@@ -103,7 +108,7 @@ export class TlcsServer {
   start(onReady?: () => void): void {
     if (onReady) this.socket.once('listening', onReady);
     this.socket.bind(this.opts.port, this.opts.bindAddr);
-    this.reaper = setInterval(() => this.reapStale(), this.opts.reapIntervalMs ?? REAP_INTERVAL_MS);
+    this.reaper = setInterval(() => this.commands.reap(), this.opts.reapIntervalMs ?? REAP_INTERVAL_MS);
     this.reaper.unref?.();
   }
 
@@ -352,74 +357,22 @@ export class TlcsServer {
       return;
     }
     if (!numbered && msg.startsWith('LOGONv15')) this.dedupe.reset(dest);
-    this.dispatch(msg, ip, port);
+    this.dispatch(msg, ip, port, numbered);
   }
 
-  private dispatch(msg: string, ip: string, port: number): void {
-    const dest = destKey(ip, port);
-    if (msg.startsWith('LOGONv15')) {
-      const user = msg.split(':')[1]?.trim() || 'unknown';
-      this.onLogon(ip, port, user);
-    } else if (msg === 'PING') {
-      this.rawSend(P.PONG, ip, port);
-    } else if (msg === 'RESULTTABLE') {
+  private dispatch(msg: string, ip: string, port: number, numbered: boolean): void {
+    if (this.commands.handle(msg, ip, port, numbered)) return;
+    if (msg === 'RESULTTABLE') {
       this.sendResultTable(ip, port);
-    } else if (msg.startsWith('CHAT')) {
-      this.onChat(dest, msg.replace(/^CHAT[:\s]*/, '').trim());
-    } else if (msg === 'LOGOFF') {
-      this.onLogoff(dest);
     } else {
-      logger.debug(`Unhandled client message from ${dest}: ${msg}`);
+      logger.debug(`Unhandled client message from ${destKey(ip, port)}: ${msg}`);
     }
-  }
-
-  private onLogon(ip: string, port: number, user: string): void {
-    const dest = destKey(ip, port);
-    const isNew = this.addClient(ip, port, user);
-    logger.info(`LOGON ${user}@${dest} (${this.clients.size} client(s))`);
-
-    this.sendRaw(dest, P.LOGON_SUCCESSFUL);
-
-    // Notify existing spectators of the new arrival.
-    if (isNew) {
-      for (const other of this.clients.keys()) {
-        if (other !== dest) this.enqueue(other, P.adduser(user));
-      }
-    }
-
-    this.resync(dest);
-  }
-
-  private onLogoff(dest: string): void {
-    const c = this.removeClient(dest);
-    if (c) {
-      logger.info(`LOGOFF ${c.user}@${dest}`);
-      this.enqueue(null, P.deluser(c.user));
-    }
-  }
-
-  private onChat(dest: string, text: string): void {
-    if (!text) return;
-    const name = this.clients.get(dest)?.user ?? 'unknown';
-    this.enqueue(null, P.chat(`${name}: ${text}`));
   }
 
   /** Minimal crosstable so node-tlcv's results parser terminates cleanly. */
   private sendResultTable(ip: string, port: number): void {
     this.rawSend(P.CTRESET, ip, port);
     this.rawSend(P.ct('total games = 0'), ip, port);
-  }
-
-  /** Drop clients that have gone silent past the timeout (e.g. a crashed viewer). */
-  private reapStale(): void {
-    const cutoff = Date.now() - this.clientTimeoutMs;
-    for (const [dest, c] of this.clients) {
-      if (c.lastSeen < cutoff) {
-        this.removeClient(dest);
-        logger.info(`Reaped silent client ${c.user}@${dest} (${this.clients.size} client(s))`);
-        this.enqueue(null, P.deluser(c.user));
-      }
-    }
   }
 
   // ----------------------------------------------------------------- transport

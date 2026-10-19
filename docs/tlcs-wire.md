@@ -35,10 +35,26 @@ changing reply/targeting logic, or touching the FEN/time/score/PV encoding in
   It stays compatible because compliant clients (node-tlcv, desktop TLCV) send *from*
   the broadcast port, so source port == broadcast port. The client registry is keyed
   by the `ip:port` "dest" token (`destKey`); `rawSend(ip, port)` is the low-level send
-  and `rawSendTo(dest)` splits a token. A client silent past `clientTimeoutMs` (30s ≈
-  three missed 10s PINGs) is reaped — idle-timeout only, *never* on a reliable ACK
-  timeout, because node-tlcv LOGONs once and never re-registers, so a false drop is
-  unrecoverable.
+  and `rawSendTo(dest)` splits a token. A client silent past `clientTimeoutMs` (default 70 s, covers
+  the desktop's 20 s PING) is reaped — idle-timeout only, *never* on a reliable ACK
+  timeout. The reaper broadcasts `DELUSER` + `CHAT: [SERVER] - Lost connection with <n>`.
+
+- **Session commands** (`tlcs/commands.ts`, `SessionCommands`):
+  - `LOGON:` (old viewer) → plain `MSG:Connection refused…`. `LOGONv15:<name>`: name stripped of
+    control chars and `:<>`, clamped to 30, empty → `Anonymous`, deduped `name 1`… (own slot
+    excluded, so a same-`ip:port` re-logon keeps its name). Burst to the newcomer: plain
+    `LOGON SUCCESSFUL`; numbered `FEATURE: PING`; `resync` (SITE, players, setup, SANs, last
+    FEN/FMR, clocks/PV); `DELUSER: <old>` (renaming re-logon only); `ADDUSER:` self then others;
+    `MENU` lines verbatim. Others get `ADDUSER` + `CHAT: [Server] <n> has arrived!` only for a
+    new client (rename: `DELUSER`+`ADDUSER`).
+  - `LOGOFF` → `DELUSER` + `CHAT: [SERVER] - <n> has left!`. `CHANGE:<n>` → `DELUSER`, `ADDUSER`,
+    `CHAT: [SERVER] - Alias changed from <a> to <b>`. `CHAT:<t>` → numbered `CHAT: [<name>] - <t>`
+    to everyone (sender included); `<who> <time> <ver> <stats> <q>` get plain private
+    `CHAT: [SERVER] …` replies. `VOTE:` ignored; `EMAIL:`/`SEND:` → `MSG:` not supported.
+  - `PING`: known → numbered `PONG`; unknown → plain `MSG: You are no longer connected to the
+    server.  Please re-connect.` (no PONG). Plain PINGs (node-tlcv) always get it; numbered PINGs
+    (desktop, modal per notice) at most once per 60 s per source. Unknown `CHAT`/`CHANGE` get it too.
+    Recovery after a restart/reap: node-tlcv ≤10 s, desktop on its next PING (≤20 s).
 
 - **Encoding invariants** (easy to regress, all enforced implicitly): 3-field
   truncated FEN (`board stm castling`); time ms→centiseconds (÷10); `score cp` is
