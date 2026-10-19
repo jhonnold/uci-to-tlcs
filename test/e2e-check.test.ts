@@ -44,6 +44,11 @@ test('pgn parser: fastchess style and chess.js style', () => {
   assert.equal(parsePgn(NT).length, 2);
 });
 
+test('pgn parser: black-to-move start with a lone ellipsis', () => {
+  const [g] = parsePgn('[White "A"]\n[Black "B"]\n\n1. ... d6 2. e4 e5 *\n');
+  assert.deepEqual(g.sans, ['d6', 'e4', 'e5']);
+});
+
 test('normSan', () => {
   assert.equal(normSan('Nf3+'), 'Nf3');
   assert.equal(normSan('e8=Q#'), 'e8=Q');
