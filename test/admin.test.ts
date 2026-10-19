@@ -80,6 +80,7 @@ test('redactSecrets', () => {
     assert(r.includes('ADMIN:***'), r);
   }
   assert.equal(redactSecrets('CHAT: hi'), 'CHAT: hi');
+  for (const m of ['A\x01DMIN:pw', 'CHAT: ADMIN\x01:pw', 'ad\x7fmin \x02: pw']) assert.equal(redactSecrets(m).includes('pw'), false, m);
 });
 
 test('disabled: every admin command only says disabled', () => {

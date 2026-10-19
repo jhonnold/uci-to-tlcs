@@ -712,3 +712,28 @@ test('admin: MAXCLIENTS refuses the second LOGON with a MSG', async () => {
     server.close();
   }
 });
+
+test('admin: plain or numbered re-LOGON revokes the admin grant', async () => {
+  const { server, port } = await startServer({ adminPass: 'pw' });
+  const a = await TestClient.create(port, 'alice');
+  try {
+    a.logon();
+    await waitFor(() => a.received.includes('LOGON SUCCESSFUL'));
+    for (const relogon of ['LOGONv15:alice', '< 7>LOGONv15:alice']) {
+      a.send('ADMIN:pw');
+      await waitFor(() => a.raw.filter((m) => m === 'CHAT: [SERVER] Admin access granted').length >= 1);
+      a.send('SECURITY');
+      await waitFor(() => a.raw.some((m) => m.startsWith('SECUSER:')));
+      a.raw.length = 0;
+      a.send(relogon);
+      await waitFor(() => a.raw.includes('LOGON SUCCESSFUL'));
+      a.send('SECURITY');
+      await waitFor(() => a.raw.includes('CHAT: [SERVER] Not authorized'));
+      assert(!a.raw.some((m) => m.startsWith('SECUSER:')));
+      a.raw.length = 0;
+    }
+  } finally {
+    a.close();
+    server.close();
+  }
+});

@@ -384,14 +384,12 @@ export class TlcsServer {
       this.sender.ack(dest, ackId);
       return;
     }
-    if (!numbered && msg.startsWith('LOGONv15')) {
-      this.dedupe.reset(dest);
-      this.admin.forget(dest);
-    }
+    if (!numbered && msg.startsWith('LOGONv15')) this.dedupe.reset(dest);
     this.dispatch(msg, ip, port, numbered);
   }
 
   private dispatch(msg: string, ip: string, port: number, numbered: boolean): void {
+    if (msg.startsWith('LOGONv15')) this.admin.forget(destKey(ip, port)); // any re-logon revokes admin
     if (this.admin.handle(msg, ip, port)) return;
     if (this.commands.handle(msg, ip, port, numbered)) return;
     if (msg === 'RESULTTABLE') {

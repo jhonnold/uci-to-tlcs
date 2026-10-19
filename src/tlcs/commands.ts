@@ -62,7 +62,10 @@ export function sanitizeText(raw: string): string {
 
 /** Blank everything after an `ADMIN:` marker so the secret never reaches a log line. */
 export function redactSecrets(s: string): string {
-  return s.replace(/ADMIN\s*:.*/is, 'ADMIN:***');
+  // Tolerates control chars inside the marker: auth strips them (sanitizeText), so must redaction.
+  const c = '[\\x00-\\x1f\\x7f]*';
+  const re = new RegExp(`A${c}D${c}M${c}I${c}N${c}\\s*${c}:.*`, 'is');
+  return s.replace(re, 'ADMIN:***');
 }
 
 export function sanitizeName(raw: string): string {
