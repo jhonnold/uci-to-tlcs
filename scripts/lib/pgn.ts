@@ -28,7 +28,8 @@ export function tokenizeMovetext(text: string): string[] {
   const sans: string[] = [];
   for (let tok of t.split(/\s+/)) {
     tok = tok.replace(/^\d+\.+/, '');
-    if (!tok || RESULT_TOKENS.has(tok)) continue;
+    // `1. ... d6` (Black to move first, as node-tlcv writes it) leaves a bare `...`.
+    if (!tok || /^\.+$/.test(tok) || RESULT_TOKENS.has(tok)) continue;
     sans.push(normSan(tok));
   }
   return sans;
