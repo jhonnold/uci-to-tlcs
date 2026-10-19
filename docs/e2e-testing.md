@@ -112,8 +112,8 @@ Kill the background jobs; `rm /tmp/{fc,uci-to-tlcs,node-tlcv,fastchess}.log`.
 Desktop pretty-print shows the `Mid()`-parsed field (`SITE -> [ My Event]`; the leading
 space is real: `Mid(body, 6)` of `SITE: x`).
 
-Today's server answers only a bare `PING` with `PONG`; a desktop `< N>PING` gets no reply, so
-`ping-giveup` events in a desktop transcript are expected until T06.
+The server ACKs and answers a numbered desktop `< N>PING` (T02), so `ping-giveup` events in a
+desktop transcript now indicate a real problem.
 
 ## Launch / teardown pattern
 
