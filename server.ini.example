@@ -17,7 +17,8 @@ SAVEDEBUG=0
 ' Up to 10 MENU lines (ID=1..10), sent verbatim to viewers at logon.
 ' Extensions (not in the reference server):
 'BIND=127.0.0.1
-'STATEFILE=state.json
+' Restart recovery: connected clients + resume points (atomic JSON, ignored if older than 10 min).
+STATEFILE=state.json
 'CLIENTTIMEOUT=70
 'MAXCLIENTS=0
 'ADMINPASS=change-me

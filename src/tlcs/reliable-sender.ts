@@ -13,6 +13,8 @@ export interface Outbound {
   latest?: string;
   /** Control items only: called when the item is given up or evicted. */
   onGiveUp?: (dest: string) => void;
+  /** Control items only: after this item's ACK, send nothing numbered to this client for holdMs. */
+  holdMs?: number;
 }
 
 export interface SenderHooks {
@@ -21,6 +23,8 @@ export interface SenderHooks {
   replay(epoch: number, withResult: boolean): Outbound[] | null;
   /** Called once per stall episode (no ACK progress for stallMs while busy). */
   onStalled?(dest: string): void;
+  /** Called in ack() once the in-flight item clears, before the next one is pumped. */
+  onAcked?(dest: string, item: Outbound): void;
 }
 
 export interface SenderOptions {
@@ -58,6 +62,8 @@ interface ClientState {
   queue: Outbound[];
   inFlight: InFlight | null;
   timer: NodeJS.Timeout | null;
+  /** Post-ACK quiet period (Outbound.holdMs): nothing numbered or raw-`latest` is sent while set. */
+  hold: NodeJS.Timeout | null;
   srtt?: number;
   rttvar?: number;
   rto: number;
@@ -100,6 +106,7 @@ export class ReliableSender {
       queue: [],
       inFlight: null,
       timer: null,
+      hold: null,
       rto: this.opts.initialRtoMs,
       samples: 0,
       lastProgressAt: t,
@@ -115,6 +122,7 @@ export class ReliableSender {
     if (!c) return;
     this.logRtt(dest, c);
     if (c.timer) clearTimeout(c.timer);
+    if (c.hold) clearTimeout(c.hold);
     this.clientsMap.delete(dest);
   }
 
@@ -158,7 +166,7 @@ export class ReliableSender {
         continue;
       }
       if (item.latest) {
-        if (!c.inFlight && c.queue.length === 0) {
+        if (!c.inFlight && !c.hold && c.queue.length === 0) {
           this.hooks.rawSend(item.body, d);
           continue;
         }
@@ -210,6 +218,14 @@ export class ReliableSender {
     if (c.timer) clearTimeout(c.timer);
     c.timer = null;
     c.inFlight = null;
+    this.hooks.onAcked?.(dest, f.item);
+    if (f.item.holdMs) {
+      c.hold = setTimeout(() => {
+        c.hold = null;
+        this.pump(dest, c);
+      }, f.item.holdMs);
+      return;
+    }
     this.pump(dest, c);
   }
 
@@ -243,7 +259,10 @@ export class ReliableSender {
   }
 
   close(): void {
-    for (const c of this.clientsMap.values()) if (c.timer) clearTimeout(c.timer);
+    for (const c of this.clientsMap.values()) {
+      if (c.timer) clearTimeout(c.timer);
+      if (c.hold) clearTimeout(c.hold);
+    }
     this.clientsMap.clear();
   }
 
@@ -277,6 +296,7 @@ export class ReliableSender {
   }
 
   private pump(dest: string, c: ClientState): void {
+    if (c.hold) return;
     while (!c.inFlight && c.queue.length > 0) {
       const item = c.queue.shift()!;
       if (item.latest) {

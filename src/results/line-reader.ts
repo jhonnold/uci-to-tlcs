@@ -12,14 +12,16 @@ export type LineHandler = (line: string, byteOffset: number) => void;
  * missing file is a no-op.
  */
 export class ByteLineReader {
-  private consumed = 0; // bytes read from the file so far (== offset of next read)
+  private consumed: number; // bytes read from the file so far (== offset of next read)
   private carry: Buffer = Buffer.alloc(0); // partial last line
   private readonly chunk: Buffer;
 
   constructor(
     private readonly path: string,
     private readonly chunkSize = 64 * 1024,
+    startOffset = 0,
   ) {
+    this.consumed = startOffset;
     this.chunk = Buffer.allocUnsafe(chunkSize);
   }
 

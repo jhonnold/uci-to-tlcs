@@ -66,7 +66,7 @@ npm start -- --log path/to/game.uci --port 16066 --white "Engine A" --black "Eng
 
 Options: `--log <path>` (required), `--format auto|raw|fastchess|myracle` (auto),
 `--port` (16066), `--bind` (0.0.0.0), `--white`/`--black`/`--site`, `--from-end` (skip
-existing content), `--ini <path>` (reference-style `server.ini`, see below),
+existing content; default is to resume at the current game, see "Restart and persistence"), `--ini <path>` (reference-style `server.ini`, see below),
 `--pgn <path>`, `--delay-after-move <ms>`, `--delay-after-game <ms>`,
 `--pv-interval <ms>` (default 200: min gap between PV updates; the mover's final PV is always sent before its move; 0 = every engine info),
 `--metrics-port <n>` (Prometheus `/metrics`, default off), `--log-format human|json` (default human),
@@ -110,7 +110,8 @@ against the ini's directory.
 | `ICSMODE`, `MAILSERVER`, `RETURNADD` | — | — | Accepted, warned, ignored |
 | `FORMAT`* | — | auto | `auto`, `raw`, `fastchess` (`--format`) |
 | `BIND`* | — | 0.0.0.0 | `--bind` |
-| `STATEFILE`*, `CLIENTTIMEOUT`* (s) | — | 70 s | Parsed now, consumed by later features |
+| `STATEFILE`* | — | off | Persist connected clients + resume points for restart recovery (see "Restart and persistence") |
+| `CLIENTTIMEOUT`* (s) | — | 70 s | Idle-client reap timeout |
 | `ADMINPASS`*, `MAXCLIENTS`* (0 = unlimited), `BANNED`* (IPs, comma/space separated, repeatable) | — | — / 0 / none | Admin commands (disabled without ADMINPASS; use a long random value), logon cap, silent source-IP drop. See `docs/tlcs-wire.md` "Admin & abuse" |
 | `METRICSPORT`* | — | off | Prometheus `/metrics` HTTP port, bound to `BIND` (`--metrics-port`) |
 | `LOGFORMAT`* | — | human | `human` or `json` (one `{"ts","level","msg"}` object per line) (`--log-format`) |
@@ -135,6 +136,26 @@ against the ini's directory.
 
 Point node-tlcv at it via `config/config.json`:
 `{ "connections": ["<host>:16066"] }`.
+
+## Restart and persistence
+
+uci-to-tlcs can be killed (even `kill -9`) and restarted mid-tournament while the engine log keeps growing.
+On startup it loads the PGN registry, scans the log for game starts, and catches up **silently and
+synchronously** from the oldest game any restored client still needs (default: the current game); only then does it
+go live. Game numbers are the 1-based index of game starts in the log, so use a fresh `-pgnout` file per log.
+
+- **With `STATEFILE`** (written atomically on every client change and every ACKed game boundary; ignored when
+  older than 10 min): connected clients are re-attached without a re-LOGON. Each gets exactly the games it has not
+  fully ACKed, as coalesced replays with message ids restarting at 1 (node-tlcv accepts id 1 as a restart),
+  preceded by a numbering dump (`CTRESET` + a one-row `CT:` table, then a 300 ms quiet period) so node-tlcv saves
+  each replayed result under the right game number. A client that missed more than the last 3 games gets the last 3.
+- **Without it** (missing, corrupt, stale): clients get the `MSG ... no longer connected` notice on their next PING
+  and re-LOGON; a game that ended during the outage is lost for them. The desktop TLCV never re-logs on by itself.
+- **Truncation / rotation / replacement** of the log (smaller size, new inode, or vanish + reappear) re-scans and
+  catches up the new file's current game; clients stay attached.
+- **`--from-end`** skips all existing content: no catch-up, restored clients just see the next game.
+- **`SAVEDEBUG=1`** copies each finished game's log segment to `Debug-<white>_vs_<black>-<n>.log` next to the ini
+  (or next to the log without `--ini`); existing numbers are never rewritten.
 
 ## Testing
 

@@ -5,33 +5,46 @@ export type LineHandler = (line: string) => void;
 
 const POLL_INTERVAL_MS = 200;
 
+export interface TailOptions {
+  /** Byte offset to start reading at, or `'end'` (the file size at start; a file created later is read from 0). */
+  start: number | 'end';
+  /**
+   * Called when the file was truncated, rotated (inode change) or vanished and came back.
+   * Returns the offset to continue from (the caller re-scans and catches up synchronously).
+   * Without it the tailer simply restarts at 0.
+   */
+  onReset?: () => number;
+}
+
 /**
  * Tail a growing text file line by line. Handles: file not existing yet (polls
- * until created), appends (read new bytes on change), truncation/rotation (size
- * shrank → restart from 0), and partial trailing lines (buffered until completed).
+ * until created), appends (read new bytes on change), truncation / rotation / replacement
+ * (size shrank, inode changed or the file vanished and reappeared: see {@link TailOptions.onReset}),
+ * and partial trailing lines (buffered until completed).
  *
  * Real-time pacing is inherent: lines are emitted as the writer appends them.
  */
 export class FileTailer {
   private offset = 0;
+  private ino: number | undefined;
   private leftover = '';
   private watcher: FSWatcher | null = null;
   private poll: NodeJS.Timeout | null = null;
   private reading = false;
   private closed = false;
-  private caughtUp = false;
+  private vanished = false;
 
   constructor(
     private path: string,
     private onLine: LineHandler,
-    private fromStart: boolean,
-    private onCaughtUp?: () => void,
+    private opts: TailOptions = { start: 0 },
   ) {}
 
   start(): void {
     try {
-      const size = statSync(this.path).size;
-      this.offset = this.fromStart ? 0 : size;
+      const st = statSync(this.path);
+      this.ino = st.ino;
+      this.offset = this.opts.start === 'end' ? st.size : this.opts.start;
       this.attachWatcher();
       void this.readNew();
     } catch {
@@ -51,8 +64,14 @@ export class FileTailer {
   private tick(): void {
     if (!this.watcher) {
       try {
-        statSync(this.path);
-        this.offset = this.fromStart ? 0 : statSync(this.path).size;
+        const st = statSync(this.path);
+        if (this.vanished) {
+          this.vanished = false;
+          this.reset('vanished and reappeared');
+        } else {
+          this.offset = 0;
+          this.ino = st.ino;
+        }
         this.attachWatcher();
       } catch {
         return; // still not there
@@ -74,38 +93,41 @@ export class FileTailer {
     if (this.reading || this.closed) return;
     this.reading = true;
     try {
-      let size: number;
+      let st;
       try {
-        size = statSync(this.path).size;
+        st = statSync(this.path);
       } catch {
-        // file disappeared (rotation): reset and wait for it to come back
-        this.resetForRotation();
+        // file disappeared: wait for it to come back (tick() then resets)
+        this.vanished = true;
+        this.watcher?.close();
+        this.watcher = null;
         return;
       }
-
-      if (size < this.offset) {
-        // truncated / rotated in place
-        this.resetForRotation();
-      }
+      if (this.ino !== undefined && st.ino !== this.ino) this.reset('rotated (inode changed)');
+      else if (st.size < this.offset) this.reset('truncated');
+      const size = statSync(this.path).size;
       if (size > this.offset) {
-        await this.consume(this.offset, size);
-        this.offset = size;
-      }
-      if (!this.caughtUp) {
-        this.caughtUp = true;
-        this.onCaughtUp?.();
+        const from = this.offset;
+        this.offset = size; // the reset path may call back into app code; keep the offset authoritative
+        await this.consume(from, size);
       }
     } finally {
       this.reading = false;
     }
   }
 
-  private resetForRotation(): void {
-    logger.info(`${this.path} shrank/rotated; restarting from beginning.`);
-    this.offset = 0;
+  private reset(why: string): void {
+    logger.info(`tail: ${this.path} ${why}; re-scanning`);
     this.leftover = '';
+    this.offset = this.opts.onReset ? this.opts.onReset() : 0;
     this.watcher?.close();
     this.watcher = null;
+    try {
+      this.ino = statSync(this.path).ino;
+    } catch {
+      this.ino = undefined;
+    }
+    this.attachWatcher();
   }
 
   private consume(start: number, end: number): Promise<void> {

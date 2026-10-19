@@ -84,3 +84,15 @@ or touching game boundaries / player-name binding in `pipeline.ts` and
   `go`; `collectingParticipants` stays open until then so the late `ucinewgame` doesn't
   trigger a spurious new game. `onBestMove` is the header backstop. Untagged input keeps
   positional/CLI names (`id name` fills defaults for game 1 only).
+
+## Startup and restart
+
+`src/app.ts` (`startApp`) runs: load `STATEFILE` -> `registry.refresh()` -> `scanGameStarts` -> `planResume`
+(start game `S` = min(current game, every restored client's `next`, clamped to the last 3) ) -> bind the socket ->
+in the `listening` turn, synchronously feed the log from `starts[S-1]` to EOF through `PacedSink` (not live) and
+`ResumeSink` -> `setLive()` -> start the tailer at the catch-up's end offset. `ResumeSink` attaches each restored
+client right before its `next` game's `setPlayers` and queues a numbering dump ahead of every replayed game; its
+per-client queue is therefore `dump(a), game a ... result a, dump(a+1), game a+1, ...` (T02 is FIFO and a coalesce
+re-inserts a game's replay at its first removed index, so a game never crosses its own dump). `next` per client is
+the oldest game it has not fully ACKed (game item of g -> g, `result` of g -> g+1), persisted by `StateStore` in the
+same JS turn as the ACK. Rotation re-runs the same session for the new file's current game.
