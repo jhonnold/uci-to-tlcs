@@ -26,7 +26,6 @@ export class ResultService {
   private gen = new Map<string, number>();
   private resends = new Map<string, number>();
   private subscribed = new Set<string>();
-  private pushed = new Set<string>();
 
   /** `emitted`: number of the last game whose result has been broadcast (Infinity = unknown/uncapped). */
   constructor(
@@ -43,7 +42,6 @@ export class ResultService {
         this.forget(dest);
         continue;
       }
-      this.pushed.add(dest);
       this.resends.set(dest, 0);
       this.sendCt(dest, n, PUSH_RECENT);
     }
@@ -63,11 +61,6 @@ export class ResultService {
       return;
     }
     this.subscribed.add(dest);
-    // node-tlcv pulls once per result it processes; the push already queued that exact table.
-    if (this.pushed.delete(dest)) {
-      logger.debug(`RESULTTABLE from ${dest}: identical capped dump already pushed, skipped`);
-      return;
-    }
     this.resends.set(dest, 0);
     this.sendCt(dest, this.emitted, 300);
   }
@@ -82,7 +75,6 @@ export class ResultService {
 
   private forget(dest: string): void {
     this.subscribed.delete(dest);
-    this.pushed.delete(dest);
   }
 
   private sendCt(dest: string, cap: number, recent: number): void {

@@ -799,9 +799,37 @@ test('server: after emitResult(n) a client that asked for the table gets CTRESET
     const rows = c.received.slice(reset).filter((m) => m.startsWith('CT:') && /^CT:\d+\s{3,}/.test(m));
     assert.equal(rows.length, 2, 'game rows capped at 2');
     assert(c.received.some((m) => m.startsWith('CT:Total games = 2')));
-    c.send('RESULTTABLE'); // the pull node-tlcv issues after the result is skipped (already pushed)
-    await new Promise((r2) => setTimeout(r2, 200));
-    assert.equal(c.received.filter((m) => m === 'CTRESET').length, 2);
+    c.send('RESULTTABLE'); // the pull node-tlcv issues after the result is answered in full, capped at 2
+    await waitFor(() => c.received.filter((m) => m === 'CTRESET').length === 3);
+    assert(c.received.slice(c.received.lastIndexOf('CTRESET')).some((m) => m.startsWith('CT:Total games = 2')));
+  } finally {
+    c.close();
+    server.close();
+  }
+});
+
+test('server: a client that re-LOGONs on the same ip:port after a push gets a complete table on its first RESULTTABLE', async () => {
+  const { server, port } = await startServer();
+  const games = [1, 2].map((n) => ({ number: n, white: 'A', black: 'B', result: '1-0' }));
+  server.setResultService(new ResultService(server, { games, refresh() {} } as unknown as GameRegistry, 0));
+  const c = await TestClient.create(port, 'c');
+  try {
+    c.logon();
+    await waitFor(() => c.received.includes('LOGON SUCCESSFUL'));
+    c.send('RESULTTABLE');
+    await waitFor(() => c.received.some((m) => m.startsWith('CT:Total games = 0')));
+    server.setPlayers('A', 'B');
+    server.emitResult('1-0 {x}', 2); // push to c
+    await waitFor(() => c.received.some((m) => m.startsWith('CT:Total games = 2')));
+    c.send('LOGOFF'); // restart on the same ip:port
+    await sleep(100);
+    c.received.length = 0;
+    c.receivedIds.length = 0;
+    c.logon();
+    await waitFor(() => c.received.includes('LOGON SUCCESSFUL'));
+    c.send('RESULTTABLE');
+    await waitFor(() => c.received.some((m) => m.startsWith('CT:Total games = 2')));
+    assert(c.received.includes('CTRESET'));
   } finally {
     c.close();
     server.close();
