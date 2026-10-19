@@ -12,7 +12,7 @@ import { startMetricsServer } from './metrics.js';
 import { logger } from './util/logger.js';
 import { loadState, type PersistedClient } from './state/state-file.js';
 import { StateStore } from './state/progress.js';
-import { ResumeSink, planResume } from './state/resume.js';
+import { ResumeSink, planResume, numberingDump, enqueueDump } from './state/resume.js';
 import { catchUpSync } from './state/catch-up.js';
 import { DebugLogSaver } from './state/debug-log.js';
 
@@ -35,6 +35,18 @@ export async function startApp(cfg: Config): Promise<App> {
     bannedIps: cfg.bannedIps,
     onAcked: (d, e, c) => store?.onAcked(d, e, c),
     onClientsChanged: () => store?.save(),
+    // A client logging on mid-tournament (fresh node-tlcv starts at game number 1) learns the
+    // current number before the resync replay.
+    onLogon: (dest) => {
+      if (!registry) return;
+      registry.refresh();
+      const g = registry.finishedCount() + 1;
+      const b = numberingDump(registry.games, g);
+      if (b) {
+        enqueueDump(server, dest, b);
+        logger.info(`logon: numbering dump -> ${dest} before game ${g} (${b.length} lines)`);
+      }
+    },
   });
 
   let registry: GameRegistry | undefined;
@@ -57,7 +69,7 @@ export async function startApp(cfg: Config): Promise<App> {
     loaded.clients = kept;
     logger.info(`state: restored ${kept.length} client(s) from ${cfg.stateFile}`);
   }
-  store = cfg.stateFile ? new StateStore(cfg.stateFile, server, loaded) : undefined;
+  store = cfg.stateFile ? new StateStore(cfg.stateFile, server, loaded, undefined, cfg.logPath) : undefined;
 
   const resume = new ResumeSink(server, store, registry);
   const paced = new PacedSink(resume, cfg);

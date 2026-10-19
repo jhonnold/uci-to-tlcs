@@ -1,3 +1,4 @@
+import { statSync } from 'node:fs';
 import { saveState, type PersistedClient } from './state-file.js';
 
 /** The slice of TlcsServer the store needs. */
@@ -26,6 +27,7 @@ export class StateStore {
     private readonly host: StoreHost,
     loaded: { clients: PersistedClient[]; logIno?: number } | null,
     private readonly now: () => number = Date.now,
+    private readonly logPath?: string,
   ) {
     this.loaded = loaded?.clients ?? [];
     this.loadedIno = loaded?.logIno;
@@ -63,6 +65,13 @@ export class StateStore {
 
   save(): void {
     if (!this.ready) return;
+    if (this.logIno === undefined && this.logPath) {
+      try {
+        this.logIno = statSync(this.logPath).ino; // the log appeared after startup
+      } catch {
+        /* still absent */
+      }
+    }
     const list = this.host.clientList();
     const live = new Set(list.map((c) => c.dest));
     for (const d of [...this.next.keys()]) if (!live.has(d)) this.next.delete(d);

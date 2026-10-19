@@ -33,6 +33,8 @@ export interface ServerOptions extends Partial<SenderOptions> {
   rateLimit?: RateLimit;
   /** A game item (`epoch`) was ACKed by `dest`; `critical` marks the game's `result`. */
   onAcked?: (dest: string, epoch: number, critical: boolean) => void;
+  /** Every accepted LOGON, right before the resync replay. */
+  onLogon?: (dest: string) => void;
   /** The client table changed (addClient / removeClient). */
   onClientsChanged?: () => void;
 }
@@ -110,6 +112,7 @@ export class TlcsServer {
       menus: opts.menus ?? [],
       clientTimeoutMs: this.clientTimeoutMs,
       admit: (dest, isNew) => this.admin.admitLogon(dest, isNew),
+      beforeResync: (dest) => this.opts.onLogon?.(dest),
     });
     this.records.set(0, this.cur);
     this.socket = createSocket('udp4');

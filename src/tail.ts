@@ -103,9 +103,16 @@ export class FileTailer {
         this.watcher = null;
         return;
       }
-      if (this.ino !== undefined && st.ino !== this.ino) this.reset('rotated (inode changed)');
-      else if (st.size < this.offset) this.reset('truncated');
-      const size = statSync(this.path).size;
+      let size = st.size;
+      const why = this.ino !== undefined && st.ino !== this.ino ? 'rotated (inode changed)' : st.size < this.offset ? 'truncated' : '';
+      if (why) {
+        this.reset(why);
+        try {
+          size = statSync(this.path).size; // the catch-up may have taken a while
+        } catch {
+          return;
+        }
+      }
       if (size > this.offset) {
         const from = this.offset;
         this.offset = size; // the reset path may call back into app code; keep the offset authoritative

@@ -56,6 +56,7 @@ export class DebugLogSaver {
     this.names.clear();
     this.saved = 0;
     this.have.clear();
+    if (!seeded) return; // truncation = a new tournament log: old files must not block numbers
     try {
       for (const f of readdirSync(this.dir)) {
         const m = /^Debug-.*-(\d+)\.log$/.exec(f);

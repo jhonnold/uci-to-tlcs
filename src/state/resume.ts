@@ -91,6 +91,11 @@ export interface ResumeStore {
   mapEpoch(epoch: number, game: number): void;
 }
 
+/** Queue a numbering dump for one client; the last line holds NUMBERING_HOLD_MS. */
+export function enqueueDump(server: Pick<ResumeServer, 'enqueue'>, dest: string, b: string[]): void {
+  b.forEach((body, i) => server.enqueue(dest, body, i === b.length - 1 && NUMBERING_HOLD_MS > 0 ? { holdMs: NUMBERING_HOLD_MS } : {}));
+}
+
 type Lazy = number | (() => number);
 const resolve = (v: Lazy): number => (typeof v === 'function' ? v() : v);
 
@@ -200,7 +205,7 @@ export class ResumeSink implements BroadcastSink {
     }
     const b = numberingDump(this.registry.games, g);
     if (!b) return;
-    b.forEach((body, i) => this.server.enqueue(dest, body, i === b.length - 1 && NUMBERING_HOLD_MS > 0 ? { holdMs: NUMBERING_HOLD_MS } : {}));
+    enqueueDump(this.server, dest, b);
     logger.info(`resume: numbering dump -> ${dest} before game ${g} (newest ${g - 1}, ${b.length} lines)`);
   }
 }

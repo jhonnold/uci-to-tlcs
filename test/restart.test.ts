@@ -227,7 +227,9 @@ test('7c/7d/7e: no or corrupt state -> silent catch-up, PING gets the notice, re
       client.send('LOGONv15:tester');
       await waitFor(() => client.bodies(mark).some((b) => b.startsWith('WPLAYER')));
       assert.ok(client.bodies(mark).includes('LOGON SUCCESSFUL'));
-      assert.ok(!client.bodies(mark).some((b) => b === 'CTRESET'), 'no numbering dump without restored clients');
+      const bb = client.bodies(mark);
+      assert.ok(bb.indexOf('CTRESET') > bb.indexOf('LOGON SUCCESSFUL') && bb.indexOf('CTRESET') < bb.findIndex((b) => b.startsWith('WPLAYER')), 'logon numbering dump precedes the resync');
+      assert.ok(bb.some((b) => /^CT:1\s/.test(b)), 'newest finished game row is 1');
     } finally {
       app2.close({ flush: false });
       client.close();
