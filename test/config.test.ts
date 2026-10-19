@@ -4,6 +4,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { parseConfig } from '../src/config.js';
+import { setLogFormat } from '../src/util/logger.js';
 
 const dir = mkdtempSync(path.join(tmpdir(), 'ini-'));
 const ini = path.join(dir, 'server.ini');
@@ -29,6 +30,7 @@ test('defaults without --ini', () => {
     maxClients: 0,
     bannedIps: [],
     pvIntervalMs: 200,
+    logFormat: 'human',
   });
 });
 
@@ -77,4 +79,22 @@ test('--fen-setup-move overrides FENSETUPMOVE in the ini; invalid values rejecte
   assert.equal(parseConfig(['--ini', off, '--fen-setup-move', '1']).fenSetupMove, true);
   assert.equal(parseConfig(['--log', 'x']).fenSetupMove, true);
   assert.throws(() => parseConfig(['--log', 'x', '--fen-setup-move', 'yes']), /fen-setup-move/);
+});
+
+test('--metrics-port / --log-format: parse, CLI overrides ini, bad values throw', () => {
+  const d = mkdtempSync(path.join(tmpdir(), 'ini-'));
+  const f = path.join(d, 's.ini');
+  writeFileSync(f, 'PATH=g.log\nMETRICSPORT=9000\nLOGFORMAT=json\n');
+  try {
+    const c = parseConfig(['--ini', f]);
+    assert.equal(c.metricsPort, 9000);
+    assert.equal(c.logFormat, 'json');
+    const o = parseConfig(['--ini', f, '--metrics-port', '9100', '--log-format', 'human']);
+    assert.equal(o.metricsPort, 9100);
+    assert.equal(o.logFormat, 'human');
+    assert.throws(() => parseConfig(['--log', 'x', '--metrics-port', '0']), /--metrics-port/);
+    assert.throws(() => parseConfig(['--log', 'x', '--log-format', 'xml']), /--log-format/);
+  } finally {
+    setLogFormat('human');
+  }
 });

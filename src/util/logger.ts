@@ -4,9 +4,15 @@ const ORDER: Record<Level, number> = { debug: 10, info: 20, warn: 30, error: 40 
 
 const threshold = ORDER[(process.env.LOG_LEVEL as Level) ?? 'info'] ?? ORDER.info;
 
+let format: 'human' | 'json' = 'human';
+export function setLogFormat(f: 'human' | 'json'): void {
+  format = f;
+}
+
 function log(level: Level, msg: string): void {
   if (ORDER[level] < threshold) return;
-  const line = `${new Date().toISOString()} [${level}] ${msg}`;
+  const ts = new Date().toISOString();
+  const line = format === 'json' ? JSON.stringify({ ts, level, msg }) : `${ts} [${level}] ${msg}`;
   if (level === 'error' || level === 'warn') console.error(line);
   else console.log(line);
 }

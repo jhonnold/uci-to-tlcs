@@ -31,6 +31,8 @@ export interface IniValues {
   adminPass?: string;
   maxClients?: number;
   bannedIps?: string[];
+  metricsPort?: number;
+  logFormat?: 'human' | 'json';
 }
 
 export interface IniResult {
@@ -134,6 +136,17 @@ export function parseIni(text: string, baseDir: string): IniResult {
       case 'MAXCLIENTS':
         values.maxClients = int(n, key, v, 0);
         break;
+      case 'METRICSPORT':
+        if (v.trim() === '') delete values.metricsPort;
+        else values.metricsPort = int(n, key, v, 1, 65535);
+        break;
+      case 'LOGFORMAT': {
+        const t = v.trim();
+        if (t === '') delete values.logFormat;
+        else if (t === 'human' || t === 'json') values.logFormat = t;
+        else fail(n, key, v);
+        break;
+      }
       case 'SAVEDEBUG': {
         const t = v.trim();
         if (t === '1') values.saveDebug = true;

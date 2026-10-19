@@ -4,6 +4,7 @@ import { createSocket, type Socket } from 'node:dgram';
 
 import { TlcsServer, type ServerOptions } from '../src/tlcs/server.js';
 import { logger } from '../src/util/logger.js';
+import { metrics } from '../src/metrics.js';
 
 const HOST = '127.0.0.1';
 
@@ -113,6 +114,9 @@ function waitFor(pred: () => boolean, timeoutMs = 1000): Promise<void> {
 }
 
 test('server: replies to the client source port (ephemeral client receives)', async () => {
+  const rx0 = metrics.get('tlcs_messages_received_total', { type: 'LOGONv15' });
+  const tx0 = metrics.get('tlcs_messages_sent_total', { type: 'LOGON' });
+  const rf0 = metrics.get('tlcs_resyncs_total', { kind: 'full' });
   const { server, port } = await startServer();
   const client = await TestClient.create(port, 'tester');
   try {
@@ -121,6 +125,9 @@ test('server: replies to the client source port (ephemeral client receives)', as
     assert.notEqual(client.port, port);
     client.logon();
     await waitFor(() => client.received.includes('LOGON SUCCESSFUL'));
+    assert(metrics.get('tlcs_messages_received_total', { type: 'LOGONv15' }) - rx0 >= 1);
+    assert(metrics.get('tlcs_messages_sent_total', { type: 'LOGON' }) - tx0 >= 1);
+    assert(metrics.get('tlcs_resyncs_total', { kind: 'full' }) - rf0 >= 1);
   } finally {
     client.close();
     server.close();

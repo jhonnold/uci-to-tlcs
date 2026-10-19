@@ -1,6 +1,7 @@
 import { createSocket, type Socket, type RemoteInfo } from 'node:dgram';
 import type { AddressInfo } from 'node:net';
 import { logger } from '../util/logger.js';
+import { metrics, sentType, receivedType } from '../metrics.js';
 import { ReliableSender, type Outbound, type SenderOptions } from './reliable-sender.js';
 import { InboundDeduper, parseAck, parseNumbered } from './inbound.js';
 import { SessionCommands, redactSecrets } from './commands.js';
@@ -351,6 +352,7 @@ export class TlcsServer {
     if (this.closed) return;
     let msg = buf.toString().trim();
     if (!msg) return;
+    metrics.inc('tlcs_messages_received_total', { type: receivedType(msg) });
     const ip = rinfo.address;
     const port = rinfo.port;
     const dest = destKey(ip, port);
@@ -413,6 +415,7 @@ export class TlcsServer {
     // port and ignores the source port, but compliant clients (node-tlcv, desktop
     // TLCV) send from the broadcast port anyway, so this is identical for them — and
     // it additionally lets clients on ephemeral ports receive the broadcast.
+    metrics.inc('tlcs_messages_sent_total', { type: sentType(payload) });
     this.socket.send(payload, port, ip, (err) => {
       if (err) logger.warn(`send to ${ip}:${port} failed: ${err}`);
     });

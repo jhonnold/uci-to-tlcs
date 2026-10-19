@@ -5,6 +5,7 @@ import { Pipeline } from './pipeline.js';
 import { PacedSink } from './paced-sink.js';
 import { makeSource } from './source/index.js';
 import { GameRegistry } from './results/index.js';
+import { startMetricsServer } from './metrics.js';
 import { logger } from './util/logger.js';
 import { existsSync } from 'node:fs';
 
@@ -18,6 +19,7 @@ function main(): void {
     bannedIps: cfg.bannedIps,
   });
   server.start();
+  if (cfg.metricsPort) startMetricsServer(cfg.metricsPort, cfg.bindAddr, server);
 
   let registry: GameRegistry | undefined;
   if (cfg.tourneyPgn) {

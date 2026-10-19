@@ -69,6 +69,7 @@ Options: `--log <path>` (required), `--format auto|raw|fastchess|myracle` (auto)
 existing content), `--ini <path>` (reference-style `server.ini`, see below),
 `--pgn <path>`, `--delay-after-move <ms>`, `--delay-after-game <ms>`,
 `--pv-interval <ms>` (default 200: min gap between PV updates; the mover's final PV is always sent before its move; 0 = every engine info),
+`--metrics-port <n>` (Prometheus `/metrics`, default off), `--log-format human|json` (default human),
 `--fen-setup-move <0|1>` (default 1: non-startpos games send a synthetic `(setup)` move so node-tlcv loads the FEN; desktop TLCV shows `1. (setup)` once, board correct). `LOG_LEVEL=debug` logs every UDP message.
 
 `--pgn <path>` points at the fastchess `-pgnout` file; when set, its `Result` is the
@@ -111,8 +112,26 @@ against the ini's directory.
 | `BIND`* | — | 0.0.0.0 | `--bind` |
 | `STATEFILE`*, `CLIENTTIMEOUT`* (s) | — | 70 s | Parsed now, consumed by later features |
 | `ADMINPASS`*, `MAXCLIENTS`* (0 = unlimited), `BANNED`* (IPs, comma/space separated, repeatable) | — | — / 0 / none | Admin commands (disabled without ADMINPASS; use a long random value), logon cap, silent source-IP drop. See `docs/tlcs-wire.md` "Admin & abuse" |
+| `METRICSPORT`* | — | off | Prometheus `/metrics` HTTP port, bound to `BIND` (`--metrics-port`) |
+| `LOGFORMAT`* | — | human | `human` or `json` (one `{"ts","level","msg"}` object per line) (`--log-format`) |
 
 \* uci-to-tlcs extension, not in the reference server.
+
+### Operations
+
+`LOGFORMAT=json` switches stdout/stderr logs to JSON lines (same messages and `LOG_LEVEL`).
+`METRICSPORT=<n>` serves `GET /metrics` (Prometheus text format 0.0.4); counters always count, only the endpoint is optional:
+`curl http://127.0.0.1:<n>/metrics`.
+
+| metric | type | labels |
+|---|---|---|
+| `tlcs_clients` | gauge | — |
+| `tlcs_client_queue_depth` | gauge | `dest` (live clients) |
+| `tlcs_retransmits_total` | counter | — |
+| `tlcs_giveups_total` | counter | `kind` = game / control / critical |
+| `tlcs_resyncs_total` | counter | `kind` = full (every logon) / giveup (game replay after a give-up) |
+| `tlcs_coalesces_total`, `tlcs_stalls_total` | counter | — |
+| `tlcs_messages_sent_total`, `tlcs_messages_received_total` | counter | `type` |
 
 Point node-tlcv at it via `config/config.json`:
 `{ "connections": ["<host>:16066"] }`.

@@ -98,6 +98,13 @@ test('extension keys', () => {
   assert.equal(p('CLIENTTIMEOUT=90').values.clientTimeoutMs, 90000);
   assert.equal(p('MAXCLIENTS=5').values.maxClients, 5);
   assert.equal(p('ADMINPASS=s3cr et').values.adminPass, 's3cr et');
+  assert.equal(p('METRICSPORT=9100').values.metricsPort, 9100);
+  assert.equal(p('METRICSPORT=').values.metricsPort, undefined);
+  assert.throws(() => p('METRICSPORT=0'), /METRICSPORT/);
+  assert.throws(() => p('METRICSPORT=x'), /METRICSPORT/);
+  assert.equal(p('LOGFORMAT=json').values.logFormat, 'json');
+  assert.equal(p('LOGFORMAT=').values.logFormat, undefined);
+  assert.throws(() => p('LOGFORMAT=xml'), /LOGFORMAT/);
   assert.match(p('FOO=bar').warnings[0], /unknown key FOO/);
 });
 
