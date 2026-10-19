@@ -136,8 +136,8 @@ Matched in this order by the dispatcher (`ClientCmd` `0x411823`). Exact match un
 | `EMAIL:<addr>` / `SEND:…` | 6 / 5-char prefix | Email PGN | Non-goal: reply `MSG:` "not supported" |
 | `PING` | exact | Numbered `PONG` to sender. **No login check** | Answer, but see §9.1 |
 | `ACK: <id>` | 4-char prefix | Mark queued message acked | Same |
-| `SECURITY` | exact | Admin list → `SECUSER:` lines | Authenticated admin only (§9.8) |
-| `BOOT:<user>` / `SRBOOT:<user>` | 5 / 7-char prefix | Admin kick | Authenticated admin only |
+| `SECURITY` | exact | Admin list → `SECUSER:` lines | Authenticated admin only (§9.8); `SECUSER: <name>:<ip>`, one datagram per client (RE `0x412f99`) |
+| `BOOT:<user>` / `SRBOOT:<user>` | 5 / 7-char prefix | Admin kick | Authenticated admin only; target is `ip:port`, IP or name; victim gets `MSG: You have been booted!`, then LOGOFF path; SRBOOT also bans the IP |
 
 ### 5.2 Logon (`0x4087ce`)
 
@@ -279,6 +279,7 @@ real comment syntax: unmatched lines, including those starting with `'`, are ign
 | `CLIENTTIMEOUT=` | 70 | Idle-client reap timeout, seconds | Rebuild extension |
 | `ADMINPASS=` | — | Admin password | Rebuild extension |
 | `MAXCLIENTS=` | 0 | Max clients, 0 = unlimited | Rebuild extension |
+| `BANNED=` | — | Source IPs dropped silently (comma/space separated, repeatable) | Rebuild extension |
 
 ### 8.1 server.ini parsing (reference, RE)
 
@@ -408,6 +409,8 @@ Each item is compatible with both clients unless stated.
 
 - `SECURITY`, `BOOT:`, `SRBOOT:` require an admin secret (e.g. `ADMIN:<secret>` first) or are disabled.
 - Per-IP rate limit and max clients; optional ban list (the reference has an IP ban table at `0x41be68`).
+- RE findings (`dis3.txt`): the reference has **no auth**. Dispatcher: `SECURITY` exact (`0x412f99`), `BOOT:` 5-char prefix (`0x413051`), `SRBOOT:` 7-char prefix (`0x413151`). BOOT matches `Trim(Mid(msg,6))` against the client's IP text (first slot only), sends plain `MSG: You have been booted!` (`0x413114`), then runs DelUser (`0x409488`). No match is silent. SRBOOT also appends the IP to a ring of 100 (`[0x41be68]` counter, wraps to 1). The ban check (`0x4084b6..0x40850c`) runs before the numbered/ACK handling (`0x408533`): banned datagrams are dropped un-ACKed.
+- Rebuild: `ADMIN:<secret>` (direct datagram only), per-`ip:port` grant and lockout; see `docs/tlcs-wire.md`.
 
 ### 9.9 Operations
 

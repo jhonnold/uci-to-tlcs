@@ -1,8 +1,9 @@
-import { test } from 'node:test';
+import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { createSocket, type Socket } from 'node:dgram';
 
 import { TlcsServer, type ServerOptions } from '../src/tlcs/server.js';
+import { logger } from '../src/util/logger.js';
 
 const HOST = '127.0.0.1';
 
@@ -597,6 +598,140 @@ test('session: PING answers (numbered PONG, notice, numbered rate limit) and cha
     await waitFor(() => a.raw.some((m) => /^<\d+>CHAT: \[alice\] - hi$/.test(m)));
     a.send('CHAT: <who>');
     await waitFor(() => a.raw.includes('CHAT: [SERVER] Users=1'));
+  } finally {
+    a.close();
+    server.close();
+  }
+});
+
+// ---------------------------------------------------------------- T08 admin & abuse
+
+test('admin: config-banned source gets nothing, not even an ACK', async () => {
+  const { server, port } = await startServer({ bannedIps: [HOST] });
+  const c = await TestClient.create(port, 'banned');
+  try {
+    c.logon();
+    c.send('< 1>PING');
+    await sleep(300);
+    assert.deepEqual(c.raw, []);
+  } finally {
+    c.close();
+    server.close();
+  }
+});
+
+test('admin: per-IP rate limit drops plain datagrams; ACKs are free', async () => {
+  const { server, port } = await startServer({ rateLimit: { burst: 3, perSec: 0.001 } });
+  const a = await TestClient.create(port, 'alice');
+  try {
+    for (let i = 0; i < 10; i++) a.send('PING');
+    await waitFor(() => a.raw.length >= 3);
+    await sleep(200);
+    assert.equal(a.raw.filter((m) => m === NOT_CONNECTED).length, 3);
+    a.send('ACK: 1');
+    a.send('ACK: 2');
+    await sleep(100); // no reply and no crash; the bucket is not charged for ACKs
+    assert.equal(a.raw.length, 3);
+  } finally {
+    a.close();
+    server.close();
+  }
+});
+
+test('admin: ADMIN, SECURITY, BOOT flow over UDP', async () => {
+  const { server, port } = await startServer({ adminPass: 'pw' });
+  const alice = await TestClient.create(port, 'alice');
+  const bob = await TestClient.create(port, 'bob');
+  try {
+    alice.logon();
+    await waitFor(() => alice.received.includes('LOGON SUCCESSFUL'));
+    bob.logon();
+    await waitFor(() => bob.received.includes('LOGON SUCCESSFUL'));
+    alice.send('ADMIN:pw');
+    await waitFor(() => alice.raw.includes('CHAT: [SERVER] Admin access granted'));
+    alice.send('SECURITY');
+    await waitFor(() => alice.raw.filter((m) => m.startsWith('SECUSER:')).length === 2);
+    assert(alice.raw.includes('SECUSER: bob:127.0.0.1'));
+    alice.send('BOOT:bob');
+    await waitFor(() => bob.raw.includes('MSG: You have been booted!'));
+    await waitFor(() => alice.received.includes('DELUSER: bob'));
+    bob.send('PING');
+    await waitFor(() => bob.raw.includes(NOT_CONNECTED));
+  } finally {
+    alice.close();
+    bob.close();
+    server.close();
+  }
+});
+
+test('admin: numbered ADMIN is applied once, admin-like chat is not relayed, nothing leaks into logs', async () => {
+  const lines: string[] = [];
+  const ms = (['info', 'warn', 'debug'] as const).map((k) => mock.method(logger, k, (s: unknown) => void lines.push(String(s))));
+  const { server, port } = await startServer({ adminPass: 'pw-leak-check' });
+  const alice = await TestClient.create(port, 'alice');
+  const bob = await TestClient.create(port, 'bob');
+  try {
+    alice.logon();
+    await waitFor(() => alice.received.includes('LOGON SUCCESSFUL'));
+    bob.logon();
+    await waitFor(() => bob.received.includes('LOGON SUCCESSFUL'));
+    alice.send('< 1>ADMIN:pw-leak-check');
+    alice.send('< 1>ADMIN:pw-leak-check');
+    await waitFor(() => alice.raw.filter((m) => m === 'ACK: 1').length === 2);
+    await sleep(100);
+    assert.equal(alice.raw.filter((m) => m === 'CHAT: [SERVER] Admin access granted').length, 1);
+    alice.send('< 2>CHAT: (x) admin:leak-zz');
+    await waitFor(() => alice.raw.includes('ACK: 2'));
+    alice.send('< 3>CHAT: hi');
+    await waitFor(() => bob.raw.some((m) => /^<\d+>CHAT: \[alice\] - hi$/.test(m)));
+    assert(!bob.raw.some((m) => m.includes('leak-zz')));
+    assert(lines.some((l) => l.includes('ADMIN:***')));
+    for (const l of lines) assert(!/pw-leak-check|leak-zz/.test(l), l);
+  } finally {
+    for (const m of ms) m.mock.restore();
+    alice.close();
+    bob.close();
+    server.close();
+  }
+});
+
+test('admin: MAXCLIENTS refuses the second LOGON with a MSG', async () => {
+  const { server, port } = await startServer({ maxClients: 1 });
+  const a = await TestClient.create(port, 'alice');
+  const b = await TestClient.create(port, 'bob');
+  try {
+    a.logon();
+    await waitFor(() => a.received.includes('LOGON SUCCESSFUL'));
+    b.logon();
+    await waitFor(() => b.raw.includes('MSG: Connection refused.  The server is full.'));
+    await sleep(100);
+    assert(!b.received.includes('LOGON SUCCESSFUL'));
+  } finally {
+    a.close();
+    b.close();
+    server.close();
+  }
+});
+
+test('admin: plain or numbered re-LOGON revokes the admin grant', async () => {
+  const { server, port } = await startServer({ adminPass: 'pw' });
+  const a = await TestClient.create(port, 'alice');
+  try {
+    a.logon();
+    await waitFor(() => a.received.includes('LOGON SUCCESSFUL'));
+    for (const relogon of ['LOGONv15:alice', '< 7>LOGONv15:alice']) {
+      a.send('ADMIN:pw');
+      await waitFor(() => a.raw.filter((m) => m === 'CHAT: [SERVER] Admin access granted').length >= 1);
+      a.send('SECURITY');
+      await waitFor(() => a.raw.some((m) => m.startsWith('SECUSER:')));
+      a.raw.length = 0;
+      a.send(relogon);
+      await waitFor(() => a.raw.includes('LOGON SUCCESSFUL'));
+      a.send('SECURITY');
+      await waitFor(() => a.raw.includes('CHAT: [SERVER] Not authorized'));
+      assert(!a.raw.some((m) => m.startsWith('SECUSER:')));
+      a.raw.length = 0;
+    }
   } finally {
     a.close();
     server.close();

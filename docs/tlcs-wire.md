@@ -84,3 +84,27 @@ changing reply/targeting logic, or touching the FEN/time/score/PV encoding in
   new-game FEN won't reset it; (2) WPLAYER/BPLAYER set `resetMoves`, so **both players
   must precede move 1** or the shown move is wiped (`buildGameDelta`); (3) `gameStartArmed`/
   PGN finalize re-arm **only on `result:`** (`onResult`) — hence the synthesized `*`.
+
+## Admin & abuse
+
+Replies are private, plain `CHAT: [SERVER] <text>` datagrams to the requester.
+
+- `ADMIN:<secret>` (a direct datagram, plain or numbered; case- and whitespace-tolerant) authorizes
+  that `ip:port` for `SECURITY`, `BOOT:<x>` and `SRBOOT:<x>`. Replies: `Admin access granted` / `Admin access denied` /
+  `Admin login locked, try later` (5 failures per `ip:port` per 10 min; other ports on the same IP are unaffected) /
+  `Admin commands are disabled` (no `ADMINPASS`). Before `LOGON` it gets `MSG_NOT_CONNECTED`.
+  There is no CHAT-borne admin path: a `CHAT:` whose text (after an optional `(name) `) starts with `ADMIN:` is dropped
+  (never relayed, no reply), so a pasted secret is not broadcast. Grants end on LOGOFF, reap, BOOT or re-LOGON.
+- `SECURITY`: one plain `SECUSER: <name>:<ip>` per client. `BOOT:<x>`: `<x>` is `ip:port`, an IP (every client on it)
+  or a name; the victim gets `MSG: You have been booted!`, then the LOGOFF path (`DELUSER`, `CHAT: [SERVER] - <name> has left!`).
+  `BOOT:<own ip>` boots the requester too. `SRBOOT` also bans the IP (ring of 100, in memory) and refuses the requester's own IP.
+  No match: `No such user: <x>`. Unauthorized: `Not authorized`.
+- Banned source IPs (`BANNED=` and SRBOOT) are dropped silently before the ACK, as in the reference.
+  A per-IP token bucket (burst 30, 10/s; ACKs are free) drops excess datagrams silently, which also caps
+  the unknown-client notice reflection (small request, ~68-byte reply) per source IP.
+- `MAXCLIENTS`: a new LOGON beyond the limit gets `MSG: Connection refused.  The server is full.` (once per dest per 60 s);
+  re-LOGON of a known dest is always admitted. node-tlcv warns on that MSG, then gets `MSG_NOT_CONNECTED` on its PINGs and
+  re-LOGONs at most once per 60 s, refused silently.
+- Caveats: the secret travels in cleartext and grants are keyed by source address (spoofable); use a long random
+  `ADMINPASS` (16+ chars, printable ASCII). A private `[SERVER]` reply to a node-tlcv dest is shown to all its web viewers.
+  The desktop client cannot send `ADMIN:`, so admin is done from a script (`mock-client --control`).

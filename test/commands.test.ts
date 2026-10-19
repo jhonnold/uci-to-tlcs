@@ -297,3 +297,21 @@ test('handle returns false for RESULTTABLE (counted) and unknown', () => {
   assert.equal(sc.stats.resultTableRequests, 1);
   assert.equal(sc.handle('FOO', H, 1), false);
 });
+
+test('admit hook: false refuses before addClient; same-dest re-logon passes isNew=false', () => {
+  const host = new FakeHost();
+  const seen: boolean[] = [];
+  let ok = false;
+  const sc = new SessionCommands(host, {
+    menus: [],
+    clientTimeoutMs: 70000,
+    now: () => host.t,
+    admit: (_d, isNew) => (seen.push(isNew), ok),
+  });
+  sc.handle('LOGONv15:a', H, 1);
+  assert.deepEqual(host.take(), []);
+  ok = true;
+  sc.handle('LOGONv15:a', H, 1);
+  sc.handle('LOGONv15:a', H, 1);
+  assert.deepEqual(seen, [true, true, false]);
+});

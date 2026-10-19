@@ -27,6 +27,7 @@ test('defaults without --ini', () => {
     saveDebug: false,
     clientTimeoutMs: 70000,
     maxClients: 0,
+    bannedIps: [],
     pvIntervalMs: 200,
   });
 });

@@ -1,6 +1,7 @@
 // Socket wiring around the pure mock-core pieces: one mock client session.
 
 import { createSocket, type Socket } from 'node:dgram';
+import { closeSync, openSync, readSync, statSync, writeFileSync } from 'node:fs';
 import {
   DesktopReceiver,
   DesktopSender,
@@ -37,6 +38,8 @@ export interface SessionOpts {
   forcePing: boolean;
   noDisconnect: boolean;
   chat?: string;
+  /** File polled for appended lines; each is sent as-is (a `#` prefix sends it numbered; desktop mode only). */
+  control?: string;
   /** Called once with the exit code; the CLI maps it to process.exit. */
   onExit: (code: number) => void;
 }
@@ -118,6 +121,7 @@ export class MockSession {
       this.logonRetry();
       if (this.o.forcePing) this.enablePing();
     }
+    if (this.o.control) this.watchControl(this.o.control);
     const at = (s: number | undefined, f: () => void) => {
       if (s !== undefined) this.timers.push(setTimeout(f, s * 1000));
     };
@@ -141,6 +145,35 @@ export class MockSession {
       }
     });
     at(this.o.exitAfter, () => this.exit(0));
+  }
+
+  private watchControl(file: string): void {
+    writeFileSync(file, '', { flag: 'a' });
+    let off = 0;
+    let partial = '';
+    this.intervals.push(
+      setInterval(() => {
+        const size = statSync(file).size;
+        if (size <= off) return;
+        const buf = Buffer.alloc(size - off);
+        const fd = openSync(file, 'r');
+        try {
+          readSync(fd, buf, 0, buf.length, off);
+        } finally {
+          closeSync(fd);
+        }
+        off = size;
+        const lines = (partial + buf.toString()).split('\n');
+        partial = lines.pop() ?? '';
+        for (const l of lines) {
+          if (l === '') continue;
+          if (l.startsWith('#')) {
+            if (this.o.mode === 'desktop') this.sendNumbered(l.slice(1));
+            else console.error(`[mock] --control '#' (numbered) lines need --mode desktop: ignored`);
+          } else this.send(l);
+        }
+      }, 200),
+    );
   }
 
   private sendLogon(ev: string, reason?: string): void {

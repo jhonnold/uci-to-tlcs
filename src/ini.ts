@@ -9,6 +9,7 @@
 
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { isIP } from 'node:net';
 import { isFormat, type Format } from './source/index.js';
 
 export interface IniValues {
@@ -29,6 +30,7 @@ export interface IniValues {
   clientTimeoutMs?: number;
   adminPass?: string;
   maxClients?: number;
+  bannedIps?: string[];
 }
 
 export interface IniResult {
@@ -123,6 +125,12 @@ export function parseIni(text: string, baseDir: string): IniResult {
       case 'CLIENTTIMEOUT':
         values.clientTimeoutMs = int(n, key, v, 1) * 1000;
         break;
+      case 'BANNED': {
+        const ips = v.split(/[\s,]+/).filter((x) => x !== '');
+        for (const ip of ips) if (!isIP(ip)) fail(n, key, v);
+        values.bannedIps = [...(values.bannedIps ?? []), ...ips];
+        break;
+      }
       case 'MAXCLIENTS':
         values.maxClients = int(n, key, v, 0);
         break;

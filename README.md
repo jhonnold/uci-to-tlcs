@@ -109,7 +109,8 @@ against the ini's directory.
 | `ICSMODE`, `MAILSERVER`, `RETURNADD` | — | — | Accepted, warned, ignored |
 | `FORMAT`* | — | auto | `auto`, `raw`, `fastchess` (`--format`) |
 | `BIND`* | — | 0.0.0.0 | `--bind` |
-| `STATEFILE`*, `CLIENTTIMEOUT`* (s), `ADMINPASS`*, `MAXCLIENTS`* (0 = unlimited) | — | 70 s / 0 | Parsed now, consumed by later features |
+| `STATEFILE`*, `CLIENTTIMEOUT`* (s) | — | 70 s | Parsed now, consumed by later features |
+| `ADMINPASS`*, `MAXCLIENTS`* (0 = unlimited), `BANNED`* (IPs, comma/space separated, repeatable) | — | — / 0 / none | Admin commands (disabled without ADMINPASS; use a long random value), logon cap, silent source-IP drop. See `docs/tlcs-wire.md` "Admin & abuse" |
 
 \* uci-to-tlcs extension, not in the reference server.
 

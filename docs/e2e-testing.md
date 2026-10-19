@@ -102,6 +102,7 @@ Kill the background jobs; `rm /tmp/{fc,uci-to-tlcs,node-tlcv,fastchess}.log`.
 | `--mode node-tlcv` (default) | node-tlcv's rules: trim, `isIdRestart` + drop-if-not-increasing, ACK everything (`ACK: <idString>`), plain `PING` every 10 s, re-LOGON on an `MSG` containing "no longer connected" (rate-limited, only live data counts as recovery) and on the 600 s data watchdog |
 | `--mode desktop` | TLCV 2.1c: untrimmed fixed-position parsing, ignores everything until `LOGON SUCCESSFUL`, last-100 duplicate ring, numbered `< N>PING` every 20 s once `FEATURE: PING` is seen, silence states at 10/30/50/70 s (exit 3 at 70 s) |
 | `--force-ping` / `--no-disconnect` / `--chat <t>` | desktop only: ping without FEATURE, never exit on silence, send a numbered CHAT after logon |
+| `--control <file>` | poll `<file>` (200 ms) and send each appended line as-is; a leading `#` sends it numbered with retransmit (desktop mode only). Drives scripted admin/chat steps |
 | `--relogin-min <s>` (60), `--data-timeout <s>` (600) | node-tlcv re-LOGON floor / watchdog |
 | `--drop <p>`, `--reorder <p>`, `--seed <n>` | seeded loss / 100-500 ms delay in both directions. Outbound `LOGON*` is exempt (node-tlcv never retries a lost LOGON) |
 | `--transcript <f.jsonl>` | one JSON line per datagram/event: `ts, t, mode, user, session, dir, raw, id, body, verdict` (`accepted restart out-of-order unnumbered gated duplicate injected-drop injected-delay`) or `event` (`logon logon-ok relogon logoff silent-start silent-end disconnect ping-giveup logon-failed exit`) |
