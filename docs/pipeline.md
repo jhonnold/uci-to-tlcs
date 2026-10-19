@@ -49,7 +49,7 @@ or touching game boundaries / player-name binding in `pipeline.ts` and
   book at 500 ms stalls ~8 s at game start) — deliberate, simplest. The queue is unbounded
   like the reference's pause-after-move; one warning at >1000 queued sends.
 
-- **Results: board-derived, or PGN-authoritative with `--pgn`.** Pure UCI has no
+- **Results: PGN-authoritative with `--pgn`/`TOURNEYPGN` (board and `*` fallback without it).** Pure UCI has no
   resign/adjudication/forfeit signal, so without a PGN only mate/stalemate/draw on the
   board produces a `result:` (`game-state.ts`), and at a game boundary a game with none
   gets a synthesized `result: *` (see `tlcs-wire.md`, node-tlcv new-game contract).
@@ -92,7 +92,14 @@ or touching game boundaries / player-name binding in `pipeline.ts` and
 in the `listening` turn, synchronously feed the log from `starts[S-1]` to EOF through `PacedSink` (not live) and
 `ResumeSink` -> `setLive()` -> start the tailer at the catch-up's end offset. `ResumeSink` attaches each restored
 client right before its `next` game's `setPlayers` and queues a numbering dump ahead of every replayed game; its
-per-client queue is therefore `dump(a), game a ... result a, dump(a+1), game a+1, ...` (T02 is FIFO and a coalesce
+per-client queue is therefore `dump(a), game a ... result a, dump(a+1), game a+1, ...` (the sender is FIFO and a coalesce
 re-inserts a game's replay at its first removed index, so a game never crosses its own dump). `next` per client is
 the oldest game it has not fully ACKed (game item of g -> g, `result` of g -> g+1), persisted by `StateStore` in the
 same JS turn as the ACK. Rotation re-runs the same session for the new file's current game.
+
+- **Segmentation plus the PGN game count let a restart skip finished games.** `scanGameStarts` finds the
+  log's game boundaries with the same rules as the live segmenter, and the registry says how many games are
+  finished. `planResume` therefore starts the catch-up at the oldest game any restored client still needs
+  (default: the game in progress) and feeds only that part of the log; earlier games are never replayed.
+  Clients that were not restored (no `STATEFILE`, or a corrupt/stale one) receive nothing until they re-LOGON,
+  and then get the full history of the current game.

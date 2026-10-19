@@ -366,6 +366,9 @@ Each item is compatible with both clients unless stated.
 - Per-client, strictly increasing ids, never reset on re-LOGON.
 - Persist the id high-water mark and finished-games store across restarts. After a restart, start above the last
   persisted id so existing clients don't mistake new messages for duplicates.
+- **Rebuild (shipped):** ids are not persisted. Each process restarts per-client ids at 1 (node-tlcv accepts that via
+  `isIdRestart`; the desktop client is safe once it has seen more than 100 ids). Results come from `TOURNEYPGN`, and
+  `STATEFILE` persists the connected clients plus their resume game.
 
 ### 9.3 Per-client ordered delivery and flow control (replaces overload fallback)
 
@@ -420,7 +423,7 @@ Each item is compatible with both clients unless stated.
 
 ## 10. Plan: Evolving uci-to-tlcs
 
-Where uci-to-tlcs stands against this spec (as of `1057bd7`), and what to change.
+Where uci-to-tlcs stands against this spec (as of `8dc7903`).
 
 ### 10.1 Already aligned
 
@@ -429,33 +432,34 @@ Where uci-to-tlcs stands against this spec (as of `1057bd7`), and what to change
 - Plain `LOGON SUCCESSFUL` followed by a numbered snapshot; truncation restarts the tail.
 - **Better than the reference:** clients keyed by `ip:port`; strictly in-order numbered delivery (§9.3);
   `SITE: ` with a space (§9.5); both clocks on every `go`.
+- **Shipped since:** the full session protocol (names, chat, `CHANGE`, `MENU`, `FEATURE: PING`, 70 s reaper), admin / ban /
+  `MAXCLIENTS` / rate limit, structured logs and Prometheus metrics, the PGN-backed `RESULTTABLE`/`GAMELIST`, and restart
+  recovery with persisted clients, silent catch-up and numbered replay.
 
 ### 10.2 Gaps
 
-| Spec item | uci-to-tlcs today | Work |
+| Spec item | uci-to-tlcs today | Status |
 | --- | --- | --- |
-| §4.1 addressing | Replies to source `ip:port` | Add a `clientIP:PORT` mode for strict compatibility |
-| §4.2 framing | Sends `<N>` without the space | Deliberate deviation: emit `<N>` (no space); accept both on input (both clients parse either). Done in T02 |
-| §4.3 numbered client messages | Compares raw text (`msg === 'PING'`, `startsWith('CHAT')`) | Strip `< id>`, ACK, dedupe. Done in T02 (the desktop client sends `PING`/`CHAT`/`VOTE`/`CHANGE` numbered) |
-| §4.4 numbering | Per-client stop-and-wait queues, adaptive RTO, give-up 30 s with replay resync | Done in T02 (§9.3–9.4; fixes gap **J**). Deviations: give-up 30 s not 10 s; ambiguous-ACK RTO bump capped at 2x |
-| §5.1 commands | `LOGONv15`, `PING`, `RESULTTABLE` (stub), `CHAT`, `LOGOFF`, `ACK` | `LOGON:` refusal, `CHANGE:`, `GAMELIST`, `CHAT: <…>` queries, admin |
-| §5.2 logon | Snapshot SITE → players → FEN → FMR → clocks → PV; `ADDUSER` only to existing clients | Reference order including `FEATURE: PING`, last move, `MENU`; send every existing user to the newcomer and `ADDUSER` for the newcomer to all |
-| §5.3 keepalive | 30 s idle reap | 70 s default. Without `FEATURE: PING` the desktop client never pings and is reaped between games |
-| §6 `MENU`, `level` | Not emitted | Emit from config / time-control metadata |
-| §6 formats | `CHAT: <user>: <text>`, `CT: line`, `result: <r>` | `CHAT: [<user>] - <text>`, `CT:<line>`, `result <r> {<reason>}` to match the desktop client |
-| §7.1 restart | Replays the whole log as live traffic (gap **G**) | Silent catch-up, then one summary burst |
-| §7.2 adapters | fastchess, myracle, raw UCI | WinBoard/xboard adapter built on the myracle one (same `>first :`/`<first :` line shape). The GUI's `result` line also fixes gap **B** |
-| §9.1 | Answers `PONG` to unknown clients, which then never recover (gap **A**) | Reply with the `MSG` notice instead |
-| §9.6 | `RESULTTABLE` stub (gaps **E**, **G**) | Results store + crosstable |
+| §4.1 addressing | Replies to the source `ip:port`; no `clientIP:PORT` mode | Out of scope |
+| §4.2 framing | Sends `<N>` without the space; accepts both on input (deliberate deviation) | Done (#14) |
+| §4.3 numbered client messages | Strips `< id>`, ACKs every copy, dedupes per source | Done (#14) |
+| §4.4 numbering | Per-client stop-and-wait queues, adaptive RTO, 30 s give-up with replay resync (fixes gap **J**). Deviations: give-up 30 s not 10 s; ambiguous-ACK RTO bump capped at 2x | Done (#14) |
+| §5.1 commands | `LOGONv15`, `LOGON:` refusal, `LOGOFF`, `CHANGE:`, `PING`, `CHAT` + `<who>`… queries, `VOTE`, `EMAIL`/`SEND`, `RESULTTABLE`, `GAMELIST`, `ACK`; admin `ADMIN`/`SECURITY`/`BOOT`/`SRBOOT` | Done (session #15, admin #16) |
+| §5.2 logon | Reference order: `LOGON SUCCESSFUL`, `FEATURE: PING`, replay of the current game, full user list, `MENU` | Done (#15) |
+| §5.3 keepalive | 70 s idle reap (`CLIENTTIMEOUT`); `FEATURE: PING` keeps the desktop client alive | Done (#15) |
+| §6 `MENU`, `level` | `MENU` from the ini, `level` from the time-control metadata | Done (`MENU` #15, `level` #10) |
+| §6 formats | `CHAT: [<user>] - <text>`, `CT:<line>`; `result: <r>` (no reason text; `protocol.ts`) | Done, with the `result` deviation |
+| §7.1 restart | `STATEFILE` resume: silent, synchronous catch-up, then live; numbered replay per client | Done (#19) |
+| §7.2 adapters | fastchess and raw UCI only | WinBoard/xboard adapter: out of scope |
+| §9.1 | Unknown `PING` gets the `MSG` notice instead of `PONG` | Done (#15) |
+| §9.6 | `RESULTTABLE`/`GAMELIST` rendered from the `TOURNEYPGN` registry | Done (#18) |
+| §9.8 admin and abuse | `ADMINPASS`, ban list, `MAXCLIENTS`, per-IP rate limit | Done (#16) |
+| §9.9 operations | Prometheus `/metrics` (`METRICSPORT`), JSON logs (`LOGFORMAT`) | Done (#17) |
 
-### 10.3 Suggested order
+### 10.3 Remaining
 
-1. Numbered client messages (§4.3) and `FEATURE: PING` in the logon snapshot: makes the desktop client work.
-2. `MSG` notice for `PING` from unknown clients (§9.1).
-3. Per-client in-order queues with resync (§9.3–9.4).
-4. Full user list on logon, `MENU`.
-5. WinBoard/xboard adapter.
-6. Silent catch-up on restart, persistent results store, real `RESULTTABLE`.
+All of the above is shipped except the WinBoard adapter and the strict addressing mode; see `docs/gaps.md` for
+the limitations and the node-tlcv follow-ups.
 
 ## 11. Open Questions
 
@@ -467,12 +471,13 @@ Where uci-to-tlcs stands against this spec (as of `1057bd7`), and what to change
 
 ## 12. Acceptance Tests
 
-1. **Golden replay:** feed recorded WinBoard/myracle/fastchess logs; compare the emitted stream with a recorded
-   reference transcript (message types, order, field formats). Ids excluded.
+1. **Golden replay:** covered by the unit tests (`test/`), which replay recorded fastchess/raw logs through the pipeline.
 2. **Desktop client:** TLCV 2.1c under Wine connects, shows players, board, clocks, PVs, chat, user list,
-   menus, results table; keepalive stays green for 10 minutes.
+   menus, results table; keepalive stays green for 10 minutes. **Not run**; only emulated by `mock-client --mode desktop`.
 3. **node-tlcv:** connects in classic and ephemeral modes; survives server restart (re-logon via §9.1); survives
-   20 % injected packet loss with no lost moves (via resync).
+   20 % injected packet loss with no lost moves (via resync). **Done:** the acceptance run of 2026-10-19
+   (`docs/e2e-testing.md`, "Acceptance run").
 4. **Loss and reorder:** with a lossy proxy, every client converges on the current FEN within one retransmit
-   cycle.
+   cycle. **Done** with the lossy mock (20 % drop, 5 % reorder) in the same run.
 5. **Compatibility switches:** with improvements disabled, output matches the reference formats in §6.
+   **Not implemented.**
