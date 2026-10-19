@@ -19,15 +19,11 @@ log ──tail──▶ LogSource adapter ──▶ parser ──▶ Pipeline / 
 
 A **`LogSource` adapter** normalizes one producer line into `{ uci, engineId?,
 direction? }`, so different log producers can be supported without touching the
-chess logic. Three adapters ship today (`--format`):
+chess logic. Two adapters ship today (`--format`):
 
 - **`fastchess`** — reads fastchess `-log file=… engine=true` output *directly* (no
   external stripping). The engine tags let it bind each game's player names to the
   right colour and detect game/matchup boundaries.
-- **`myracle`** — reads myracle's tournament `.debug` log *directly*. Lines look like
-  `863187 >first : uci` (ms timestamp, `>`/`<` direction, `first`/`second` engine tag).
-  The tag is remapped to the real display name (learned from the `Starting engine N`
-  banner and the engine's `id name`), so names bind to the right colour like fastchess.
 - **`raw`** — a bare, already-stripped UCI transcript. Games are still segmented
   (board resets between them), but without engine tags it can't bind names per game,
   so it falls back to CLI `--white`/`--black` (with `id name` filling the defaults).
@@ -45,8 +41,10 @@ It live-tails the log and, for each event, emits the matching TLCS message(s):
 | new game (boundary) | `result:` (prev, if none) → `WPLAYER`/`BPLAYER` → startpos `FEN` | resets node-tlcv's board for the next game |
 
 Reliability matches node-tlcv's transport: state-critical messages are ID-wrapped
-(`<N>MSG`) and resent until `ACK: N`, in strict order; `WPV`/`BPV`/`WTIME`/`BTIME`
-are sent unwrapped. Late joiners get a unicast snapshot of current state.
+(`<N>MSG`) and resent until `ACK: N`, in strict order, per client (a slow client never stalls another);
+`WPV`/`BPV`/`WTIME`/`BTIME` are sent unwrapped. A client that logs on mid-game gets the **full
+move history** of the current game replayed, and the results table (`RESULTTABLE`/`GAMELIST`) is rendered from the
+tournament PGN.
 
 Each client is tracked by its source `ip:port`, and the server replies to that
 source port — not the fixed broadcast port that strict TLCS assumes. Compliant
@@ -56,6 +54,30 @@ and lets several clients share one host. A client that goes silent (no PING/ACK 
 ~70s; `CLIENTTIMEOUT` in the ini) is reaped. A PING/CHAT/CHANGE from an unknown (e.g. reaped) client gets
 `MSG: You are no longer connected to the server.  Please re-connect.`, on which node-tlcv re-LOGONs.
 
+## Quick start (fastchess tournament)
+
+The whole server is configured by one `server.ini` (precedence: CLI flags > ini > defaults):
+
+```bash
+cp server.ini.example server.ini     # edit PORT, SITE, MENU, ...; PATH=fc.log and TOURNEYPGN=games.pgn are relative to this file
+npm ci && npm run build
+node dist/src/main.js --ini server.ini          # or: npm start -- --ini server.ini
+```
+
+Run the tournament from the same directory with **`-concurrency 1`**, a fresh `-pgnout` file, and the engine log
+enabled (`TOURNEYPGN` makes every result exact, including resign/adjudication/forfeit):
+
+```bash
+fastchess -engine cmd=berserk name=A -engine cmd=berserk name=B -each tc=60+0.6 option.Hash=16 option.Threads=1 \
+  -rounds 1 -games 2 -concurrency 1 \
+  -log file=fc.log engine=true realtime=true -pgnout file=games.pgn
+```
+
+node-tlcv runs on the same host with one **ephemeral** connection (`config/config.json`):
+`{ "connections": [ { "connection": "127.0.0.1:<PORT>", "ephemeral": true } ] }`. Start order does not matter
+(a node-tlcv that boots first re-LOGONs on the server's notice). The server survives a `kill -9` and restart
+mid-tournament, see "Restart and persistence". `docs/e2e-testing.md` has the full acceptance runbook.
+
 ## Usage
 
 ```bash
@@ -64,7 +86,7 @@ npm run build           # or run straight from source with tsx:
 npm start -- --log path/to/game.uci --port 16066 --white "Engine A" --black "Engine B" --site "My Match"
 ```
 
-Options: `--log <path>` (required), `--format auto|raw|fastchess|myracle` (auto),
+Options: `--log <path>` (required), `--format auto|raw|fastchess` (auto),
 `--port` (16066), `--bind` (0.0.0.0), `--white`/`--black`/`--site`, `--from-end` (skip
 existing content; default is to resume at the current game, see "Restart and persistence"), `--ini <path>` (reference-style `server.ini`, see below),
 `--pgn <path>`, `--delay-after-move <ms>`, `--delay-after-game <ms>`,
@@ -77,11 +99,11 @@ authoritative result for each game (resign/adjudication/time forfeit included, z
 `*`). Use a **fresh** `-pgnout` file per run: fastchess appends, and old entries
 misalign the game numbers.
 
-With `--format fastchess` (or `myracle`) you point `--log` at the engine/tournament log
+With `--format fastchess` you point `--log` at the engine/tournament log
 itself; with `--format raw` you point it at a pre-stripped transcript. `--white`/`--black`
 are only used as the fallback names for the raw/untagged path. To attach to a log that is
 *already running*, keep the default (read from start) so the top-of-file engine names are
-learned — `--from-end` would skip them and the myracle path would fall back to `first`/`second`.
+learned — `--from-end` would skip them.
 
 ### server.ini
 
@@ -110,8 +132,8 @@ against the ini's directory.
 | `ICSMODE`, `MAILSERVER`, `RETURNADD` | — | — | Accepted, warned, ignored |
 | `FORMAT`* | — | auto | `auto`, `raw`, `fastchess` (`--format`) |
 | `BIND`* | — | 0.0.0.0 | `--bind` |
-| `STATEFILE`* | — | off | Persist connected clients + resume points for restart recovery (see "Restart and persistence") |
-| `CLIENTTIMEOUT`* (s) | — | 70 s | Idle-client reap timeout |
+| `STATEFILE`* | — | off | Connected clients + resume point, atomic JSON; a restart resumes without re-LOGON (see "Restart and persistence") |
+| `CLIENTTIMEOUT`* | — | 70 | Idle-client reap timeout, seconds |
 | `ADMINPASS`*, `MAXCLIENTS`* (0 = unlimited), `BANNED`* (IPs, comma/space separated, repeatable) | — | — / 0 / none | Admin commands (disabled without ADMINPASS; use a long random value), logon cap, silent source-IP drop. See `docs/tlcs-wire.md` "Admin & abuse" |
 | `METRICSPORT`* | — | off | Prometheus `/metrics` HTTP port, bound to `BIND` (`--metrics-port`) |
 | `LOGFORMAT`* | — | human | `human` or `json` (one `{"ts","level","msg"}` object per line) (`--log-format`) |
@@ -150,7 +172,7 @@ go live. Game numbers are the 1-based index of game starts in the log, so use a 
   preceded by a numbering dump (`CTRESET` + a one-row `CT:` table, then a 300 ms quiet period) so node-tlcv saves
   each replayed result under the right game number. A client that missed more than the last 3 games gets the last 3.
 - **Without it** (missing, corrupt, stale): clients get the `MSG ... no longer connected` notice on their next PING
-  and re-LOGON; a game that ended during the outage is lost for them. The desktop TLCV never re-logs on by itself.
+  and re-LOGON; a game that ended during the outage is lost for them. The desktop TLCV never re-logs on by itself: the operator reconnects it.
 - **Truncation / rotation / replacement** of the log (smaller size, new inode, or vanish + reappear) re-scans and
   catches up the new file's current game; clients stay attached.
 - **`--from-end`** skips all existing content: no catch-up, restored clients just see the next game.
@@ -160,12 +182,13 @@ go live. Game numbers are the 1-based index of game starts in the log, so use a 
 ## Testing
 
 ```bash
-npm test                # unit tests (parser, encoder, pipeline) via node:test
+npm test                # unit tests via node:test (test/*.test.ts)
+npm run typecheck && npm run build
 ```
 
-**Local loop with the mock client** — emulates node-tlcv. Since the server replies to
-the client's source port, the client can bind an ephemeral port on the same host (no
-loopback alias needed):
+**Local loop with the mock client**: it emulates node-tlcv (default) or the desktop TLCV (`--mode desktop`). Since
+the server replies to the client's source port, the client can bind an ephemeral port on the same host (no loopback
+alias needed):
 
 ```bash
 npm start -- --log fixtures/sample-game.uci --port 16066 --bind 127.0.0.1 &
@@ -173,45 +196,24 @@ npm run mock-client -- --server 127.0.0.1 --port 16066 --ephemeral
 # append lines to the log and watch them decode live
 ```
 
-(To emulate a strict TLCS client that binds the broadcast port instead, drop
-`--ephemeral` and run the client on a loopback alias, e.g. `--bind 127.0.0.2`.)
-
-**Faithful end-to-end with real node-tlcv (single host, no Docker)** — node-tlcv now
-supports an *ephemeral* connection mode, so it runs alongside the bridge on one host (no
-container or loopback alias). Point its `config/config.json` at the bridge:
-
-```json
-{ "connections": [ { "connection": "127.0.0.1:16066", "ephemeral": true } ] }
-```
-
-Start order doesn't matter: a node-tlcv that boots before the bridge gets the `MSG: … no longer
-connected` notice on its next PING and re-LOGONs (≤10 s). Start the bridge, start node-tlcv, then
-feed it a real game from fastchess:
-
-```bash
-# 1) bridge — tails the fastchess log directly (no sed), broadcasts on 16066
-npm start -- --log /tmp/fc.log --format fastchess --port 16066 --bind 127.0.0.1 &
-# 2) node-tlcv (in ../node-tlcv): npm run dev-server   → http://127.0.0.1:8080/16066
-# 3) real games — multiple games / matchups in one log are fine
-fastchess -engine cmd=<engineA> -engine cmd=<engineB> -each tc=10+0.1 \
-  -rounds 4 -games 2 -repeat -concurrency 1 \
-  -log file=/tmp/fc.log engine=true realtime=true
-```
-
-With `--format fastchess` the bridge consumes the engine-tagged log directly, so the
-player names come from the run and swap correctly each game. (The old `--format raw`
-path with `tail -F … | sed -u -E 's/.*(<--- |---> )//' >> /tmp/live.uci` still works
-for pre-stripped transcripts.) Use a real `tc=` (not `st=`/`movetime`) so the clocks
-tick, `-concurrency 1` so games don't interleave in one log, and no fastchess
-adjudication so games end on the board (a non-board end emits `result: *`). Needs
-node-tlcv checked out at `../node-tlcv`.
+**Faithful end-to-end with real node-tlcv and fastchess** (single host, no Docker): see the Quick start above and
+`docs/e2e-testing.md`, which also holds the restart/churn acceptance scenario and the checkers
+(`npm run e2e-check`, `scripts/standings-check.ts`). Use a real `tc=` (not `st=`/`movetime`) so the clocks tick,
+`-concurrency 1` so games don't interleave in one log, and `TOURNEYPGN`/`--pgn` so every result is exact (any
+adjudication or forfeit included); without it a non-board ending emits `result: *`. Needs node-tlcv checked out at
+`../node-tlcv`.
 
 ## Scope
 
-Sequential multi-game / multi-matchup on one port (each game replaces the previous on
-the board; assumes `-concurrency 1` so the log isn't interleaved). Player-name binding
-needs a tagged producer (`--format fastchess`); the raw path keeps CLI names. Results
-are board-derived (mate/stalemate/draw); an adjudicated/unknown end emits `result: *`.
-A new game that starts from a *non-startpos* position won't visually reset node-tlcv's
-board. Mid-game joiners get the current position (not full move history); minimal
-RESULTTABLE. See the comments in `src/` and the plan for the rationale behind each.
+In scope:
+
+- Sequential multi-game / multi-matchup tournaments on one port (`-concurrency 1`), from a fastchess log
+  (`--format fastchess`) or a pre-stripped UCI transcript (`--format raw`, CLI names).
+- The TLCS session, result and admin protocol as node-tlcv and the desktop TLCV use it: logon burst and user list,
+  chat/alias, `MENU`, `RESULTTABLE`/`GAMELIST` from the tournament PGN, admin (`ADMINPASS`), ban list, `MAXCLIENTS`,
+  per-IP rate limit, a Prometheus endpoint.
+- Restart persistence (`STATEFILE`): kill and restart mid-tournament without losing clients, games or numbering.
+
+Out of scope: concurrent games (`-concurrency > 1`), a WinBoard/myracle adapter, `ICSMODE` and e-mail, several
+broadcasts per process, and the reference server's strict `clientIP:<broadcast port>` addressing mode.
+See `docs/gaps.md` for the status table, known limitations and node-tlcv follow-ups.
