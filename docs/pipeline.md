@@ -28,6 +28,16 @@ or touching game boundaries / player-name binding in `pipeline.ts` and
 - **Stale PVs are dropped** (`onInfo`): no active game, an `in`-direction line, or (both
   colours bound) info from the engine not on move. PVs are sent at `info` time, i.e. before
   the move's FEN/xMOVE (§9.7).
+- **PVs are coalesced** (`--pv-interval`, default 200 ms; 0 = legacy every-info): `onInfo` only
+  stores the latest raw info (tagged with game sequence + ply); it is converted to SAN and
+  emitted at most once per interval (first info after a gap goes out at once, later ones are
+  flushed by an unref'd timer) and **always** by `applyAndEmit` before the move, against the
+  pre-move board. A pending PV is dropped on a new game, a board-replacing `position`, `quit`,
+  `Pipeline.close()`, or if the ply changed. A latest info whose PV converts to nothing yields
+  no update (never a wrong one). A hosting layer that discards a Pipeline (session swap) must
+  call `close()`. SAN conversion reuses one probe board with object-form moves
+  (string moves make chess.js generate SAN for every legal move); identical `position`
+  resends are not rebuilt.
 
 - **`level`** is emitted once per tagged game at the first clock-bearing `go`
   (`formatLevel`): fastchess pre-adds the increment, so base = wtime − winc; needs

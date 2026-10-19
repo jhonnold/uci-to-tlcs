@@ -1,4 +1,4 @@
-import { Chess } from 'chess.js';
+import { Chess, type Move } from 'chess.js';
 import { logger } from '../util/logger.js';
 
 export type ColorCode = 'w' | 'b';
@@ -23,6 +23,8 @@ export const STARTPOS_TRUNC = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQk
  */
 export class GameState {
   private chess = new Chess();
+  /** Reused scratch board for PV playout (avoids a Chess construction per info line). */
+  private probe = new Chess();
   /** The FEN the current game started from, or null for the standard start. */
   startFen: string | null = null;
 
@@ -59,13 +61,17 @@ export class GameState {
   applyMove(coord: string): AppliedMove | null {
     const color = this.chess.turn();
     const fullMoveNumber = this.chess.moveNumber();
-    if (!tryCoordMove(this.chess, coord)) {
+    const mv = tryCoordMove(this.chess, coord);
+    if (!mv) {
       logger.warn(`Could not apply bestmove ${coord} at ${this.chess.fen()}`);
       return null;
     }
-    const history = this.chess.history();
-    const san = history[history.length - 1];
-    return { color, fullMoveNumber, san };
+    return { color, fullMoveNumber, san: mv.san };
+  }
+
+  /** True if the game was built from the given `position` base (startpos, or this exact FEN). */
+  sameBase(startpos: boolean, fen: string | undefined): boolean {
+    return startpos || !fen ? this.startFen === null : fen === this.startFen;
   }
 
   turn(): ColorCode {
@@ -93,11 +99,13 @@ export class GameState {
    * take coords and emit SAN).
    */
   playoutPvToSan(pvCoords: string[]): string[] {
-    const probe = new Chess(this.chess.fen());
+    const probe = this.probe;
+    probe.load(this.chess.fen());
     const san: string[] = [];
     for (const m of pvCoords) {
       try {
-        const result = probe.move(m, { strict: false });
+        // Object form: a string goes through chess.js's SAN matcher, which generates SAN for every legal move.
+        const result = probe.move({ from: m.slice(0, 2), to: m.slice(2, 4), promotion: m[4]?.toLowerCase() });
         san.push(result.san);
       } catch {
         break;
@@ -129,20 +137,18 @@ export class GameState {
 }
 
 /** Apply a long-algebraic coordinate move (e2e4, e7e8q). Returns success. */
-function tryCoordMove(chess: Chess, coord: string): boolean {
+function tryCoordMove(chess: Chess, coord: string): Move | null {
   const from = coord.slice(0, 2);
   const to = coord.slice(2, 4);
   const promotion = coord.length > 4 ? coord[4].toLowerCase() : undefined;
   try {
-    chess.move({ from, to, promotion });
-    return true;
+    return chess.move({ from, to, promotion });
   } catch {
     // Fall back to the sloppy parser (handles minor format quirks).
     try {
-      chess.move(coord, { strict: false });
-      return true;
+      return chess.move(coord, { strict: false });
     } catch {
-      return false;
+      return null;
     }
   }
 }
