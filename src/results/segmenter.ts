@@ -27,6 +27,11 @@ export class GameSegmenter {
     return opened;
   }
 
+  /** Engine ids (white = first `go`) once both are known for the current/last game. */
+  bound(): { white: string; black: string } | undefined {
+    return this.whiteId && this.blackId ? { white: this.whiteId, black: this.blackId } : undefined;
+  }
+
   /** Feed an `in` `go` line. */
   onGo(id?: string): void {
     if (this.awaitingFirstGo && id) {

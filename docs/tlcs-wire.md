@@ -121,3 +121,13 @@ Delivery is **numbered** to registered clients (plain to unregistered requesters
 - If a `CT:` line is given up, the whole dump is re-sent (deferred, coalesced, at most 3 times), starting with a fresh `CTRESET`.
 - `GL:` line: `GL:` + number (`#####`) + white (40) + black (40) + result (8), fixed width, newest first, max 300, not trimmed. A lost `GL:` line is not re-sent (no reset command). No games: `MSG:PGN file not found!  Sorry, the server cannot provide you with a list of games.`
 - Latency: a 300-row dump is about 320 stop-and-wait items (about 50 ms on loopback, about 16 s at 50 ms RTT). If remote viewers matter, lower the `recent` argument of `renderCrosstable`.
+
+## Restart: numbering dumps and ids
+
+- Per-client ids restart at 1 on every process start. node-tlcv accepts id 1 as a restart; the desktop TLCV drops a
+  body only if its id is in its ring of the last 100 ids, so a restart is safe once it has received more than 100
+  numbered messages from the previous session.
+- node-tlcv saves a game's PGN on `result` under `currentGameNumber`, set by a 100 ms debounce timer after the last
+  `CT:` line (cancelled by `CTRESET`). Before each replayed game a restored client therefore gets `CTRESET` +
+  the `CT:` lines of a `recent = 1` crosstable (newest finished game = g-1, so `currentGameNumber = g`), and the
+  last of those lines carries `holdMs = 300` in the sender: nothing numbered is sent for 300 ms after its ACK.

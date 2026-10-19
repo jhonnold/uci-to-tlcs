@@ -21,6 +21,8 @@ export interface SessionOptions {
   clientTimeoutMs: number;
   /** MAXCLIENTS gate: return false to refuse the LOGON before the client is registered. */
   admit?: (dest: string, isNew: boolean) => boolean;
+  /** Called on every accepted LOGON, right before the resync replay (numbering dump for node-tlcv). */
+  beforeResync?: (dest: string) => void;
   now?: () => number;
 }
 
@@ -171,6 +173,7 @@ export class SessionCommands {
     const others = this.host.clientList().filter((c) => c.dest !== dest);
     this.host.sendRaw(dest, 'LOGON SUCCESSFUL');
     this.host.enqueue(dest, FEATURE_PING);
+    this.opts.beforeResync?.(dest);
     this.host.resync(dest);
     if (prev && prev.user !== name) this.host.enqueue(dest, `DELUSER: ${prev.user}`);
     this.host.enqueue(dest, `ADDUSER: ${name}`);

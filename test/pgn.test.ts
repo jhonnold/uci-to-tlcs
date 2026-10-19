@@ -194,3 +194,16 @@ test('ByteLineReader: byte offsets with CRLF and multi-byte', () => {
   assert.equal(r.lineEnd, Buffer.byteLength('ab\r\nbé✓\r\n'));
   assert.equal(r.offset, Buffer.byteLength(text));
 });
+
+test('ByteLineReader startOffset: offsets stay absolute and the first line is read from the offset', async () => {
+  const { ByteLineReader } = await import('../src/results/line-reader.js');
+  const { mkdtempSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const f = `${mkdtempSync(`${tmpdir()}/lr-`)}/a.log`;
+  writeFileSync(f, 'aaa\nbbb\nccc\n');
+  const r = new ByteLineReader(f, undefined, 4);
+  const got: Array<[string, number]> = [];
+  r.readAvailable((l, o) => void got.push([l, o]));
+  assert.deepEqual(got, [['bbb', 4], ['ccc', 8]]);
+  assert.equal(r.lineEnd, 12);
+});

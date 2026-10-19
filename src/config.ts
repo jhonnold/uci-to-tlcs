@@ -71,7 +71,8 @@ Options:
   --pv-interval <ms>       Min ms between PV updates (default 200; 0 = every engine info)
   --metrics-port <n> Serve Prometheus /metrics on this port (default off; METRICSPORT=)
   --log-format <f>   Log format: human | json (default human; LOGFORMAT=)
-  --from-end         Only broadcast appends made after startup (default: from start)
+  --from-end         Only broadcast appends made after startup (default: resume at the current game,
+                     catching up silently from the log and the PGN)
   -h, --help         Show this help
 `;
 

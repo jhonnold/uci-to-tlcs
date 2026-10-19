@@ -23,21 +23,30 @@ interface Job {
  * a latched warning fires when it exceeds 1000 sends.
  *
  * Forwards every BroadcastSink method: any new sink method added by sibling tasks must be
- * forwarded here too. T09's catch-up rework must keep calling `setLive()` at EOF.
+ * forwarded here too. app.ts calls `setLive()` after the synchronous catch-up.
  */
 export class PacedSink implements BroadcastSink {
   private live = false;
   private queue: Job[] = [];
   private holding = false;
   private warned = false;
+  private timer?: NodeJS.Timeout;
 
   constructor(
     private inner: BroadcastSink,
     private opts: PacingOptions,
   ) {}
 
-  setLive(): void {
-    this.live = true;
+  /** `setLive(false)` (a session reset) also drops queued sends and the hold: they belong to the replaced log. */
+  setLive(live = true): void {
+    this.live = live;
+    if (live) return;
+    if (this.queue.length > 0) logger.debug(`pacing: dropped ${this.queue.length} queued sends on reset`);
+    this.queue = [];
+    this.holding = false;
+    this.warned = false;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = undefined;
   }
 
   setSite(site: string): void {
@@ -87,10 +96,12 @@ export class PacedSink implements BroadcastSink {
       job.fn();
       if (job.holdMs > 0) {
         this.holding = true;
-        setTimeout(() => {
+        this.timer = setTimeout(() => {
+          this.timer = undefined;
           this.holding = false;
           this.pump();
-        }, job.holdMs).unref();
+        }, job.holdMs);
+        this.timer.unref();
         return;
       }
     }

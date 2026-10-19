@@ -31,6 +31,12 @@ export interface ServerOptions extends Partial<SenderOptions> {
   bannedIps?: string[];
   /** Per-source-IP datagram budget (ACKs are free). */
   rateLimit?: RateLimit;
+  /** A game item (`epoch`) was ACKed by `dest`; `critical` marks the game's `result`. */
+  onAcked?: (dest: string, epoch: number, critical: boolean) => void;
+  /** Every accepted LOGON, right before the resync replay. */
+  onLogon?: (dest: string) => void;
+  /** The client table changed (addClient / removeClient). */
+  onClientsChanged?: () => void;
 }
 
 /** How often the reaper scans for silent clients (matches node-tlcv's PING interval). */
@@ -106,6 +112,7 @@ export class TlcsServer {
       menus: opts.menus ?? [],
       clientTimeoutMs: this.clientTimeoutMs,
       admit: (dest, isNew) => this.admin.admitLogon(dest, isNew),
+      beforeResync: (dest) => this.opts.onLogon?.(dest),
     });
     this.records.set(0, this.cur);
     this.socket = createSocket('udp4');
@@ -115,6 +122,9 @@ export class TlcsServer {
         replay: (e, withResult) => this.replay(e, withResult),
         // Never reap on ACK timeout alone (spec §5.3): the idle reaper owns removal.
         onStalled: opts.onStalled,
+        onAcked: (d, it) => {
+          if (it.epoch !== undefined) this.opts.onAcked?.(d, it.epoch, !!it.critical);
+        },
       },
       opts,
     );
@@ -157,8 +167,8 @@ export class TlcsServer {
   }
 
   /** Numbered control item to one client, or to every registered client when `dest` is null. */
-  enqueue(dest: string | null, body: string, opts: { onGiveUp?: (dest: string) => void } = {}): void {
-    this.sender.enqueue(dest, { body, onGiveUp: opts.onGiveUp });
+  enqueue(dest: string | null, body: string, opts: { onGiveUp?: (dest: string) => void; holdMs?: number } = {}): void {
+    this.sender.enqueue(dest, { body, onGiveUp: opts.onGiveUp, holdMs: opts.holdMs });
   }
 
   /** Unnumbered, immediate send (LOGON SUCCESSFUL, MSG to unknown clients, PONG). */
@@ -173,6 +183,7 @@ export class TlcsServer {
     const isNew = !this.clients.has(dest);
     this.clients.set(dest, { ip, port, user, lastSeen: Date.now() });
     this.sender.addClient(dest);
+    this.opts.onClientsChanged?.();
     return isNew;
   }
 
@@ -182,6 +193,7 @@ export class TlcsServer {
     this.admin.forget(dest);
     this.sender.removeClient(dest);
     this.gcRecords();
+    this.opts.onClientsChanged?.();
     return c;
   }
 
@@ -217,6 +229,11 @@ export class TlcsServer {
 
   rttStats(dest: string): { srtt: number; rttvar: number; rto: number } | null {
     return this.sender.rttStats(dest);
+  }
+
+  /** Epoch of the current (most recent) game; increments per setPlayers. */
+  currentEpoch(): number {
+    return this.cur.epoch;
   }
 
   recordEpochs(): number[] {
