@@ -150,7 +150,7 @@ config by running it with `CONFIG_DIR=<dir with config.json> PORT=... PGNS_DIR=.
 ## Acceptance run (restart + churn)
 
 One scripted live tournament proves the whole stack, configured by `server.ini` only (the server is started as
-`node dist/src/main.js --ini server.ini`, no other flag or env). Last passed: 2026-10-19 on `8dc7903`.
+`node dist/src/main.js --ini server.ini`, no other flag or env). Last passed: 2026-10-19 on `8dc7903` (one unattended in-run pass, all 13 gates).
 
 **Set-up.** fastchess: 4 engines (one named `Berserk B` to cover names with spaces), EPD book with black-to-move starts,
 `-rounds 1 -games 2 -concurrency 1`, `tc=60+0.6 option.Hash=16 option.Threads=1`,
@@ -194,7 +194,7 @@ per-IP rate-limit bucket), then fastchess.
 10. Reliability per destination: `stalled`, `give-up`, `hard cap` and `RESULTTABLE … lost` log lines are allowed only for a
     destination that is dead on purpose and only before it is reaped (silent mock, killed node-tlcv), plus `give-up … resync
     game` for the lossy clients. The Prometheus counters (`tlcs_giveups_total`, `tlcs_stalls_total`, `tlcs_resyncs_total`)
-    must equal the number of allowed log lines. Any other `warn`/`error` is unclassified and fails the run.
+    must match the allowed log lines (`critical`/`control` give-ups equal; `1 <= tlcs_stalls_total <= stalled lines`, since one episode logs at start and again per new epoch). Any other `warn`/`error` is unclassified and fails the run.
 11. `SAVEDEBUG`: exactly one `Debug-<white>_vs_<black>-<n>.log` per game (names sanitized `[^A-Za-z0-9._-]+ -> _`), no `.tmp`;
     the final `state.json` lists exactly the live clients.
 12. `npm test`, `npm run typecheck`, `npm run build && node dist/src/main.js --help` are green; no leftover ports.

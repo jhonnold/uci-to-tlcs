@@ -30,7 +30,7 @@ behaviour is a known limitation. Status as of `8dc7903`.
 
 ## Command surface
 
-node-tlcv recognizes 22 TLCS commands (`../node-tlcv/src/protocol.ts`, one handler each in `game-service.ts`).
+node-tlcv recognizes 23 TLCS commands (`../node-tlcv/src/protocol.ts`, one handler each in `game-service.ts`).
 
 Emitted by us (`src/tlcs/protocol.ts`, `commands.ts`, `results/`): `FEN`, `FMR`, `WMOVE`/`BMOVE`, `WPLAYER`/`BPLAYER`,
 `WPV`/`BPV`, `WTIME`/`BTIME`, `SITE`, `result`, `level`, `CT`/`CTRESET`, `GL`, `ADDUSER`/`DELUSER`, `CHAT`, `PONG`,
@@ -58,7 +58,7 @@ Handled from clients (`tlcs/server.ts`, `commands.ts`, `admin.ts`, `results/resu
 - **Clocks do not tick** between moves (gap F).
 - **MENU `NAME` with spaces** is mangled by node-tlcv (see below).
 - **Fast-TC backlog artifacts** (blitz-speed message rates, e.g. `tc=3+0.05` at 5 % loss): a few `(Book)` labels when a mover's
-  final PV is not numbered ahead of its move, and hard-cap eviction of a control item during a full-log live replay. Neither
+  final PV is not numbered ahead of its move (fix deferred as T13: reliable final PV), and hard-cap eviction of a control item during a full-log live replay. Neither
   occurs at real time controls (10 min + 5 s) and neither affects moves or results.
 
 ## node-tlcv follow-ups
