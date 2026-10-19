@@ -58,8 +58,8 @@ export class PacedSink implements BroadcastSink {
   emitPv(color: ColorCode, depth: number, scoreCp: number, timeCs: number, nodes: number, sanPv: string[]): void {
     this.run(() => this.inner.emitPv(color, depth, scoreCp, timeCs, nodes, sanPv));
   }
-  emitResult(result: string): void {
-    this.run(() => this.inner.emitResult(result), this.opts.delayAfterGameMs);
+  emitResult(result: string, gameNumber?: number): void {
+    this.run(() => this.inner.emitResult(result, gameNumber), this.opts.delayAfterGameMs);
   }
   emitLevel(text: string): void {
     if (!this.inner.emitLevel) return;

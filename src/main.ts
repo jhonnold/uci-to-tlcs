@@ -4,7 +4,7 @@ import { TlcsServer } from './tlcs/server.js';
 import { Pipeline } from './pipeline.js';
 import { PacedSink } from './paced-sink.js';
 import { makeSource } from './source/index.js';
-import { GameRegistry } from './results/index.js';
+import { GameRegistry, ResultService } from './results/index.js';
 import { startMetricsServer } from './metrics.js';
 import { logger } from './util/logger.js';
 import { existsSync } from 'node:fs';
@@ -34,6 +34,7 @@ function main(): void {
       );
     }
   }
+  server.setResultService(new ResultService(server, registry, cfg.fromStart ? 0 : registry?.finishedCount() ?? Infinity));
   const sink = new PacedSink(server, cfg);
   const pipeline = new Pipeline(
     sink,

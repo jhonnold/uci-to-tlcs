@@ -81,6 +81,7 @@ export class TlcsServer {
   /** Keyed by the client's `ip:port` "dest" token, so two clients on one host differ. */
   private clients = new Map<string, ClientInfo>();
   private sender: ReliableSender;
+  private results?: { onResultTable(dest: string): void; onGameList(dest: string): void; onResultEmitted?(n: number): void };
   private snap: Snapshot = {};
   private records = new Map<number, GameRecord>();
   private cur: GameRecord = { epoch: 0, stream: [], finished: false };
@@ -149,6 +150,11 @@ export class TlcsServer {
   }
 
   // ------------------------------------------------------- transport API (T06/T07/T09/T10)
+
+  /** Handler for RESULTTABLE / GAMELIST requests (see results/result-commands.ts). */
+  setResultService(h: { onResultTable(dest: string): void; onGameList(dest: string): void; onResultEmitted?(n: number): void }): void {
+    this.results = h;
+  }
 
   /** Numbered control item to one client, or to every registered client when `dest` is null. */
   enqueue(dest: string | null, body: string, opts: { onGiveUp?: (dest: string) => void } = {}): void {
@@ -274,9 +280,11 @@ export class TlcsServer {
     this.sender.enqueue(null, { body: msg, latest: color === 'w' ? 'WPV' : 'BPV' });
   }
 
-  emitResult(result: string): void {
+  /** `gameNumber` (PGN authority only): after the result, queue a table capped at it per client. */
+  emitResult(result: string, gameNumber?: number): void {
     this.game(P.result(result), true);
     this.cur.finished = true;
+    if (gameNumber !== undefined) this.results?.onResultEmitted?.(gameNumber);
   }
 
   /** Single path for every game-channel message: record it, then queue it for all clients. */
@@ -394,17 +402,16 @@ export class TlcsServer {
     if (msg.startsWith('LOGONv15')) this.admin.forget(destKey(ip, port)); // any re-logon revokes admin
     if (this.admin.handle(msg, ip, port)) return;
     if (this.commands.handle(msg, ip, port, numbered)) return;
+    const dest = destKey(ip, port);
     if (msg === 'RESULTTABLE') {
-      this.sendResultTable(ip, port);
+      if (this.results) this.results.onResultTable(dest);
+      else logger.debug(`RESULTTABLE from ${dest}: no result service`);
+    } else if (msg === 'GAMELIST') {
+      if (this.results) this.results.onGameList(dest);
+      else logger.debug(`GAMELIST from ${dest}: no result service`);
     } else {
       logger.debug(`Unhandled client message from ${destKey(ip, port)}: ${redactSecrets(msg)}`);
     }
-  }
-
-  /** Minimal crosstable so node-tlcv's results parser terminates cleanly. */
-  private sendResultTable(ip: string, port: number): void {
-    this.rawSend(P.CTRESET, ip, port);
-    this.rawSend(P.ct('total games = 0'), ip, port);
   }
 
   // ----------------------------------------------------------------- transport
