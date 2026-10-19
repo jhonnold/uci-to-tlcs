@@ -53,7 +53,8 @@ source port — not the fixed broadcast port that strict TLCS assumes. Compliant
 clients (node-tlcv, desktop TLCV) send from the broadcast port, so this is identical
 for them; it additionally lets clients on **ephemeral** ports receive the broadcast
 and lets several clients share one host. A client that goes silent (no PING/ACK for
-~30s) is reaped.
+~70s; `CLIENTTIMEOUT` in the ini) is reaped. A PING/CHAT/CHANGE from an unknown (e.g. reaped) client gets
+`MSG: You are no longer connected to the server.  Please re-connect.`, on which node-tlcv re-LOGONs.
 
 ## Usage
 
@@ -142,8 +143,9 @@ container or loopback alias). Point its `config/config.json` at the bridge:
 { "connections": [ { "connection": "127.0.0.1:16066", "ephemeral": true } ] }
 ```
 
-Start the bridge **first** (it must be listening before node-tlcv boots — node-tlcv LOGONs
-once and never retries), start node-tlcv, then feed it a real game from fastchess:
+Start order doesn't matter: a node-tlcv that boots before the bridge gets the `MSG: … no longer
+connected` notice on its next PING and re-LOGONs (≤10 s). Start the bridge, start node-tlcv, then
+feed it a real game from fastchess:
 
 ```bash
 # 1) bridge — tails the fastchess log directly (no sed), broadcasts on 16066

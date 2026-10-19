@@ -12,7 +12,7 @@ function main(): void {
   const cfg = parseConfig(process.argv.slice(2));
   logger.info('config: ' + JSON.stringify({ ...cfg, adminPass: cfg.adminPass ? '***' : undefined }));
 
-  const server = new TlcsServer({ port: cfg.port, bindAddr: cfg.bindAddr });
+  const server = new TlcsServer({ port: cfg.port, bindAddr: cfg.bindAddr, clientTimeoutMs: cfg.clientTimeoutMs, menus: cfg.menus });
   server.start();
 
   let registry: GameRegistry | undefined;

@@ -246,6 +246,14 @@ test('server: reaps a silent client after the idle timeout', async () => {
 
     // bob now goes silent; the reaper should drop him and notify alice.
     await waitFor(() => alice.received.includes('DELUSER: bob'), 2000);
+    await waitFor(() => alice.received.includes('CHAT: [SERVER] - Lost connection with bob'));
+
+    // A reaped client's next PING gets the "no longer connected" notice, and its re-LOGON continues its ids.
+    const lastId = Math.max(...bob.ids);
+    bob.send('PING');
+    await waitFor(() => bob.received.includes('MSG: You are no longer connected to the server.  Please re-connect.'));
+    bob.logon();
+    await waitFor(() => bob.ids.length > 0 && Math.max(...bob.ids) > lastId);
   } finally {
     alice.close();
     bob.close();
@@ -276,9 +284,9 @@ test('server: numbered inbound PING/CHAT are ACKed on every copy and deduped', a
 
     a.send('<8>CHAT: hi');
     a.send('<8>CHAT: hi');
-    await waitFor(() => b.received.includes('CHAT: alice: hi'));
+    await waitFor(() => b.received.includes('CHAT: [alice] - hi'));
     await sleep(60);
-    assert.equal(b.received.filter((m) => m === 'CHAT: alice: hi').length, 1);
+    assert.equal(b.received.filter((m) => m === 'CHAT: [alice] - hi').length, 1);
 
     a.send('LOGONv15:alice'); // re-LOGON resets the dedupe ring (restarted desktop counter)
     await sleep(40);
@@ -529,6 +537,68 @@ test('server: BMOVE never precedes a FEN after a re-LOGON on a backlogged client
     assert(firstFen !== -1 && firstFen < firstMove, 'a FEN precedes the first move after re-LOGON');
   } finally {
     c.close();
+    server.close();
+  }
+});
+
+const NOT_CONNECTED = 'MSG: You are no longer connected to the server.  Please re-connect.';
+
+test('session: logon burst order on the wire, fan-out to the others', async () => {
+  const { server, port } = await startServer({ menus: ['MENU ID=1 WIDTH=1 HEIGHT=1 NAME="A" URL="u"'] });
+  const alice = await TestClient.create(port, 'alice');
+  const bob = await TestClient.create(port, 'bob');
+  try {
+    server.setSite('S');
+    server.setPlayers('W', 'B');
+    server.emitMove({ fenTruncated: FEN_E4, color: 'w', fullMoveNumber: 1, san: 'e4', fmr: 0 });
+    alice.logon();
+    await waitFor(() => alice.received.includes('MENU ID=1 WIDTH=1 HEIGHT=1 NAME="A" URL="u"'));
+    bob.logon();
+    await waitFor(() => bob.received.some((m) => m.startsWith('MENU ')));
+    const i = (m: string) => bob.received.findIndex((x) => x === m || x.startsWith(m));
+    assert.equal(bob.received[0], 'LOGON SUCCESSFUL');
+    assert(bob.raw[0] === 'LOGON SUCCESSFUL', 'unnumbered');
+    assert(i('LOGON SUCCESSFUL') < i('FEATURE: PING'));
+    assert(i('FEATURE: PING') < i('WPLAYER'));
+    assert(i('WPLAYER') < i('WMOVE'));
+    assert(i('WMOVE') < i('ADDUSER: bob'));
+    assert(i('ADDUSER: bob') < i('ADDUSER: alice'));
+    assert(i('ADDUSER: alice') < i('MENU ID=1'));
+    await waitFor(() => alice.received.includes('CHAT: [Server] bob has arrived!'));
+    assert(alice.received.includes('ADDUSER: bob'));
+  } finally {
+    alice.close();
+    bob.close();
+    server.close();
+  }
+});
+
+test('session: PING answers (numbered PONG, notice, numbered rate limit) and chat relay', async () => {
+  const { server, port } = await startServer();
+  const a = await TestClient.create(port, 'alice');
+  try {
+    a.send('< 4>PING');
+    await waitFor(() => a.raw.includes(NOT_CONNECTED));
+    assert(a.raw.includes('ACK: 4'));
+    a.send('< 5>PING');
+    await waitFor(() => a.raw.includes('ACK: 5'));
+    await sleep(60);
+    assert.equal(a.raw.filter((m) => m === NOT_CONNECTED).length, 1, 'numbered PING notice rate-limited');
+    a.send('PING');
+    a.send('PING');
+    await waitFor(() => a.raw.filter((m) => m === NOT_CONNECTED).length === 3);
+    assert(!a.raw.some((m) => m.includes('PONG')));
+
+    a.logon();
+    await waitFor(() => a.received.includes('LOGON SUCCESSFUL'));
+    a.send('< 3>PING');
+    await waitFor(() => a.raw.some((m) => /^<\d+>PONG$/.test(m)));
+    a.send('CHAT: hi');
+    await waitFor(() => a.raw.some((m) => /^<\d+>CHAT: \[alice\] - hi$/.test(m)));
+    a.send('CHAT: <who>');
+    await waitFor(() => a.raw.includes('CHAT: [SERVER] Users=1'));
+  } finally {
+    a.close();
     server.close();
   }
 });

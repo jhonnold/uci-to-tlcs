@@ -26,10 +26,10 @@ relies on our source-port reply, so no same-host `EADDRINUSE`):
 
 `.env` → `PORT=8099`, `LOG_LEVEL=debug`, `PGNS_DIR=/tmp/node-tlcv-pgns`.
 
-## 3. Run (bridge first)
+## 3. Run
 
 ```bash
-# bridge — up first so node-tlcv's LOGON lands (see LOGON-race)
+# bridge
 LOG_LEVEL=debug npm start -- --log /tmp/fc.log --format fastchess \
   --bind 127.0.0.1 --port 16000 > /tmp/uci-to-tlcs.log 2>&1 &
 
@@ -77,7 +77,7 @@ Then eyeball the logs:
 - **Names** — `[White]`/`[Black]` are real engine names (not `Engine1`/`Engine2`);
   colours = side-to-move at start; stable across rounds.
 - **Registration** — exactly one client in `/tmp/uci-to-tlcs.log` (`LOGONv15`); 0 =
-  LOGON-race, >1 = node-tlcv restarted.
+  node-tlcv can't reach the bridge (check host/port), >1 = node-tlcv restarted.
 - **Retries** — `reliable send ... unacked, retrying` count: 0 = clean, many = a slow
   consumer (gaps.md J).
 - **Clocks** — `WTIME`/`BTIME` present and decreasing.
@@ -112,7 +112,7 @@ Kill the background jobs; `rm /tmp/{fc,uci-to-tlcs,node-tlcv,fastchess}.log`.
 Desktop pretty-print shows the `Mid()`-parsed field (`SITE -> [ My Event]`; the leading
 space is real: `Mid(body, 6)` of `SITE: x`).
 
-The server ACKs and answers a numbered desktop `< N>PING` (T02), so `ping-giveup` events in a
+The server ACKs a numbered desktop `< N>PING` and answers it with a numbered `PONG`, so `ping-giveup` events in a
 desktop transcript now indicate a real problem.
 
 ## Launch / teardown pattern
@@ -139,6 +139,6 @@ config by running it with `CONFIG_DIR=<dir with config.json> PORT=... PGNS_DIR=.
    confirm space-y engine names are pushed whole. For the strict same-port client instead, drop
   `--ephemeral` and use aliases (server `--bind 127.0.0.1`, client `--bind 127.0.0.2`,
   same port).
-- **LOGON-race**: node-tlcv sends `LOGONv15` once at boot and never retries. Bring the
-  bridge up **before** node-tlcv, or it sits connected-but-unregistered (PINGs PONGed,
-  0 moves).
+- **Late bridge**: node-tlcv's boot `LOGONv15` is lost if the bridge isn't up, but the bridge
+  answers its next 10 s PING with the `MSG` notice and node-tlcv re-LOGONs — expect one
+  `Re-sending LOGON` warn in node-tlcv's log.
