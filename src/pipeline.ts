@@ -24,7 +24,7 @@ export interface BroadcastSink {
   }): void;
   emitClocks(whiteCs: number, blackCs: number): void;
   emitPv(color: ColorCode, depth: number, scoreCp: number, timeCs: number, nodes: number, sanPv: string[]): void;
-  emitResult(result: string): void;
+  emitResult(result: string, gameNumber?: number): void;
   /** WinBoard-format `level <mps> <base> <inc>` text. Optional: absent until the server supports it. */
   emitLevel?(text: string): void;
 }
@@ -505,7 +505,7 @@ export class Pipeline {
   private emitResultOnce(r: string): void {
     if (this.resultEmitted) return;
     this.resultEmitted = true;
-    this.sink.emitResult(r);
+    this.sink.emitResult(r, this.opts.authority ? this.gameNumber : undefined);
   }
 
   currentGameNumber(): number {

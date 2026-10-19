@@ -84,7 +84,11 @@ export function chat(text: string): string {
 }
 
 export function ct(line: string): string {
-  return `CT: ${line}`;
+  return `CT:${line}`;
+}
+
+export function gl(line: string): string {
+  return `GL:${line}`;
 }
 
 export const CTRESET = 'CTRESET';

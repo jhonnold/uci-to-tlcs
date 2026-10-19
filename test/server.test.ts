@@ -5,6 +5,8 @@ import { createSocket, type Socket } from 'node:dgram';
 import { TlcsServer, type ServerOptions } from '../src/tlcs/server.js';
 import { logger } from '../src/util/logger.js';
 import { metrics } from '../src/metrics.js';
+import { ResultService } from '../src/results/result-commands.js';
+import type { GameRegistry } from '../src/results/registry.js';
 
 const HOST = '127.0.0.1';
 
@@ -27,6 +29,8 @@ class TestClient {
   readonly received: string[] = [];
   /** Ids of the first-seen numbered messages, parallel to the numbered entries of `received`. */
   readonly ids: number[] = [];
+  /** Parallel to `received`: the id of each entry, or null for an unnumbered body. */
+  readonly receivedIds: Array<number | null> = [];
   /** Every datagram, raw, in arrival order (including retransmitted copies). */
   readonly raw: string[] = [];
   /** Drop (do not ACK or record) the first copy of every Nth id; 0 = never. */
@@ -70,8 +74,10 @@ class TestClient {
       this.seenIds.add(id);
       this.ids.push(id);
       this.received.push(raw.slice(close + 1));
+      this.receivedIds.push(id);
     } else {
       this.received.push(raw);
+      this.receivedIds.push(null);
     }
   }
 
@@ -741,6 +747,91 @@ test('admin: plain or numbered re-LOGON revokes the admin grant', async () => {
     }
   } finally {
     a.close();
+    server.close();
+  }
+});
+
+test('server: RESULTTABLE after LOGON gets a numbered CTRESET then CT lines in order; GAMELIST gets GL lines', async () => {
+  const { server, port } = await startServer();
+  const games = [
+    { number: 1, white: 'A', black: 'B', result: '1-0' },
+    { number: 2, white: 'B', black: 'A', result: '1/2-1/2' },
+  ];
+  server.setResultService(new ResultService(server, { games, refresh() {} } as unknown as GameRegistry));
+  const c = await TestClient.create(port, 'c');
+  try {
+    c.logon();
+    await waitFor(() => c.received.includes('LOGON SUCCESSFUL'));
+    c.send('RESULTTABLE');
+    await waitFor(() => c.received.some((m) => m.startsWith('CT:Total games')));
+    const reset = c.received.indexOf('CTRESET');
+    const first = c.received.findIndex((m) => m.startsWith('CT:RANK'));
+    assert(reset !== -1 && first > reset, 'CTRESET precedes the first CT line');
+    const ids = c.received.flatMap((m, i) => (i >= reset && (m === 'CTRESET' || m.startsWith('CT:')) ? [c.receivedIds[i]!] : []));
+    assert(ids.every((id, k) => k === 0 || id > ids[k - 1]), 'strictly increasing ids');
+    c.send('GAMELIST');
+    await waitFor(() => c.received.filter((m) => m.startsWith('GL:')).length === 2);
+    assert.match(c.received.filter((m) => m.startsWith('GL:'))[0], /^GL:\s+2B\s/);
+  } finally {
+    c.close();
+    server.close();
+  }
+});
+
+test('server: after emitResult(n) a client that asked for the table gets CTRESET+CT capped at n right behind the result', async () => {
+  const { server, port } = await startServer();
+  const games = [1, 2, 3].map((n) => ({ number: n, white: 'A', black: 'B', result: '1-0' }));
+  server.setResultService(new ResultService(server, { games, refresh() {} } as unknown as GameRegistry, 0));
+  const c = await TestClient.create(port, 'c');
+  try {
+    c.logon();
+    await waitFor(() => c.received.includes('LOGON SUCCESSFUL'));
+    c.send('RESULTTABLE');
+    await waitFor(() => c.received.some((m) => m.startsWith('CT:Total games = 0')));
+    server.setPlayers('A', 'B');
+    server.emitResult('1-0 {x}', 2);
+    server.setPlayers('B', 'A');
+    await waitFor(() => c.received.includes('bplayer A') || c.received.some((m) => m.startsWith('BPLAYER')));
+    const r = c.received.findIndex((m) => m.startsWith('RESULT') || m.startsWith('result'));
+    const reset = c.received.lastIndexOf('CTRESET');
+    const next = c.received.findIndex((m, i) => i > reset && /^WPLAYER/i.test(m));
+    assert(r !== -1 && reset > r && next > reset, JSON.stringify(c.received.slice(-12)));
+    const rows = c.received.slice(reset).filter((m) => m.startsWith('CT:') && /^CT:\d+\s{3,}/.test(m));
+    assert.equal(rows.length, 2, 'game rows capped at 2');
+    assert(c.received.some((m) => m.startsWith('CT:Total games = 2')));
+    c.send('RESULTTABLE'); // the pull node-tlcv issues after the result is answered in full, capped at 2
+    await waitFor(() => c.received.filter((m) => m === 'CTRESET').length === 3);
+    assert(c.received.slice(c.received.lastIndexOf('CTRESET')).some((m) => m.startsWith('CT:Total games = 2')));
+  } finally {
+    c.close();
+    server.close();
+  }
+});
+
+test('server: a client that re-LOGONs on the same ip:port after a push gets a complete table on its first RESULTTABLE', async () => {
+  const { server, port } = await startServer();
+  const games = [1, 2].map((n) => ({ number: n, white: 'A', black: 'B', result: '1-0' }));
+  server.setResultService(new ResultService(server, { games, refresh() {} } as unknown as GameRegistry, 0));
+  const c = await TestClient.create(port, 'c');
+  try {
+    c.logon();
+    await waitFor(() => c.received.includes('LOGON SUCCESSFUL'));
+    c.send('RESULTTABLE');
+    await waitFor(() => c.received.some((m) => m.startsWith('CT:Total games = 0')));
+    server.setPlayers('A', 'B');
+    server.emitResult('1-0 {x}', 2); // push to c
+    await waitFor(() => c.received.some((m) => m.startsWith('CT:Total games = 2')));
+    c.send('LOGOFF'); // restart on the same ip:port
+    await sleep(100);
+    c.received.length = 0;
+    c.receivedIds.length = 0;
+    c.logon();
+    await waitFor(() => c.received.includes('LOGON SUCCESSFUL'));
+    c.send('RESULTTABLE');
+    await waitFor(() => c.received.some((m) => m.startsWith('CT:Total games = 2')));
+    assert(c.received.includes('CTRESET'));
+  } finally {
+    c.close();
     server.close();
   }
 });
