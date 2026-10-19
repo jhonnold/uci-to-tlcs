@@ -29,6 +29,7 @@ const HELP = `Usage: tsx scripts/mock-client.ts [options]
   --exit-after <s>       LOGOFF and exit 0
   --relogin-min <s> (60) --data-timeout <s> (600)   node-tlcv re-LOGON tuning
   desktop only: --force-ping (ping without FEATURE: PING)  --no-disconnect  --chat <text>
+  --control <file>       send each line appended to <file> (poll 200 ms); a leading '#' sends it numbered (desktop mode only)
 `;
 
 function parseOpts(argv: string[]): Omit<SessionOpts, 'onExit'> {
@@ -72,6 +73,7 @@ function parseOpts(argv: string[]): Omit<SessionOpts, 'onExit'> {
       case '--force-ping': o.forcePing = true; break;
       case '--no-disconnect': o.noDisconnect = true; break;
       case '--chat': o.chat = v(); break;
+      case '--control': o.control = v(); break;
       case '--help': console.log(HELP); process.exit(0);
       default: usage(`unknown option ${a}`);
     }

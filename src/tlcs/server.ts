@@ -3,7 +3,8 @@ import type { AddressInfo } from 'node:net';
 import { logger } from '../util/logger.js';
 import { ReliableSender, type Outbound, type SenderOptions } from './reliable-sender.js';
 import { InboundDeduper, parseAck, parseNumbered } from './inbound.js';
-import { SessionCommands } from './commands.js';
+import { SessionCommands, redactSecrets } from './commands.js';
+import { AdminCommands, RATE_DEFAULT, type RateLimit } from './admin.js';
 import * as P from './protocol.js';
 import type { ColorCode } from './protocol.js';
 
@@ -21,6 +22,14 @@ export interface ServerOptions extends Partial<SenderOptions> {
   reapIntervalMs?: number;
   /** Called once per stall episode (a busy client with no ACK progress for stallMs). */
   onStalled?: (dest: string) => void;
+  /** ADMINPASS: admin commands (SECURITY/BOOT/SRBOOT) are disabled unless non-empty. */
+  adminPass?: string;
+  /** MAXCLIENTS: refuse new LOGONs beyond this many clients (0 = unlimited). */
+  maxClients?: number;
+  /** BANNED=: source IPs whose datagrams are dropped silently. */
+  bannedIps?: string[];
+  /** Per-source-IP datagram budget (ACKs are free). */
+  rateLimit?: RateLimit;
 }
 
 /** How often the reaper scans for silent clients (matches node-tlcv's PING interval). */
@@ -81,10 +90,21 @@ export class TlcsServer {
   private reaper: NodeJS.Timeout | null = null;
   private readonly clientTimeoutMs: number;
   private readonly commands: SessionCommands;
+  private readonly admin: AdminCommands;
 
   constructor(private opts: ServerOptions) {
     this.clientTimeoutMs = opts.clientTimeoutMs ?? DEFAULT_CLIENT_TIMEOUT_MS;
-    this.commands = new SessionCommands(this, { menus: opts.menus ?? [], clientTimeoutMs: this.clientTimeoutMs });
+    this.admin = new AdminCommands(this, {
+      adminPass: opts.adminPass,
+      maxClients: opts.maxClients ?? 0,
+      bannedIps: opts.bannedIps ?? [],
+      rateLimit: opts.rateLimit ?? RATE_DEFAULT,
+    });
+    this.commands = new SessionCommands(this, {
+      menus: opts.menus ?? [],
+      clientTimeoutMs: this.clientTimeoutMs,
+      admit: (dest, isNew) => this.admin.admitLogon(dest, isNew),
+    });
     this.records.set(0, this.cur);
     this.socket = createSocket('udp4');
     this.sender = new ReliableSender(
@@ -108,7 +128,10 @@ export class TlcsServer {
   start(onReady?: () => void): void {
     if (onReady) this.socket.once('listening', onReady);
     this.socket.bind(this.opts.port, this.opts.bindAddr);
-    this.reaper = setInterval(() => this.commands.reap(), this.opts.reapIntervalMs ?? REAP_INTERVAL_MS);
+    this.reaper = setInterval(() => {
+      this.commands.reap();
+      this.admin.prune();
+    }, this.opts.reapIntervalMs ?? REAP_INTERVAL_MS);
     this.reaper.unref?.();
   }
 
@@ -149,6 +172,7 @@ export class TlcsServer {
   removeClient(dest: string): ClientInfo | undefined {
     const c = this.clients.get(dest);
     this.clients.delete(dest);
+    this.admin.forget(dest);
     this.sender.removeClient(dest);
     this.gcRecords();
     return c;
@@ -330,7 +354,11 @@ export class TlcsServer {
     const ip = rinfo.address;
     const port = rinfo.port;
     const dest = destKey(ip, port);
-    logger.debug(`<- ${dest}  ${msg}`);
+    // Banned sources are dropped before the ACK (as in the reference); ACKs are not charged
+    // to the rate limiter (no amplification, and legitimate clients ACK every numbered item).
+    if (this.admin.isBanned(ip)) return;
+    if (parseAck(msg) === null && !this.admin.allowDatagram(ip)) return;
+    logger.debug(`<- ${dest}  ${redactSecrets(msg)}`);
 
     // Any datagram is proof of life for the reaper.
     const known = this.clients.get(dest);
@@ -340,7 +368,7 @@ export class TlcsServer {
     if (numbered) {
       const n = parseNumbered(msg);
       if (!n) {
-        logger.debug(`Malformed numbered message from ${dest}: ${msg}`);
+        logger.debug(`Malformed numbered message from ${dest}: ${redactSecrets(msg)}`);
         return;
       }
       this.rawSend(P.ack(n.id), ip, port); // ACK every copy, even duplicates
@@ -356,16 +384,20 @@ export class TlcsServer {
       this.sender.ack(dest, ackId);
       return;
     }
-    if (!numbered && msg.startsWith('LOGONv15')) this.dedupe.reset(dest);
+    if (!numbered && msg.startsWith('LOGONv15')) {
+      this.dedupe.reset(dest);
+      this.admin.forget(dest);
+    }
     this.dispatch(msg, ip, port, numbered);
   }
 
   private dispatch(msg: string, ip: string, port: number, numbered: boolean): void {
+    if (this.admin.handle(msg, ip, port)) return;
     if (this.commands.handle(msg, ip, port, numbered)) return;
     if (msg === 'RESULTTABLE') {
       this.sendResultTable(ip, port);
     } else {
-      logger.debug(`Unhandled client message from ${destKey(ip, port)}: ${msg}`);
+      logger.debug(`Unhandled client message from ${destKey(ip, port)}: ${redactSecrets(msg)}`);
     }
   }
 

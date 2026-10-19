@@ -113,3 +113,10 @@ test('FENSETUPMOVE: 1 true, 0 and empty false, other values throw', () => {
   assert.equal(p('PORT=1').values.fenSetupMove, undefined);
   assert.throws(() => p('FENSETUPMOVE=yes'), /line 1: invalid FENSETUPMOVE/);
 });
+
+test('BANNED: comma/space separated, accumulates, validated', () => {
+  assert.deepEqual(p('BANNED=1.2.3.4, ::1').values.bannedIps, ['1.2.3.4', '::1']);
+  assert.deepEqual(p('BANNED=1.2.3.4\nBANNED=5.6.7.8').values.bannedIps, ['1.2.3.4', '5.6.7.8']);
+  assert.deepEqual(p('BANNED=').values.bannedIps, []);
+  assert.throws(() => p('BANNED=nope'), /BANNED/);
+});

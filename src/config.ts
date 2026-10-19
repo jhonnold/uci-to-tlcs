@@ -40,6 +40,8 @@ export interface Config {
   adminPass?: string;
   /** Extension: max concurrent clients (0 = unlimited). */
   maxClients: number;
+  /** Extension: source IPs dropped silently (BANNED=). */
+  bannedIps: string[];
   /** Extension: min ms between PV updates per game (0 = every engine info). */
   pvIntervalMs: number;
 }
@@ -90,6 +92,7 @@ export function parseConfig(argv: string[]): Config {
     saveDebug: false,
     clientTimeoutMs: 70000,
     maxClients: 0,
+    bannedIps: [],
     pvIntervalMs: 200,
   };
 

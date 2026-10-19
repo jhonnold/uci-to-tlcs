@@ -19,6 +19,8 @@ export interface SessionHost {
 export interface SessionOptions {
   menus: string[];
   clientTimeoutMs: number;
+  /** MAXCLIENTS gate: return false to refuse the LOGON before the client is registered. */
+  admit?: (dest: string, isNew: boolean) => boolean;
   now?: () => number;
 }
 
@@ -56,6 +58,11 @@ export function packageVersion(): string {
 
 export function sanitizeText(raw: string): string {
   return raw.replace(/[\x00-\x1f\x7f]/g, '').trim();
+}
+
+/** Blank everything after an `ADMIN:` marker so the secret never reaches a log line. */
+export function redactSecrets(s: string): string {
+  return s.replace(/ADMIN\s*:.*/is, 'ADMIN:***');
 }
 
 export function sanitizeName(raw: string): string {
@@ -117,7 +124,7 @@ export class SessionCommands {
       if (!known) this.notice(dest, false, 'CHAT');
       else this.onChat(dest, known.user, sanitizeText(msg.slice(5)));
     } else if (msg.startsWith('VOTE:')) {
-      logger.debug(`VOTE from ${dest} ignored: ${msg}`);
+      logger.debug(`VOTE from ${dest} ignored: ${redactSecrets(msg)}`);
     } else if (msg.startsWith('EMAIL:') || msg.startsWith('SEND:')) {
       this.stats.emails++;
       this.host.sendRaw(dest, MSG_NO_EMAIL);
@@ -152,7 +159,7 @@ export class SessionCommands {
     const dest = `${ip}:${port}`;
     const prev = this.host.getClient(dest);
     const name = uniqueName(sanitizeName(rawName), this.takenExcept(dest));
-    // T08: MAXCLIENTS / ban refusal goes here (early return before addClient).
+    if (this.opts.admit && !this.opts.admit(dest, !prev)) return;
     this.host.addClient(ip, port, name);
     this.stats.connects++;
     this.lastNotice.delete(dest);
