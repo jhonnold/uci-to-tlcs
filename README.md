@@ -35,7 +35,7 @@ It live-tails the log and, for each event, emits the matching TLCS message(s):
 |---|---|---|
 | `position …` | `FEN` (+`FMR`) once at start | truncated FEN (`board stm castling`); board is authoritative |
 | `go wtime … btime …` | `WTIME`/`BTIME` | ms → centiseconds (÷10) |
-| `info … score … pv …` | `WPV`/`BPV` | score in side-to-move (engine) POV, matching TLCS; time ms→cs; PV coords→SAN; only `multipv 1` |
+| `info … score … pv …` | `WPV`/`BPV` | score in side-to-move (engine) POV, matching TLCS; time ms→cs; PV stays in UCI coordinates (legal prefix only; node-tlcv parses coords, not SAN); only `multipv 1` |
 | `bestmove <coord>` | `FEN`, `WMOVE`/`BMOVE`, `FMR` | move number + SAN |
 | game over (board) | `result:` | mate/stalemate/draw |
 | new game (boundary) | `result:` (prev, if none) → `WPLAYER`/`BPLAYER` → startpos `FEN` | resets node-tlcv's board for the next game |

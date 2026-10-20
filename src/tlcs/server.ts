@@ -289,8 +289,8 @@ export class TlcsServer {
     this.sender.enqueue(null, { body: P.time('b', blackCs, whiteCs), latest: 'BTIME' });
   }
 
-  emitPv(color: ColorCode, depth: number, scoreCp: number, timeCs: number, nodes: number, sanPv: string[]): void {
-    const msg = P.pv(color, depth, scoreCp, timeCs, nodes, sanPv);
+  emitPv(color: ColorCode, depth: number, scoreCp: number, timeCs: number, nodes: number, pv: string[]): void {
+    const msg = P.pv(color, depth, scoreCp, timeCs, nodes, pv);
     if (color === 'w') this.snap.lastWpv = msg;
     else this.snap.lastBpv = msg;
     this.pvSinceMove[color] = msg;

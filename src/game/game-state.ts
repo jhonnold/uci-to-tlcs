@@ -94,24 +94,25 @@ export class GameState {
   }
 
   /**
-   * Play out a coordinate PV from the current position into SAN, stopping at the
-   * first move that doesn't apply. Mirrors node-tlcv's playoutPV (inverted: we
-   * take coords and emit SAN).
+   * The legal prefix of a coordinate PV from the current position, still in
+   * coordinates, stopping at the first move that doesn't apply. node-tlcv's
+   * replayUci only parses coordinate PVs (from = [0,2), to = [2,4)), so SAN would
+   * not render.
    */
-  playoutPvToSan(pvCoords: string[]): string[] {
+  legalPvPrefix(pvCoords: string[]): string[] {
     const probe = this.probe;
     probe.load(this.chess.fen());
-    const san: string[] = [];
+    const coords: string[] = [];
     for (const m of pvCoords) {
       try {
         // Object form: a string goes through chess.js's SAN matcher, which generates SAN for every legal move.
         const result = probe.move({ from: m.slice(0, 2), to: m.slice(2, 4), promotion: m[4]?.toLowerCase() });
-        san.push(result.san);
+        coords.push(`${result.from}${result.to}${result.promotion ?? ''}`);
       } catch {
         break;
       }
     }
-    return san;
+    return coords;
   }
 
   isGameOver(): boolean {

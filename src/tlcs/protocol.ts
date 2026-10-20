@@ -61,10 +61,10 @@ export function pv(
   scoreCp: number,
   timeCs: number,
   nodes: number,
-  sanPv: string[],
+  pvCoords: string[],
 ): string {
   const cmd = color === 'w' ? 'WPV' : 'BPV';
-  return `${cmd}: ${depth} ${scoreCp} ${timeCs} ${nodes} ${sanPv.join(' ')}`.trimEnd();
+  return `${cmd}: ${depth} ${scoreCp} ${timeCs} ${nodes} ${pvCoords.join(' ')}`.trimEnd();
 }
 
 export function result(r: string): string {
