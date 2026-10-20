@@ -96,9 +96,9 @@ Kill the background jobs; `rm /tmp/{fc,uci-to-tlcs,node-tlcv,fastchess}.log`.
 
 ## DMZ / WAN run (2026-10-20)
 
-The same stack across a real network: VM 123 `tlcs-dmz` (homelab, VLAN 15, `192.168.15.7`) ran fastchess + 4x Berserk and the
-bridge on UDP 16001 (`server.ini` only, `STATEFILE` on). **Prod node-tlcv** on EC2 (`35.87.254.70`, ccrl.live) logged on through
-a pfSense WAN forward locked to that source IP, non-ephemeral (its source port is 16001). The homelab host doc
+The same stack across a real network: a `tlcs-dmz` VM (homelab DMZ VLAN) ran fastchess + 4x Berserk and the
+bridge on UDP 16001 (`server.ini` only, `STATEFILE` on). **Prod node-tlcv** on EC2 (ccrl.live) logged on through
+a pfSense WAN forward locked to the node-tlcv source IP, non-ephemeral (its source port is 16001). The homelab host doc
 (`docs/hosts/tlcs-dmz.md`) has the setup.
 
 - Found: **PV panes were empty on prod.** We sent `WPV`/`BPV` in SAN; node-tlcv has parsed coordinates only since f465dc3.

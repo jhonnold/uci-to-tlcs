@@ -142,7 +142,7 @@ test('protocol: wire formats', () => {
   assert.equal(P.move('b', 1, 'e5'), 'BMOVE: 1... e5');
   assert.equal(P.time('w', 30000, 29900), 'WTIME: 30000 otim 29900');
   assert.equal(P.time('b', 29900, 30000), 'BTIME: 29900 otim 30000');
-  assert.equal(P.pv('w', 20, 35, 120, 1500000, ['e4', 'e5', 'Nf3']), 'WPV: 20 35 120 1500000 e4 e5 Nf3');
+  assert.equal(P.pv('w', 20, 35, 120, 1500000, ['e2e4', 'e7e5', 'g1f3']), 'WPV: 20 35 120 1500000 e2e4 e7e5 g1f3');
   assert.equal(P.result('1-0'), 'result: 1-0');
   assert.equal(P.msToCs(1200), 120);
 });
