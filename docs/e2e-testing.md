@@ -94,6 +94,23 @@ node-tlcv names files `<N>_<white>_vs_<black>.pgn` from the results table, so re
 
 Kill the background jobs; `rm /tmp/{fc,uci-to-tlcs,node-tlcv,fastchess}.log`.
 
+## DMZ / WAN run (2026-10-20)
+
+The same stack across a real network: a `tlcs-dmz` VM (homelab DMZ VLAN) ran fastchess + 4x Berserk and the
+bridge on UDP 16001 (`server.ini` only, `STATEFILE` on). **Prod node-tlcv** on EC2 (ccrl.live) logged on through
+a pfSense WAN forward locked to the node-tlcv source IP, non-ephemeral (its source port is 16001). The homelab host doc
+(`docs/hosts/tlcs-dmz.md`) has the setup.
+
+- Found: **PV panes were empty on prod.** We sent `WPV`/`BPV` in SAN; node-tlcv has parsed coordinates only since f465dc3.
+  Fixed (coordinates; see `tlcs-wire.md` encoding invariants). The loopback acceptance gates never compared PV text, so it slipped
+  through: check a live PV (`curl …/<port>/pgn` comments read `{(c5 Nf3 …) score/depth time}`, not `{() …}`).
+- After the fix: 10 of 12 games finished before the run was stopped on purpose. Prod kept **1 session** throughout (one
+  `LOGON (new)`, after a deliberate no-state restart: `notice` -> re-LOGON in 4 s). **0** `stalled`/`give-up`/`hard cap` log lines.
+  Names with spaces, the black-to-move start and PVs showed correctly in prod's live PGN (`/16001/pgn`).
+- Not done: `e2e-check`/`standings-check` against prod (no PGN export is reachable without touching prod; polling `/<port>/pgn`
+  gives the live game only and mis-splits games when a snapshot lands mid-reset). With `-rounds 1`, fastchess plays **one opening
+  for every game**, so use `-rounds` ≥ the number of book lines to cover them.
+
 ## Mock client modes
 
 `npm run mock-client -- [flags]` (`--help` lists them). It binds, in precedence order:

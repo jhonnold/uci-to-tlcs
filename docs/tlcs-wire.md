@@ -61,6 +61,10 @@ changing reply/targeting logic, or touching the FEN/time/score/PV encoding in
   broadcast in side-to-move (engine) POV — each engine's own perspective, matching
   real TLCS, **no** White-POV flip; only `multipv 1` is the broadcast eval; mate
   mapped to ±(100000 − n) so node-tlcv renders it decisive.
+  `WPV`/`BPV` moves are **UCI coordinates** (`e2e4`, `e1g1`, `e7e8q`), truncated at the first illegal move:
+  node-tlcv's `replayUci` (`src/util/uci.ts`) slices from/to out of each token, so a SAN PV plays zero
+  moves and the PV pane stays empty while depth/score/nodes still update. The desktop TLCV prints the
+  tokens as-is.
 
 - **Mid-game join** (`tlcs/server.ts` `resync`): every successful `LOGONv15` (new or known)
   gets a full replay of the current game on the reliable channel — SITE, WPLAYER, BPLAYER, the

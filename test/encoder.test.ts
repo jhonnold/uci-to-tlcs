@@ -120,11 +120,11 @@ test('GameState: promotion and castling coordinate moves', () => {
   assert.equal(g.applyMove('e1g1')!.san, 'O-O');
 });
 
-test('GameState: PV coords play out to SAN and truncate on illegal move', () => {
+test('GameState: PV stays in coords and truncates on illegal move', () => {
   const g = new GameState();
   g.setPosition(true, undefined, []);
-  assert.deepEqual(g.playoutPvToSan(['e2e4', 'e7e5', 'g1f3', 'b8c6']), ['e4', 'e5', 'Nf3', 'Nc6']);
-  assert.deepEqual(g.playoutPvToSan(['e2e4', 'e2e4']), ['e4']); // second is illegal ⇒ stop
+  assert.deepEqual(g.legalPvPrefix(['e2e4', 'e7e5', 'g1f3', 'b8c6']), ['e2e4', 'e7e5', 'g1f3', 'b8c6']);
+  assert.deepEqual(g.legalPvPrefix(['e2e4', 'e2e4']), ['e2e4']); // second is illegal ⇒ stop
 });
 
 test('GameState: result detection (Fool\'s mate)', () => {
@@ -142,7 +142,7 @@ test('protocol: wire formats', () => {
   assert.equal(P.move('b', 1, 'e5'), 'BMOVE: 1... e5');
   assert.equal(P.time('w', 30000, 29900), 'WTIME: 30000 otim 29900');
   assert.equal(P.time('b', 29900, 30000), 'BTIME: 29900 otim 30000');
-  assert.equal(P.pv('w', 20, 35, 120, 1500000, ['e4', 'e5', 'Nf3']), 'WPV: 20 35 120 1500000 e4 e5 Nf3');
+  assert.equal(P.pv('w', 20, 35, 120, 1500000, ['e2e4', 'e7e5', 'g1f3']), 'WPV: 20 35 120 1500000 e2e4 e7e5 g1f3');
   assert.equal(P.result('1-0'), 'result: 1-0');
   assert.equal(P.msToCs(1200), 120);
 });
@@ -199,8 +199,8 @@ test('pipeline: sample-game.uci produces the expected ordered emissions', () => 
     fmr: 0,
   });
   assert.deepEqual(e[3], { k: 'clocks', w: 30000, b: 30000 });
-  assert.deepEqual(e[4], { k: 'pv', color: 'w', depth: 1, score: 18, time: 1, nodes: 200, pv: ['e4'] });
-  assert.deepEqual(e[5], { k: 'pv', color: 'w', depth: 20, score: 35, time: 120, nodes: 1500000, pv: ['e4', 'e5', 'Nf3', 'Nc6'] });
+  assert.deepEqual(e[4], { k: 'pv', color: 'w', depth: 1, score: 18, time: 1, nodes: 200, pv: ['e2e4'] });
+  assert.deepEqual(e[5], { k: 'pv', color: 'w', depth: 20, score: 35, time: 120, nodes: 1500000, pv: ['e2e4', 'e7e5', 'g1f3', 'b8c6'] });
   assert.deepEqual(e[6], {
     k: 'move',
     fen: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq',
@@ -213,7 +213,7 @@ test('pipeline: sample-game.uci produces the expected ordered emissions', () => 
   // black's reply: engine-POV -28 broadcast as-is (side-to-move POV passthrough)
   const blackPv = e.find((x) => x.k === 'pv' && x.color === 'b') as Extract<Emit, { k: 'pv' }>;
   assert.equal(blackPv.score, -28);
-  assert.deepEqual(blackPv.pv, ['e5', 'Nf3', 'Nc6', 'Bb5']);
+  assert.deepEqual(blackPv.pv, ['e7e5', 'g1f3', 'b8c6', 'f1b5']);
 
   const blackMove = e.find((x) => x.k === 'move' && x.color === 'b') as Extract<Emit, { k: 'move' }>;
   assert.deepEqual({ n: blackMove.n, san: blackMove.san }, { n: 1, san: 'e5' });

@@ -23,7 +23,7 @@ export interface BroadcastSink {
     fmr: number;
   }): void;
   emitClocks(whiteCs: number, blackCs: number): void;
-  emitPv(color: ColorCode, depth: number, scoreCp: number, timeCs: number, nodes: number, sanPv: string[]): void;
+  emitPv(color: ColorCode, depth: number, scoreCp: number, timeCs: number, nodes: number, pv: string[]): void;
   emitResult(result: string, gameNumber?: number): void;
   /** WinBoard-format `level <mps> <base> <inc>` text. Optional: absent until the server supports it. */
   emitLevel?(text: string): void;
@@ -447,10 +447,10 @@ export class Pipeline {
     if (p.seq !== this.gameSeq || p.ply !== this.currentMoves.length || !this.gameActive) return;
     const info = p.info;
     const scoreCp = scoreToCentipawns(info); // side-to-move (engine) POV, matching TLCS
-    const sanPv = this.game.playoutPvToSan(info.pv);
-    if (sanPv.length === 0) return;
+    const pv = this.game.legalPvPrefix(info.pv);
+    if (pv.length === 0) return;
     this.lastPvAt = Date.now();
-    this.sink.emitPv(p.color, info.depth, Math.round(scoreCp), msToCs(info.timeMs), info.nodes, sanPv);
+    this.sink.emitPv(p.color, info.depth, Math.round(scoreCp), msToCs(info.timeMs), info.nodes, pv);
   }
 
   /** Apply one coordinate move to the authoritative board and broadcast it (+ result). */

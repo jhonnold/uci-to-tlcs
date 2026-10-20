@@ -73,7 +73,7 @@ test('flush before move: latest PV (pre-move board) precedes the move', () => {
   const kinds = sink.emits.map((e) => e.k);
   assert.deepEqual(kinds, ['pv', 'pv', 'move']);
   assert.equal(sink.pvs[1].depth, 5);
-  assert.equal(sink.pvs[1].pv[0], 'e4');
+  assert.equal(sink.pvs[1].pv[0], 'e2e4');
   assert.equal((sink.emits[2] as { san: string }).san, 'e4');
 });
 
@@ -148,14 +148,14 @@ test('same-ply rebuild with a different base clears the pending PV', () => {
   assert.equal(sink.pvs.length, 1);
 });
 
-test('game-state: PV playout SAN (castling, promotion, check, truncation) and applyMove SAN', () => {
+test('game-state: PV legal prefix in coords (castling, promotion, truncation) and applyMove SAN', () => {
   const g = new GameState();
   assert.ok(g.setPosition(false, 'r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1', []));
-  assert.deepEqual(g.playoutPvToSan(['e1g1', 'e8c8', 'a1a8']), ['O-O', 'O-O-O', 'Ra8+']); // not truncated
-  assert.deepEqual(g.playoutPvToSan(['e1g1', 'e8c8', 'e2e4']), ['O-O', 'O-O-O']); // illegal: truncated
+  assert.deepEqual(g.legalPvPrefix(['e1g1', 'e8c8', 'a1a8']), ['e1g1', 'e8c8', 'a1a8']); // not truncated
+  assert.deepEqual(g.legalPvPrefix(['e1g1', 'e8c8', 'e2e4']), ['e1g1', 'e8c8']); // illegal: truncated
   const q = new GameState();
   assert.ok(q.setPosition(false, 'k7/4P3/8/8/8/8/8/4K3 w - - 0 1', []));
-  assert.deepEqual(q.playoutPvToSan(['e7e8q']), ['e8=Q+']);
+  assert.deepEqual(q.legalPvPrefix(['e7e8Q']), ['e7e8q']); // promotion normalized to lowercase
   const h = new GameState();
   assert.equal(h.applyMove('e2e4')?.san, 'e4');
   assert.equal(h.applyMove('e7e5')?.san, 'e5');
