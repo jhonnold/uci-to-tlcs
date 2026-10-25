@@ -294,20 +294,18 @@ export class TlcsServer {
     this.sender.enqueue(null, { body: P.time('b', blackCs, whiteCs), latest: 'BTIME' });
   }
 
-  emitPv(color: ColorCode, depth: number, scoreCp: number, timeCs: number, nodes: number, pv: string[]): void {
+  /** With `info`, also a latest-only WINFO/BINFO; not attached to xMOVE, so a game replay carries none. */
+  emitPv(color: ColorCode, depth: number, scoreCp: number, timeCs: number, nodes: number, pv: string[], info?: UciInfo): void {
     const msg = P.pv(color, depth, scoreCp, timeCs, nodes, pv);
     if (color === 'w') this.snap.lastWpv = msg;
     else this.snap.lastBpv = msg;
     this.pvSinceMove[color] = msg;
     this.sender.enqueue(null, { body: msg, latest: color === 'w' ? 'WPV' : 'BPV' });
-  }
-
-  /** Latest-only like WPV; not attached to xMOVE, so a game replay carries no WINFO/BINFO. */
-  emitInfo(color: ColorCode, info: UciInfo, pv: string[]): void {
-    const msg = P.info(color, info, pv);
-    if (color === 'w') this.snap.lastWinfo = msg;
-    else this.snap.lastBinfo = msg;
-    this.sender.enqueue(null, { body: msg, latest: color === 'w' ? 'WINFO' : 'BINFO' });
+    if (!info) return;
+    const infoMsg = P.info(color, info, pv);
+    if (color === 'w') this.snap.lastWinfo = infoMsg;
+    else this.snap.lastBinfo = infoMsg;
+    this.sender.enqueue(null, { body: infoMsg, latest: color === 'w' ? 'WINFO' : 'BINFO' });
   }
 
   /** `gameNumber` (PGN authority only): after the result, queue a table capped at it per client. */

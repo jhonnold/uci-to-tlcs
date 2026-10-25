@@ -198,8 +198,8 @@ test('server: mid-game LOGON replays site, players, full move history, latest po
       fmr: 0,
     });
     server.emitClocks(98_000, 97_500);
-    server.emitPv('w', 5, 12, 100, 100, ['g1f3']);
-    server.emitInfo('w', parseInfoLine('info depth 5 seldepth 9 score cp 12 hashfull 7 nodes 100 time 1000 pv g1f3')!, ['g1f3']);
+    const info = parseInfoLine('info depth 5 seldepth 9 score cp 12 hashfull 7 nodes 100 time 1000 pv g1f3')!;
+    server.emitPv('w', 5, 12, 100, 100, ['g1f3'], info);
 
     // Wait for the pre-logon reliable queue to drain (FMR is each move's last msg).
     await waitFor(() => early.received.filter((m) => m === 'FMR: 0').length === 2);
