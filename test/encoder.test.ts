@@ -25,6 +25,46 @@ test('parseInfoLine: cp score, units, fields', () => {
   assert.deepEqual(info!.pv, ['e2e4', 'e7e5']);
 });
 
+const FULL_INFO =
+  'info depth 33 seldepth 64 score cp 61 wdl 196 801 3 nodes 18853873877 nps 263995696 hashfull 214 tbhits 36079 time 71417 pv h2h3 g8g7 f1g3';
+
+test('parseInfoLine: seldepth, wdl, nps, hashfull, tbhits', () => {
+  const info = parseInfoLine(FULL_INFO);
+  assert.ok(info);
+  assert.equal(info!.depth, 33);
+  assert.equal(info!.seldepth, 64);
+  assert.equal(info!.scoreValue, 61);
+  assert.deepEqual(info!.wdl, [196, 801, 3]);
+  assert.equal(info!.nodes, 18853873877);
+  assert.equal(info!.nps, 263995696);
+  assert.equal(info!.hashfull, 214);
+  assert.equal(info!.tbhits, 36079);
+  assert.equal(info!.timeMs, 71417);
+  assert.deepEqual(info!.pv, ['h2h3', 'g8g7', 'f1g3']);
+});
+
+test('parseInfoLine: absent extended fields are null', () => {
+  const info = parseInfoLine('info depth 5 score cp 1 nodes 10 time 1 pv e2e4');
+  assert.ok(info);
+  assert.equal(info!.seldepth, null);
+  assert.equal(info!.wdl, null);
+  assert.equal(info!.nps, null);
+  assert.equal(info!.hashfull, null);
+  assert.equal(info!.tbhits, null);
+});
+
+test('P.info: WINFO/BINFO tag-value line in raw UCI units, absent tags omitted', () => {
+  const full = parseInfoLine(FULL_INFO)!;
+  assert.equal(
+    P.info('w', full, full.pv),
+    'WINFO: depth 33 seldepth 64 score cp 61 wdl 196 801 3 nodes 18853873877 nps 263995696 hashfull 214 tbhits 36079 time 71417 pv h2h3 g8g7 f1g3',
+  );
+  const min = parseInfoLine('info depth 5 score cp 1 nodes 10 time 1 pv e2e4')!;
+  assert.equal(P.info('b', min, min.pv), 'BINFO: depth 5 score cp 1 nodes 10 time 1 pv e2e4');
+  const mate = parseInfoLine('info depth 30 score mate -3 lowerbound nodes 10 time 10 pv e2e4 e7e5')!;
+  assert.equal(P.info('w', mate, ['e2e4']), 'WINFO: depth 30 score mate -3 lowerbound nodes 10 time 10 pv e2e4');
+});
+
 test('parseInfoLine: mate score', () => {
   const info = parseInfoLine('info depth 30 score mate 3 nodes 10 time 10 pv e2e4');
   assert.ok(info);

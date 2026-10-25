@@ -24,6 +24,8 @@ export interface BroadcastSink {
   }): void;
   emitClocks(whiteCs: number, blackCs: number): void;
   emitPv(color: ColorCode, depth: number, scoreCp: number, timeCs: number, nodes: number, pv: string[]): void;
+  /** WINFO/BINFO: the full search info with the same legal `pv` prefix as the preceding emitPv. Optional. */
+  emitInfo?(color: ColorCode, info: UciInfo, pv: string[]): void;
   emitResult(result: string, gameNumber?: number): void;
   /** WinBoard-format `level <mps> <base> <inc>` text. Optional: absent until the server supports it. */
   emitLevel?(text: string): void;
@@ -451,6 +453,7 @@ export class Pipeline {
     if (pv.length === 0) return;
     this.lastPvAt = Date.now();
     this.sink.emitPv(p.color, info.depth, Math.round(scoreCp), msToCs(info.timeMs), info.nodes, pv);
+    this.sink.emitInfo?.(p.color, info, pv);
   }
 
   /** Apply one coordinate move to the authoritative board and broadcast it (+ result). */

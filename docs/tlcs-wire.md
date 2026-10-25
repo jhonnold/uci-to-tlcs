@@ -22,7 +22,7 @@ changing reply/targeting logic, or touching the FEN/time/score/PV encoding in
     coalesced to replays when shorter. Game data is dropped only for a *stalled* client (no
     ACK progress for 60 s while busy), logged at error. Used for SITE / PLAYER / FEN / MOVE /
     FMR / level / result / user / chat.
-  - *Unnumbered* — fire-and-forget, latest-only per key: WPV / BPV / WTIME / BTIME. An idle
+  - *Unnumbered* — fire-and-forget, latest-only per key: WPV / BPV / WINFO / BINFO / WTIME / BTIME. An idle
     client gets them at once; a busy client has them held in queue order (so a position always
     precedes its clock/PV). Never retransmitted. Don't move a message between channels casually.
   - *Inbound numbered*: a datagram `<N>body` / `< N>body` is ACKed (`ACK: N`) on **every** copy,
@@ -65,6 +65,15 @@ changing reply/targeting logic, or touching the FEN/time/score/PV encoding in
   node-tlcv's `replayUci` (`src/util/uci.ts`) slices from/to out of each token, so a SAN PV plays zero
   moves and the PV pane stays empty while depth/score/nodes still update. The desktop TLCV prints the
   tokens as-is.
+- **`WINFO`/`BINFO`** (extension, not in the reference): the full `info depth …` search line as
+  UCI-style `<tag> <value…>` pairs in **raw UCI units**, sent right after every `WPV`/`BPV` with the
+  same legal PV prefix:
+  `WINFO: depth 33 seldepth 64 score cp 61 wdl 196 801 3 nodes 18853873877 nps 263995696 hashfull 214 tbhits 36079 time 71417 pv h2h3 …`.
+  `time` in ms; `score cp|mate` in engine POV with no mate collapse; `lowerbound`/`upperbound` flags;
+  tags the engine omitted are omitted. `depth`, `score`, `nodes`, `time`, `pv` always present, `pv` last;
+  consumers must accept any tag order and skip unknown tags. Unnumbered, latest-only (`WINFO`/`BINFO`
+  keys); a LOGON resync sends the last of each after the last PV, but the numbered game replay does not
+  carry them. Legacy consumers keep reading `WPV`/`BPV`; node-tlcv drops unknown commands (`splitOnCommand`).
 
 - **Mid-game join** (`tlcs/server.ts` `resync`): every successful `LOGONv15` (new or known)
   gets a full replay of the current game on the reliable channel — SITE, WPLAYER, BPLAYER, the
@@ -98,6 +107,7 @@ Everything else follows `docs/tlcs-server-spec.md`; these differ on purpose (all
 - Replies go to the datagram's source `ip:port`, not `clientIP:<broadcast port>`.
 - `SITE: <text>` with a space after the colon.
 - The mover's final PV is sent before its `FEN`/`xMOVE`.
+- `WINFO`/`BINFO` extended search info (see the encoding invariants) is an addition.
 - `result: <r>` with only `1-0`/`0-1`/`1/2-1/2`/`*`; the reference's `{<reason>}` text is not sent (`protocol.ts`).
 - `DELAYAFTERMOVE`/`DELAYAFTERGAME` default to 0.
 - Give-up resyncs the client with a replay of the current game instead of skipping the message.

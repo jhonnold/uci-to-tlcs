@@ -1,5 +1,6 @@
 import type { BroadcastSink } from '../pipeline.js';
 import type { ColorCode } from '../tlcs/protocol.js';
+import type { UciInfo } from '../uci/info.js';
 import * as P from '../tlcs/protocol.js';
 import { renderCrosstable } from '../results/crosstable.js';
 import type { FinishedGame } from '../results/registry.js';
@@ -164,6 +165,9 @@ export class ResumeSink implements BroadcastSink {
   }
   emitPv(color: ColorCode, depth: number, scoreCp: number, timeCs: number, nodes: number, pv: string[]): void {
     this.server.emitPv(color, depth, scoreCp, timeCs, nodes, pv);
+  }
+  emitInfo(color: ColorCode, info: UciInfo, pv: string[]): void {
+    this.server.emitInfo?.(color, info, pv);
   }
   emitResult(result: string, gameNumber?: number): void {
     this.server.emitResult(result, gameNumber);

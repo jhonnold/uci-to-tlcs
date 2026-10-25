@@ -8,6 +8,7 @@ import { SessionCommands, redactSecrets } from './commands.js';
 import { AdminCommands, RATE_DEFAULT, type RateLimit } from './admin.js';
 import * as P from './protocol.js';
 import type { ColorCode } from './protocol.js';
+import type { UciInfo } from '../uci/info.js';
 
 export interface ServerOptions extends Partial<SenderOptions> {
   port: number;
@@ -58,6 +59,8 @@ interface Snapshot {
   blackTimeCs?: number;
   lastWpv?: string;
   lastBpv?: string;
+  lastWinfo?: string;
+  lastBinfo?: string;
 }
 
 /** A game-stream item; xMOVE items carry the mover's PV so a replay keeps node-tlcv's move comments. */
@@ -221,6 +224,8 @@ export class TlcsServer {
     }
     if (s.lastWpv) latest(s.lastWpv, 'WPV');
     if (s.lastBpv) latest(s.lastBpv, 'BPV');
+    if (s.lastWinfo) latest(s.lastWinfo, 'WINFO');
+    if (s.lastBinfo) latest(s.lastBinfo, 'BINFO');
   }
 
   queueDepth(dest: string): number {
@@ -295,6 +300,14 @@ export class TlcsServer {
     else this.snap.lastBpv = msg;
     this.pvSinceMove[color] = msg;
     this.sender.enqueue(null, { body: msg, latest: color === 'w' ? 'WPV' : 'BPV' });
+  }
+
+  /** Latest-only like WPV; not attached to xMOVE, so a game replay carries no WINFO/BINFO. */
+  emitInfo(color: ColorCode, info: UciInfo, pv: string[]): void {
+    const msg = P.info(color, info, pv);
+    if (color === 'w') this.snap.lastWinfo = msg;
+    else this.snap.lastBinfo = msg;
+    this.sender.enqueue(null, { body: msg, latest: color === 'w' ? 'WINFO' : 'BINFO' });
   }
 
   /** `gameNumber` (PGN authority only): after the result, queue a table capped at it per client. */

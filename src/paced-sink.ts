@@ -1,5 +1,6 @@
 import type { BroadcastSink } from './pipeline.js';
 import type { ColorCode } from './tlcs/protocol.js';
+import type { UciInfo } from './uci/info.js';
 import { logger } from './util/logger.js';
 
 export interface PacingOptions {
@@ -66,6 +67,10 @@ export class PacedSink implements BroadcastSink {
   }
   emitPv(color: ColorCode, depth: number, scoreCp: number, timeCs: number, nodes: number, pv: string[]): void {
     this.run(() => this.inner.emitPv(color, depth, scoreCp, timeCs, nodes, pv));
+  }
+  emitInfo(color: ColorCode, info: UciInfo, pv: string[]): void {
+    if (!this.inner.emitInfo) return;
+    this.run(() => this.inner.emitInfo?.(color, info, pv));
   }
   emitResult(result: string, gameNumber?: number): void {
     this.run(() => this.inner.emitResult(result, gameNumber), this.opts.delayAfterGameMs);

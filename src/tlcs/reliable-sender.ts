@@ -9,7 +9,7 @@ export interface Outbound {
   epoch?: number;
   /** A `result`: retried until stallMs, never replayed on its own. */
   critical?: boolean;
-  /** 'WPV'|'BPV'|'WTIME'|'BTIME': unnumbered, latest-only per key, never retransmitted. */
+  /** 'WPV'|'BPV'|'WINFO'|'BINFO'|'WTIME'|'BTIME': unnumbered, latest-only per key, never retransmitted. */
   latest?: string;
   /** Control items only: called when the item is given up or evicted. */
   onGiveUp?: (dest: string) => void;

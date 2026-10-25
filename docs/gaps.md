@@ -70,6 +70,9 @@ Client-side changes that would remove a workaround here (never committed from th
 - Accept SAN PV tokens again (try the from/to slice, fall back to `chess.move(token)`): `replayUci` (`src/util/uci.ts`) has
   parsed coordinates only since node-tlcv f465dc3 (2026-08-03); before that it took both. We now send coordinates, but a feed
   that relays SAN would lose its PV pane silently.
+- Consume `WINFO`/`BINFO` (`docs/tlcs-wire.md`): parse the tag-value pairs, keep seldepth/wdl/nps/hashfull/tbhits in
+  `liveData` and the move meta, and show them in the UI. Until then node-tlcv drops them as unknown commands. The desktop
+  TLCV is assumed to ignore them too (not verified against the binary).
 - A freshly started node-tlcv begins at `currentGameNumber = 1` and only learns the real number after a `result`; the server
   works around it with a numbering dump on every LOGON.
 

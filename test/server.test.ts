@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createSocket, type Socket } from 'node:dgram';
 
 import { TlcsServer, type ServerOptions } from '../src/tlcs/server.js';
+import { parseInfoLine } from '../src/uci/info.js';
 import { logger } from '../src/util/logger.js';
 import { metrics } from '../src/metrics.js';
 import { ResultService } from '../src/results/result-commands.js';
@@ -198,6 +199,7 @@ test('server: mid-game LOGON replays site, players, full move history, latest po
     });
     server.emitClocks(98_000, 97_500);
     server.emitPv('w', 5, 12, 100, 100, ['g1f3']);
+    server.emitInfo('w', parseInfoLine('info depth 5 seldepth 9 score cp 12 hashfull 7 nodes 100 time 1000 pv g1f3')!, ['g1f3']);
 
     // Wait for the pre-logon reliable queue to drain (FMR is each move's last msg).
     await waitFor(() => early.received.filter((m) => m === 'FMR: 0').length === 2);
@@ -206,6 +208,8 @@ test('server: mid-game LOGON replays site, players, full move history, latest po
     // Wait for the WHOLE snapshot (WPV is its last reliable message) before
     // asserting order, so a slow ACK round-trip can't make a later idx() -1.
     await waitFor(() => late.received.includes('WPV: 5 12 100 100 g1f3'));
+    const winfo = 'WINFO: depth 5 seldepth 9 score cp 12 nodes 100 hashfull 7 time 1000 pv g1f3';
+    await waitFor(() => late.received.includes(winfo));
 
     // Snapshot content: the LATEST position (not move 1), current players/site.
     const idx = (m: string) => late.received.indexOf(m);
@@ -227,6 +231,7 @@ test('server: mid-game LOGON replays site, players, full move history, latest po
     assert(late.received.lastIndexOf('FMR: 0') < idx('WTIME: 98000 otim 97500'));
     assert(late.received.lastIndexOf(fen2) < late.received.lastIndexOf('FMR: 0'));
     assert(idx('WTIME: 98000 otim 97500') < idx('WPV: 5 12 100 100 g1f3'));
+    assert(idx('WPV: 5 12 100 100 g1f3') < idx(winfo));
 
     // The next live move lands only after the snapshot is complete.
     server.emitMove({
