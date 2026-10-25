@@ -5,9 +5,10 @@ import { Pipeline, type BroadcastSink } from '../src/pipeline.js';
 import { FastchessSource } from '../src/source/fastchess-source.js';
 import { GameState } from '../src/game/game-state.js';
 import type { ColorCode } from '../src/tlcs/protocol.js';
+import type { UciInfo } from '../src/uci/info.js';
 
 type Emit =
-  | { k: 'pv'; color: ColorCode; depth: number; pv: string[] }
+  | { k: 'pv'; color: ColorCode; depth: number; pv: string[]; info?: UciInfo }
   | { k: 'move'; san: string }
   | { k: 'other' };
 
@@ -20,8 +21,8 @@ class Sink implements BroadcastSink {
     this.emits.push({ k: 'move', san: a.san });
   }
   emitClocks() {}
-  emitPv(color: ColorCode, depth: number, _s: number, _t: number, _n: number, pv: string[]) {
-    this.emits.push({ k: 'pv', color, depth, pv });
+  emitPv(color: ColorCode, depth: number, _s: number, _t: number, _n: number, pv: string[], info?: UciInfo) {
+    this.emits.push({ k: 'pv', color, depth, pv, info });
   }
   emitResult() {}
   get pvs() {
@@ -171,4 +172,13 @@ test('game-state: sameBase', () => {
   assert.ok(g.setPosition(false, f, []));
   assert.ok(g.sameBase(false, f));
   assert.ok(!g.sameBase(true, undefined));
+});
+
+test('info: every emitted PV carries its full search info; multipv 2 sends neither', () => {
+  const { sink, feed } = setup({ pvIntervalMs: 0 });
+  feed(out('A', INFO(1, 'e2e4 e7e5')));
+  feed(out('A', INFO(2, 'e2e4 e2e4'))); // illegal second move: truncated
+  feed(out('A', 'info depth 3 multipv 2 score cp 0 nodes 300 time 20 pv d2d4'));
+  assert.deepEqual(sink.pvs.map((p) => [p.pv, p.info?.depth]), [[['e2e4', 'e7e5'], 1], [['e2e4'], 2]]);
+  assert.deepEqual(sink.pvs[1].info?.pv, ['e2e4', 'e2e4']); // raw line kept; the sink sends the legal `pv`
 });

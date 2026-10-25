@@ -2,6 +2,8 @@
 // accepts (src/game-service.ts). These return bare message bodies; ID-wrapping for
 // the reliable channel is applied by ReliableSender using frame() below.
 
+import type { UciInfo } from '../uci/info.js';
+
 export type ColorCode = 'w' | 'b';
 
 /** UCI/TLCS time fields are centiseconds on the wire; convert from milliseconds. */
@@ -65,6 +67,28 @@ export function pv(
 ): string {
   const cmd = color === 'w' ? 'WPV' : 'BPV';
   return `${cmd}: ${depth} ${scoreCp} ${timeCs} ${nodes} ${pvCoords.join(' ')}`.trimEnd();
+}
+
+/**
+ * `WINFO: depth 33 seldepth 64 score cp 61 wdl 196 801 3 nodes … nps … hashfull 214 tbhits … time 71417 pv …`
+ * — the `info depth …` search line as UCI-style `<tag> <value…>` pairs in raw UCI units
+ * (ms, `score cp|mate`, engine POV), `pv` last. Tags the engine did not send are omitted.
+ */
+export function info(color: ColorCode, i: UciInfo, pvCoords: string[]): string {
+  const cmd = color === 'w' ? 'WINFO' : 'BINFO';
+  const parts = [`depth ${i.depth}`];
+  if (i.seldepth !== null) parts.push(`seldepth ${i.seldepth}`);
+  parts.push(`score ${i.scoreKind} ${i.scoreValue}`);
+  if (i.lowerbound) parts.push('lowerbound');
+  if (i.upperbound) parts.push('upperbound');
+  if (i.wdl) parts.push(`wdl ${i.wdl.join(' ')}`);
+  parts.push(`nodes ${i.nodes}`);
+  if (i.nps !== null) parts.push(`nps ${i.nps}`);
+  if (i.hashfull !== null) parts.push(`hashfull ${i.hashfull}`);
+  if (i.tbhits !== null) parts.push(`tbhits ${i.tbhits}`);
+  parts.push(`time ${i.timeMs}`);
+  parts.push(`pv ${pvCoords.join(' ')}`);
+  return `${cmd}: ${parts.join(' ')}`;
 }
 
 export function result(r: string): string {

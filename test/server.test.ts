@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createSocket, type Socket } from 'node:dgram';
 
 import { TlcsServer, type ServerOptions } from '../src/tlcs/server.js';
+import { parseInfoLine } from '../src/uci/info.js';
 import { logger } from '../src/util/logger.js';
 import { metrics } from '../src/metrics.js';
 import { ResultService } from '../src/results/result-commands.js';
@@ -197,7 +198,8 @@ test('server: mid-game LOGON replays site, players, full move history, latest po
       fmr: 0,
     });
     server.emitClocks(98_000, 97_500);
-    server.emitPv('w', 5, 12, 100, 100, ['g1f3']);
+    const info = parseInfoLine('info depth 5 seldepth 9 score cp 12 hashfull 7 nodes 100 time 1000 pv g1f3')!;
+    server.emitPv('w', 5, 12, 100, 100, ['g1f3'], info);
 
     // Wait for the pre-logon reliable queue to drain (FMR is each move's last msg).
     await waitFor(() => early.received.filter((m) => m === 'FMR: 0').length === 2);
@@ -206,6 +208,8 @@ test('server: mid-game LOGON replays site, players, full move history, latest po
     // Wait for the WHOLE snapshot (WPV is its last reliable message) before
     // asserting order, so a slow ACK round-trip can't make a later idx() -1.
     await waitFor(() => late.received.includes('WPV: 5 12 100 100 g1f3'));
+    const winfo = 'WINFO: depth 5 seldepth 9 score cp 12 nodes 100 hashfull 7 time 1000 pv g1f3';
+    await waitFor(() => late.received.includes(winfo));
 
     // Snapshot content: the LATEST position (not move 1), current players/site.
     const idx = (m: string) => late.received.indexOf(m);
@@ -227,6 +231,7 @@ test('server: mid-game LOGON replays site, players, full move history, latest po
     assert(late.received.lastIndexOf('FMR: 0') < idx('WTIME: 98000 otim 97500'));
     assert(late.received.lastIndexOf(fen2) < late.received.lastIndexOf('FMR: 0'));
     assert(idx('WTIME: 98000 otim 97500') < idx('WPV: 5 12 100 100 g1f3'));
+    assert(idx('WPV: 5 12 100 100 g1f3') < idx(winfo));
 
     // The next live move lands only after the snapshot is complete.
     server.emitMove({
@@ -484,10 +489,10 @@ test('server: replay keeps the mover PV before each SAN (so node-tlcv does not l
   try {
     server.setPlayers('W', 'B');
     server.emitInitialPosition(FEN_START, 0);
-    server.emitPv('w', 9, 20, 100, 5000, ['e2e4']);
+    server.emitPv('w', 9, 20, 100, 5000, ['e2e4'], parseInfoLine('info depth 9 score cp 20 nodes 5000 time 1000 pv e2e4')!);
     mv(server, 1);
     mv(server, 2); // black: book move, no PV
-    server.emitPv('w', 11, 25, 100, 9000, ['g1f3']);
+    server.emitPv('w', 11, 25, 100, 9000, ['g1f3'], parseInfoLine('info depth 11 score cp 25 nodes 9000 time 1000 pv g1f3')!);
     mv(server, 3);
     c.logon();
     await waitFor(() => c.received.includes('FMR: 3'), 2000);

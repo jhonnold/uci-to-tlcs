@@ -3,7 +3,8 @@
 // Per the UCI spec (DOBRO gist 2592c6dad754ba67e6dcaec8c90165bf):
 //  - `depth` / `seldepth` are in plies
 //  - `time` is in milliseconds
-//  - `nodes` / `nps` are counts
+//  - `nodes` / `nps` / `tbhits` are counts; `hashfull` is permill
+//  - `wdl w d l` is win/draw/loss permill, engine (side-to-move) POV
 //  - `score cp` is in centipawns, FROM THE ENGINE'S (side-to-move) POINT OF VIEW
 //  - `score mate y` is mate in `y` MOVES (not plies), negative when being mated
 //  - `multipv` is 1-based; line 1 is the primary line
@@ -22,7 +23,11 @@ export interface UciInfo {
   /** Raw value, engine (side-to-move) POV: centipawns for `cp`, moves for `mate`. */
   scoreValue: number;
   nodes: number;
-  nps: number;
+  nps: number | null;
+  hashfull: number | null;
+  tbhits: number | null;
+  /** Win/draw/loss permill, engine (side-to-move) POV. */
+  wdl: [number, number, number] | null;
   timeMs: number;
   /** PV in long-algebraic coordinate notation. */
   pv: string[];
@@ -44,7 +49,10 @@ export function parseInfoLine(line: string): UciInfo | null {
   let scoreKind: ScoreKind | null = null;
   let scoreValue: number | null = null;
   let nodes = 0;
-  let nps = 0;
+  let nps: number | null = null;
+  let hashfull: number | null = null;
+  let tbhits: number | null = null;
+  let wdl: [number, number, number] | null = null;
   let timeMs = 0;
   let pv: string[] | null = null;
   let lowerbound = false;
@@ -66,6 +74,16 @@ export function parseInfoLine(line: string): UciInfo | null {
         break;
       case 'nps':
         nps = parseInt(tokens[++i], 10);
+        break;
+      case 'hashfull':
+        hashfull = parseInt(tokens[++i], 10);
+        break;
+      case 'tbhits':
+        tbhits = parseInt(tokens[++i], 10);
+        break;
+      case 'wdl':
+        wdl = [parseInt(tokens[i + 1], 10), parseInt(tokens[i + 2], 10), parseInt(tokens[i + 3], 10)];
+        i += 3;
         break;
       case 'time':
         timeMs = parseInt(tokens[++i], 10);
@@ -91,8 +109,8 @@ export function parseInfoLine(line: string): UciInfo | null {
         pv = tokens.slice(i + 1);
         i = tokens.length; // pv is always last
         break;
-      // Ignored: currmove, currmovenumber, hashfull, tbhits, cpuload, string,
-      // refutation, currline — not needed for the broadcast.
+      // Ignored: currmove, currmovenumber, cpuload, string, refutation, currline —
+      // not part of the `info depth …` search line the broadcast forwards.
     }
   }
 
@@ -100,7 +118,22 @@ export function parseInfoLine(line: string): UciInfo | null {
     return null;
   }
 
-  return { depth, seldepth, multipv, scoreKind, scoreValue, nodes, nps, timeMs, pv, lowerbound, upperbound };
+  return {
+    depth,
+    seldepth,
+    multipv,
+    scoreKind,
+    scoreValue,
+    nodes,
+    nps,
+    hashfull,
+    tbhits,
+    wdl,
+    timeMs,
+    pv,
+    lowerbound,
+    upperbound,
+  };
 }
 
 const MATE_BASE = 100000;

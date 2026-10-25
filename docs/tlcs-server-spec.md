@@ -435,6 +435,8 @@ Where uci-to-tlcs stands against this spec (as of `8dc7903`).
 - **Shipped since:** the full session protocol (names, chat, `CHANGE`, `MENU`, `FEATURE: PING`, 70 s reaper), admin / ban /
   `MAXCLIENTS` / rate limit, structured logs and Prometheus metrics, the PGN-backed `RESULTTABLE`/`GAMELIST`, and restart
   recovery with persisted clients, silent catch-up and numbered replay.
+- **Extension:** `WINFO`/`BINFO` extended search info (seldepth, wdl, nps, hashfull, tbhits) beside `WPV`/`BPV`
+  (`docs/tlcs-wire.md`).
 
 ### 10.2 Gaps
 

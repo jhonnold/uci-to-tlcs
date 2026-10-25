@@ -36,13 +36,14 @@ It live-tails the log and, for each event, emits the matching TLCS message(s):
 | `position …` | `FEN` (+`FMR`) once at start | truncated FEN (`board stm castling`); board is authoritative |
 | `go wtime … btime …` | `WTIME`/`BTIME` | ms → centiseconds (÷10) |
 | `info … score … pv …` | `WPV`/`BPV` | score in side-to-move (engine) POV, matching TLCS; time ms→cs; PV stays in UCI coordinates (legal prefix only; node-tlcv parses coords, not SAN); only `multipv 1` |
+| same `info depth …` line | `WINFO`/`BINFO` (extension) | right after each `WPV`/`BPV`: `depth seldepth score cp\|mate wdl nodes nps hashfull tbhits time pv` as `<tag> <value>` pairs in raw UCI units (ms, engine POV); absent tags omitted, `pv` last |
 | `bestmove <coord>` | `FEN`, `WMOVE`/`BMOVE`, `FMR` | move number + SAN |
 | game over (board) | `result:` | mate/stalemate/draw |
 | new game (boundary) | `result:` (prev, if none) → `WPLAYER`/`BPLAYER` → startpos `FEN` | resets node-tlcv's board for the next game |
 
 Reliability matches node-tlcv's transport: state-critical messages are ID-wrapped
 (`<N>MSG`) and resent until `ACK: N`, in strict order, per client (a slow client never stalls another);
-`WPV`/`BPV`/`WTIME`/`BTIME` are sent unwrapped. A client that logs on mid-game gets the **full
+`WPV`/`BPV`/`WINFO`/`BINFO`/`WTIME`/`BTIME` are sent unwrapped. A client that logs on mid-game gets the **full
 move history** of the current game replayed, and the results table (`RESULTTABLE`/`GAMELIST`) is rendered from the
 tournament PGN.
 
