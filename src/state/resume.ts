@@ -163,7 +163,7 @@ export class ResumeSink implements BroadcastSink {
   emitClocks(whiteCs: number, blackCs: number): void {
     this.server.emitClocks(whiteCs, blackCs);
   }
-  emitPv(color: ColorCode, depth: number, scoreCp: number, timeCs: number, nodes: number, pv: string[], info?: UciInfo): void {
+  emitPv(color: ColorCode, depth: number, scoreCp: number, timeCs: number, nodes: number, pv: string[], info: UciInfo): void {
     this.server.emitPv(color, depth, scoreCp, timeCs, nodes, pv, info);
   }
   emitResult(result: string, gameNumber?: number): void {

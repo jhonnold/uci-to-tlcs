@@ -2,6 +2,7 @@ import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { PacedSink } from '../src/paced-sink.js';
 import type { BroadcastSink } from '../src/pipeline.js';
+import { parseInfoLine } from '../src/uci/info.js';
 
 function fake() {
   const calls: string[] = [];
@@ -42,7 +43,7 @@ test('live: a move holds the queue for delayAfterMove, order preserved', () => {
     mock.timers.tick(1);
     assert.deepEqual(calls, ['move:e4', 'clocks', 'move:e5']);
     mock.timers.tick(300);
-    p.emitPv('w', 1, 1, 1, 1, []);
+    p.emitPv('w', 1, 1, 1, 1, [], parseInfoLine('info depth 1 score cp 1 nodes 1 time 10 pv')!);
     assert.deepEqual(calls, ['move:e4', 'clocks', 'move:e5', 'pv']);
   } finally {
     mock.timers.reset();

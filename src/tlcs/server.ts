@@ -294,14 +294,13 @@ export class TlcsServer {
     this.sender.enqueue(null, { body: P.time('b', blackCs, whiteCs), latest: 'BTIME' });
   }
 
-  /** With `info`, also a latest-only WINFO/BINFO; not attached to xMOVE, so a game replay carries none. */
-  emitPv(color: ColorCode, depth: number, scoreCp: number, timeCs: number, nodes: number, pv: string[], info?: UciInfo): void {
+  /** Also a latest-only WINFO/BINFO from `info`; not attached to xMOVE, so a game replay carries none. */
+  emitPv(color: ColorCode, depth: number, scoreCp: number, timeCs: number, nodes: number, pv: string[], info: UciInfo): void {
     const msg = P.pv(color, depth, scoreCp, timeCs, nodes, pv);
     if (color === 'w') this.snap.lastWpv = msg;
     else this.snap.lastBpv = msg;
     this.pvSinceMove[color] = msg;
     this.sender.enqueue(null, { body: msg, latest: color === 'w' ? 'WPV' : 'BPV' });
-    if (!info) return;
     const infoMsg = P.info(color, info, pv);
     if (color === 'w') this.snap.lastWinfo = infoMsg;
     else this.snap.lastBinfo = infoMsg;

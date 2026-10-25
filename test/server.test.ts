@@ -489,10 +489,10 @@ test('server: replay keeps the mover PV before each SAN (so node-tlcv does not l
   try {
     server.setPlayers('W', 'B');
     server.emitInitialPosition(FEN_START, 0);
-    server.emitPv('w', 9, 20, 100, 5000, ['e2e4']);
+    server.emitPv('w', 9, 20, 100, 5000, ['e2e4'], parseInfoLine('info depth 9 score cp 20 nodes 5000 time 1000 pv e2e4')!);
     mv(server, 1);
     mv(server, 2); // black: book move, no PV
-    server.emitPv('w', 11, 25, 100, 9000, ['g1f3']);
+    server.emitPv('w', 11, 25, 100, 9000, ['g1f3'], parseInfoLine('info depth 11 score cp 25 nodes 9000 time 1000 pv g1f3')!);
     mv(server, 3);
     c.logon();
     await waitFor(() => c.received.includes('FMR: 3'), 2000);

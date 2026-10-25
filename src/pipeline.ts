@@ -24,7 +24,7 @@ export interface BroadcastSink {
   }): void;
   emitClocks(whiteCs: number, blackCs: number): void;
   /** `info` (optional): the full search line, also sent as WINFO/BINFO with the same legal `pv`. */
-  emitPv(color: ColorCode, depth: number, scoreCp: number, timeCs: number, nodes: number, pv: string[], info?: UciInfo): void;
+  emitPv(color: ColorCode, depth: number, scoreCp: number, timeCs: number, nodes: number, pv: string[], info: UciInfo): void;
   emitResult(result: string, gameNumber?: number): void;
   /** WinBoard-format `level <mps> <base> <inc>` text. Optional: absent until the server supports it. */
   emitLevel?(text: string): void;
