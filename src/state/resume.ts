@@ -166,8 +166,8 @@ export class ResumeSink implements BroadcastSink {
   emitPv(color: ColorCode, depth: number, scoreCp: number, timeCs: number, nodes: number, pv: string[], info: UciInfo): void {
     this.server.emitPv(color, depth, scoreCp, timeCs, nodes, pv, info);
   }
-  emitResult(result: string, gameNumber?: number): void {
-    this.server.emitResult(result, gameNumber);
+  emitResult(result: string, gameNumber?: number, fromPgn?: boolean): void {
+    this.server.emitResult(result, gameNumber, fromPgn);
   }
   emitLevel(text: string): void {
     this.server.emitLevel?.(text);

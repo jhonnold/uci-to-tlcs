@@ -74,6 +74,11 @@ export class GameState {
     return startpos || !fen ? this.startFen === null : fen === this.startFen;
   }
 
+  /** SAN of every move since the start position. */
+  sans(): string[] {
+    return this.chess.history();
+  }
+
   turn(): ColorCode {
     return this.chess.turn();
   }

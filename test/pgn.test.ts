@@ -207,3 +207,24 @@ test('ByteLineReader startOffset: offsets stay absolute and the first line is re
   assert.deepEqual(got, [['bbb', 4], ['ccc', 8]]);
   assert.equal(r.lineEnd, 12);
 });
+
+test('movetext SANs are collected (numbers, comments, NAGs, check marks and the result dropped)', () => {
+  const g = parseAll(
+    ['[Event "x"]', '[White "A"]', '[Black "B"]', '[Result "0-1"]', '', '1. f3 {+0.1/3 0.1s} e5 $1 2.g4?? {c} Qh4# 0-1', ''].join('\n'),
+  );
+  assert.equal(g.length, 1);
+  assert.deepEqual(g[0].moves, ['f3', 'e5', 'g4', 'Qh4']);
+});
+
+test('movetext: black-to-move numbering (1...) and promotions', () => {
+  const g = parseAll(['[Event "x"]', '[FEN "8/P7/8/8/8/8/8/k6K b - - 0 1"]', '', '1... Kb2 2. a8=Q+ Kc3 *', ''].join('\n'));
+  assert.deepEqual(g[0].moves, ['Kb2', 'a8=Q', 'Kc3']);
+});
+
+test('fixture: SAN count equals PlyCount', () => {
+  for (const f of ['fastchess-adjudicated.pgn', 'fastchess-concurrent.pgn']) {
+    for (const x of parseAll(readFileSync(new URL(`../fixtures/${f}`, import.meta.url), 'utf8'))) {
+      assert.equal(x.moves?.length, x.plyCount, `${f} ${x.white}-${x.black}`);
+    }
+  }
+});

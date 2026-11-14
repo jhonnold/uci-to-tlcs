@@ -9,10 +9,14 @@ export interface PgnGame {
   plyCount?: number;
   fen?: string;
   round?: string;
+  /** Movetext SANs without move numbers, comments, NAGs or check/annotation marks. */
+  moves?: string[];
 }
 
 const HEADER_RE = /^\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]\s*$/;
 const TERMINATIONS = new Set(['1-0', '0-1', '1/2-1/2', '*']);
+const MOVE_NUMBER_RE = /^\d+\.+/;
+const ANNOTATION_RE = /[+#!?]+$/;
 
 /**
  * Line-fed PGN entry parser. Only headers matter; movetext is scanned just far
@@ -24,12 +28,14 @@ export class PgnStreamParser {
   private haveHeaders = false;
   private commentDepth = 0;
   private movetextTokens = 0;
+  private moves: string[] = [];
 
   reset(): void {
     this.headers = {};
     this.haveHeaders = false;
     this.commentDepth = 0;
     this.movetextTokens = 0;
+    this.moves = [];
   }
 
   push(line: string): PgnGame | undefined {
@@ -62,6 +68,8 @@ export class PgnStreamParser {
       if (t) {
         this.movetextTokens++;
         if (TERMINATIONS.has(t)) return t;
+        const san = t.replace(MOVE_NUMBER_RE, '').replace(ANNOTATION_RE, '');
+        if (san && !san.startsWith('$')) this.moves.push(san);
       }
       return undefined;
     };
@@ -104,6 +112,7 @@ export class PgnStreamParser {
       plyCount: Number.isFinite(ply) ? ply : undefined,
       fen: h['FEN'],
       round: h['Round'],
+      moves: this.moves,
     };
     this.reset();
     return game;

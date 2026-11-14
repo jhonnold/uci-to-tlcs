@@ -25,15 +25,30 @@ export interface BroadcastSink {
   emitClocks(whiteCs: number, blackCs: number): void;
   /** `info` (optional): the full search line, also sent as WINFO/BINFO with the same legal `pv`. */
   emitPv(color: ColorCode, depth: number, scoreCp: number, timeCs: number, nodes: number, pv: string[], info: UciInfo): void;
-  emitResult(result: string, gameNumber?: number): void;
+  /** `fromPgn`: `gameNumber` is the matched PGN entry's number (not the pipeline's own count). */
+  emitResult(result: string, gameNumber?: number, fromPgn?: boolean): void;
   /** WinBoard-format `level <mps> <base> <inc>` text. Optional: absent until the server supports it. */
   emitLevel?(text: string): void;
 }
 
+/** What the pipeline knows about its game, so an authority can match it to a PGN entry. */
+export interface GameHint {
+  white: string;
+  black: string;
+  /** Start FEN, null for the standard start. */
+  startFen: string | null;
+  plies: number;
+  /** SAN of every ply so far (built on demand: O(plies)). */
+  sans(): string[];
+}
+
 /** Source of authoritative results (the tournament PGN), keyed by 1-based game number. */
 export interface ResultAuthority {
-  lookup(n: number): FinishedGame | undefined;
+  /** `hint` (tagged games): lets an authority pick the entry describing this game instead of entry n. */
+  lookup(n: number, hint?: GameHint): FinishedGame | undefined;
   refresh(): unknown;
+  /** The entry's result was emitted for this game. */
+  claim?(e: FinishedGame): void;
 }
 
 export interface PipelineOpts {
@@ -506,7 +521,20 @@ export class Pipeline {
   private emitResultOnce(r: string): void {
     if (this.resultEmitted) return;
     this.resultEmitted = true;
-    this.sink.emitResult(r, this.opts.authority ? this.gameNumber : undefined);
+    const auth = this.opts.authority;
+    const e = this.emittedEntry;
+    if (auth && e) {
+      auth.claim?.(e);
+      this.sink.emitResult(r, e.number, true);
+      return;
+    }
+    this.sink.emitResult(r, auth ? this.gameNumber : undefined);
+  }
+
+  private hint(): GameHint | undefined {
+    if (!this.boundNames) return undefined;
+    const [white, black] = this.boundNames;
+    return { white, black, startFen: this.game.startFen, plies: this.currentMoves.length, sans: () => this.game.sans() };
   }
 
   currentGameNumber(): number {
@@ -551,7 +579,7 @@ export class Pipeline {
       this.warnOverrun();
       return;
     }
-    const e = auth.lookup(this.gameNumber);
+    const e = auth.lookup(this.gameNumber, this.hint());
     if (!e || !this.namesMatchLoosely(e)) return;
     const target = this.targetPlies(e);
     if (target === undefined || this.currentMoves.length < target) return;
@@ -598,7 +626,7 @@ export class Pipeline {
       return;
     }
     auth.refresh();
-    const e = auth.lookup(this.gameNumber);
+    const e = auth.lookup(this.gameNumber, this.hint());
     if (e) {
       this.checkEntry(e, true);
       this.emittedEntry = e;
