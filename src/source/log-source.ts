@@ -26,6 +26,11 @@ export interface NormalizedLine {
    * `position`/`go` participate in White/Black binding. `undefined` when unknown.
    */
   direction?: 'in' | 'out';
+  /**
+   * The producer's game channel, when it tags one: lines of two games played at the same
+   * time differ by channel (fastchess: the worker-thread id). `undefined` = one channel.
+   */
+  channel?: string;
 }
 
 export interface LogSource {

@@ -513,6 +513,11 @@ export class Pipeline {
     return this.gameNumber;
   }
 
+  /** A game is open here (participants being collected, or playing) and has no result yet. */
+  busy(): boolean {
+    return (this.collectingParticipants || this.gameActive) && !this.resultEmitted;
+  }
+
   private openGameNumber(): void {
     if (this.numbered) return;
     if (this.gameNumberBase === undefined) {

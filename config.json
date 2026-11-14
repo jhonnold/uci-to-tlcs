@@ -1,0 +1,155 @@
+{
+    "resign": {
+        "move_count": 2,
+        "score": 300,
+        "twosided": false,
+        "enabled": true
+    },
+    "draw": {
+        "move_number": 10,
+        "move_count": 2,
+        "score": 40,
+        "enabled": true
+    },
+    "maxmoves": {
+        "move_count": 1,
+        "enabled": false
+    },
+    "tb_adjudication": {
+        "syzygy_dirs": "",
+        "max_pieces": 0,
+        "ignore_50_move_rule": false,
+        "enabled": false
+    },
+    "opening": {
+        "file": "",
+        "format": 2,
+        "order": 1,
+        "plies": -1,
+        "start": 1
+    },
+    "pgn": {
+        "additional_lines_rgx": [],
+        "event_name": "Fastchess Tournament",
+        "site": "?",
+        "file": "/tmp/claude-1000/-home-jhonnold-projects-uci-to-tlcs/351785d7-c434-5638-a255-e419cc069cfb/scratchpad/fx3/games.pgn",
+        "notation": 0,
+        "append_file": false,
+        "track_nodes": false,
+        "track_seldepth": false,
+        "track_nps": false,
+        "track_hashfull": false,
+        "track_tbhits": false,
+        "track_timeleft": false,
+        "track_latency": false,
+        "track_pv": false,
+        "min": false,
+        "crc": false
+    },
+    "epd": {
+        "file": "",
+        "append_file": true
+    },
+    "sprt": {
+        "alpha": 0.0,
+        "beta": 0.0,
+        "elo0": 0.0,
+        "elo1": 0.0,
+        "model": "normalized",
+        "enabled": false
+    },
+    "config_name": "config.json",
+    "output": 0,
+    "seed": 17940034194292343996,
+    "variant": 0,
+    "type": 0,
+    "gauntlet_seeds": 1,
+    "ratinginterval": 10,
+    "scoreinterval": 1,
+    "wait": 0,
+    "autosaveinterval": 20,
+    "games": 2,
+    "rounds": 1,
+    "concurrency": 1,
+    "force_concurrency": false,
+    "recover": false,
+    "noswap": false,
+    "reverse": false,
+    "report_penta": true,
+    "affinity": false,
+    "check_mate_pvs": false,
+    "show_latency": false,
+    "log": {
+        "file": "/tmp/claude-1000/-home-jhonnold-projects-uci-to-tlcs/351785d7-c434-5638-a255-e419cc069cfb/scratchpad/fx3/fc.log",
+        "level": 3,
+        "append_file": false,
+        "compress": false,
+        "realtime": true,
+        "engine_coms": true
+    },
+    "engines": [
+        {
+            "name": "A",
+            "dir": "",
+            "cmd": "berserk",
+            "args": "",
+            "restart": false,
+            "options": [
+                [
+                    "Hash",
+                    "16"
+                ]
+            ],
+            "limit": {
+                "tc": {
+                    "increment": 100,
+                    "fixed_time": 0,
+                    "time": 10000,
+                    "moves": 0,
+                    "timemargin": 0
+                },
+                "nodes": 800,
+                "plies": 0
+            },
+            "variant": 0
+        },
+        {
+            "name": "B",
+            "dir": "",
+            "cmd": "berserk",
+            "args": "",
+            "restart": false,
+            "options": [
+                [
+                    "Hash",
+                    "16"
+                ]
+            ],
+            "limit": {
+                "tc": {
+                    "increment": 100,
+                    "fixed_time": 0,
+                    "time": 10000,
+                    "moves": 0,
+                    "timemargin": 0
+                },
+                "nodes": 800,
+                "plies": 0
+            },
+            "variant": 0
+        }
+    ],
+    "stats": {
+        "A vs B": {
+            "wins": 0,
+            "losses": 0,
+            "draws": 2,
+            "penta_WW": 0,
+            "penta_WD": 0,
+            "penta_WL": 0,
+            "penta_DD": 1,
+            "penta_LD": 0,
+            "penta_LL": 0
+        }
+    }
+}
