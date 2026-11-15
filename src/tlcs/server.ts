@@ -9,6 +9,7 @@ import { AdminCommands, RATE_DEFAULT, type RateLimit } from './admin.js';
 import * as P from './protocol.js';
 import type { ColorCode } from './protocol.js';
 import type { UciInfo } from '../uci/info.js';
+import type { BroadcastSink } from '../pipeline.js';
 
 export interface ServerOptions extends Partial<SenderOptions> {
   port: number;
@@ -52,9 +53,8 @@ export interface ClientInfo {
   lastSeen: number;
 }
 
-/** Latest-value fields that feed a resync's clocks/PV (not part of the game stream). */
+/** Latest-value fields of one board that feed a resync's clocks/PV (not part of the game stream). */
 interface Snapshot {
-  site?: string;
   whiteTimeCs?: number;
   blackTimeCs?: number;
   lastWpv?: string;
@@ -66,16 +66,35 @@ interface Snapshot {
 /** A game-stream item; xMOVE items carry the mover's PV so a replay keeps node-tlcv's move comments. */
 interface StreamItem extends Outbound {
   pv?: string;
+  /** TLCS-MG only (`GAMENO`): never sent to, nor replayed for, a single-game client. */
+  multiOnly?: boolean;
 }
 
 /** Every game-channel message of one game (epoch), kept while any client still references it. */
 interface GameRecord {
   epoch: number;
+  board: number;
   stream: StreamItem[];
   finished: boolean;
-  /** Replay cache, valid once finished (the stream is immutable then). */
-  cache?: { site: string | undefined; withResult: boolean; out: Outbound[] };
+  /** Replay caches, valid once finished (the stream is immutable then), per site/result/wrapping. */
+  cache?: Map<string, Outbound[]>;
 }
+
+/** One board: a slot showing one game after another (TLCS-MG). Board 1 is the single-game stream. */
+interface Board {
+  id: number;
+  cur: GameRecord;
+  snap: Snapshot;
+  /** Mover's PV emitted since that colour's last move (consumed by emitMove). */
+  pvSinceMove: { w?: string; b?: string };
+}
+
+/** TLCS-MG protocol version this server speaks (docs/tlcs-multigame-spec.md). */
+export const MULTIGAME_VERSION = 1;
+const MULTIGAME_RE = /^MULTIGAME:\s*(\d+)\s*$/;
+
+/** TLCS-MG wrapping of a board's game line. */
+export const wrapBoard = (board: number, body: string): string => `BOARD ${board} ${body}`;
 
 const isMoveBody = (b: string): boolean => b.startsWith('WMOVE:') || b.startsWith('BMOVE:');
 
@@ -91,11 +110,14 @@ export class TlcsServer {
   private clients = new Map<string, ClientInfo>();
   private sender: ReliableSender;
   private results?: { onResultTable(dest: string): void; onGameList(dest: string): void; onResultEmitted?(n: number): void };
-  private snap: Snapshot = {};
+  private site?: string;
   private records = new Map<number, GameRecord>();
-  private cur: GameRecord = { epoch: 0, stream: [], finished: false };
-  /** Mover's PV emitted since that colour's last move (consumed by emitMove). */
-  private pvSinceMove: { w?: string; b?: string } = {};
+  /** boards[i] is board i+1; board 1 always exists. */
+  private boards: Board[] = [];
+  /** Last epoch handed out (epochs are unique across boards). */
+  private epochSeq = 0;
+  /** Dests that opted in to TLCS-MG (MULTIGAME: 1) since their last LOGON. */
+  private multi = new Set<string>();
   private dedupe = new InboundDeduper();
   private closed = false;
   private reaper: NodeJS.Timeout | null = null;
@@ -117,12 +139,12 @@ export class TlcsServer {
       admit: (dest, isNew) => this.admin.admitLogon(dest, isNew),
       beforeResync: (dest) => this.opts.onLogon?.(dest),
     });
-    this.records.set(0, this.cur);
+    this.boards.push(this.newBoard(1));
     this.socket = createSocket('udp4');
     this.sender = new ReliableSender(
       {
         rawSend: (payload, dest) => this.sendRaw(dest, payload),
-        replay: (e, withResult) => this.replay(e, withResult),
+        replay: (e, withResult, dest) => this.replay(e, withResult, dest),
         // Never reap on ACK timeout alone (spec §5.3): the idle reaper owns removal.
         onStalled: opts.onStalled,
         onAcked: (d, it) => {
@@ -193,6 +215,7 @@ export class TlcsServer {
   removeClient(dest: string): ClientInfo | undefined {
     const c = this.clients.get(dest);
     this.clients.delete(dest);
+    this.multi.delete(dest);
     this.admin.forget(dest);
     this.sender.removeClient(dest);
     this.gcRecords();
@@ -211,21 +234,28 @@ export class TlcsServer {
   /**
    * Full replay of the current game for one client, then clocks and last PV as latest
    * items. The only LOGON payload (a board snapshot cannot repair a client whose board is
-   * already loaded). Never clears control items or the in-flight item.
+   * already loaded). Never clears control items or the in-flight item. A TLCS-MG client gets
+   * every board's current game, wrapped.
    */
   resync(dest: string): void {
-    this.sender.resync(dest, this.cur.epoch, this.cur.finished);
-    if (this.cur.stream.length === 0 && this.snap.site) this.enqueue(dest, P.site(this.snap.site));
-    const s = this.snap;
-    const latest = (body: string, key: string) => this.sender.enqueue(dest, { body, latest: key });
-    if (s.whiteTimeCs !== undefined && s.blackTimeCs !== undefined) {
-      latest(P.time('w', s.whiteTimeCs, s.blackTimeCs), 'WTIME');
-      latest(P.time('b', s.blackTimeCs, s.whiteTimeCs), 'BTIME');
+    const boards = this.multi.has(dest) ? this.boards : [this.boards[0]];
+    this.sender.resyncAll(
+      dest,
+      boards.map((b) => ({ epoch: b.cur.epoch, finished: b.cur.finished })),
+    );
+    if (boards.every((b) => b.cur.stream.length === 0) && this.site) this.enqueue(dest, P.site(this.site));
+    for (const b of boards) {
+      const s = b.snap;
+      const latest = (body: string, key: string) => this.sender.enqueue(dest, this.latestFor(dest, b.id, body, key)!);
+      if (s.whiteTimeCs !== undefined && s.blackTimeCs !== undefined) {
+        latest(P.time('w', s.whiteTimeCs, s.blackTimeCs), 'WTIME');
+        latest(P.time('b', s.blackTimeCs, s.whiteTimeCs), 'BTIME');
+      }
+      if (s.lastWpv) latest(s.lastWpv, 'WPV');
+      if (s.lastBpv) latest(s.lastBpv, 'BPV');
+      if (s.lastWinfo) latest(s.lastWinfo, 'WINFO');
+      if (s.lastBinfo) latest(s.lastBinfo, 'BINFO');
     }
-    if (s.lastWpv) latest(s.lastWpv, 'WPV');
-    if (s.lastBpv) latest(s.lastBpv, 'BPV');
-    if (s.lastWinfo) latest(s.lastWinfo, 'WINFO');
-    if (s.lastBinfo) latest(s.lastBinfo, 'BINFO');
   }
 
   queueDepth(dest: string): number {
@@ -236,95 +266,207 @@ export class TlcsServer {
     return this.sender.rttStats(dest);
   }
 
-  /** Epoch of the current (most recent) game; increments per setPlayers. */
+  /** Epoch of board 1's current (most recent) game; a new epoch per setPlayers on any board. */
   currentEpoch(): number {
-    return this.cur.epoch;
+    return this.boards[0].cur.epoch;
   }
 
   recordEpochs(): number[] {
     return Array.from(this.records.keys()).sort((a, b) => a - b);
   }
 
+  // ------------------------------------------------------------------ TLCS-MG
+
+  /** Board ids so far (1..n). */
+  boardCount(): number {
+    return this.boards.length;
+  }
+
+  /**
+   * The BroadcastSink of board `id`, created (with every board below it) on first use and
+   * announced to TLCS-MG clients with a fresh `BOARDS:` list. Board 1 is this server's own
+   * sink. SITE is broadcast-wide: only board 1 sets it.
+   */
+  board(id: number): BroadcastSink {
+    if (!Number.isInteger(id) || id < 1) throw new Error(`bad board id ${id}`);
+    if (id > this.boards.length) {
+      while (this.boards.length < id) this.boards.push(this.newBoard(this.boards.length + 1));
+      const list = this.boardsLine();
+      for (const d of this.multi) this.enqueue(d, list);
+    }
+    if (id === 1) return this;
+    const b = this.boards[id - 1];
+    return {
+      setSite: () => {},
+      setPlayers: (w, bl) => this.setPlayersOn(b, w, bl),
+      emitInitialPosition: (f, fmr) => this.initialPositionOn(b, f, fmr),
+      emitMove: (a) => this.moveOn(b, a),
+      emitLevel: (t) => this.game(b, P.level(t)),
+      emitClocks: (w, bl) => this.clocksOn(b, w, bl),
+      emitPv: (c, d, sc, t, n, pv, info) => this.pvOn(b, c, d, sc, t, n, pv, info),
+      emitResult: (r, n, pgn) => this.resultOn(b, r, n, pgn),
+    };
+  }
+
+  /** Does `dest` receive TLCS-MG (wrapped) game lines? */
+  isMulti(dest: string): boolean {
+    return this.multi.has(dest);
+  }
+
+  /** Restore a client's opt-in without a handshake (state-file restore). */
+  setMulti(dest: string): void {
+    if (this.clients.has(dest)) this.multi.add(dest);
+  }
+
+  /** `MULTIGAME: <v>` from a registered client: switch it to wrapped boards and resync it. */
+  private onMultigame(dest: string, version: number): void {
+    if (!this.clients.has(dest)) {
+      logger.debug(`MULTIGAME from unknown ${dest}: ignored`);
+      return;
+    }
+    if (version < MULTIGAME_VERSION) {
+      logger.debug(`MULTIGAME ${version} from ${dest}: unsupported version, ignored`);
+      return;
+    }
+    const dropped = this.sender.dropGameItems(dest);
+    this.multi.add(dest);
+    logger.info(`MULTIGAME ${dest}: ${this.boards.length} board(s) (dropped ${dropped} queued single-game items)`);
+    this.enqueue(dest, `MULTIGAME: ${MULTIGAME_VERSION}`);
+    this.enqueue(dest, this.boardsLine());
+    this.resync(dest);
+    this.opts.onClientsChanged?.();
+  }
+
+  private boardsLine(): string {
+    return `BOARDS: ${this.boards.map((b) => b.id).join(' ')}`;
+  }
+
+  private newBoard(id: number): Board {
+    const cur: GameRecord = { epoch: id === 1 ? 0 : ++this.epochSeq, board: id, stream: [], finished: false };
+    this.records.set(cur.epoch, cur);
+    return { id, cur, snap: {}, pvSinceMove: {} };
+  }
+
   // ---------------------------------------------------------------- outbound API
 
   setSite(site: string): void {
-    this.snap.site = site;
+    this.site = site;
     this.sender.enqueue(null, { body: P.site(site) });
   }
 
   setPlayers(white: string, black: string): void {
-    this.cur = { epoch: this.cur.epoch + 1, stream: [], finished: false };
-    this.records.set(this.cur.epoch, this.cur);
-    this.pvSinceMove = {};
-    this.gcRecords();
-    this.game(P.wplayer(white));
-    this.game(P.bplayer(black));
+    this.setPlayersOn(this.boards[0], white, black);
   }
 
   /** Initial board position (no move yet): FEN + FMR. */
   emitInitialPosition(fenTruncated: string, fmr: number): void {
-    this.game(P.fen(fenTruncated));
-    this.game(P.fmr(fmr));
+    this.initialPositionOn(this.boards[0], fenTruncated, fmr);
   }
 
   /** A played move, in TLCS order: FEN (post-move), then MOVE, then FMR. */
-  emitMove(args: {
-    fenTruncated: string;
-    color: ColorCode;
-    fullMoveNumber: number;
-    san: string;
-    fmr: number;
-  }): void {
-    const pv = this.pvSinceMove[args.color];
-    delete this.pvSinceMove[args.color];
-    this.game(P.fen(args.fenTruncated));
-    this.game(P.move(args.color, args.fullMoveNumber, args.san), false, pv);
-    this.game(P.fmr(args.fmr));
+  emitMove(args: { fenTruncated: string; color: ColorCode; fullMoveNumber: number; san: string; fmr: number }): void {
+    this.moveOn(this.boards[0], args);
   }
 
   /** `level <text>` game-channel line (T05's time-control/level announcement). */
   emitLevel(text: string): void {
-    this.game(P.level(text));
+    this.game(this.boards[0], P.level(text));
   }
 
   emitClocks(whiteCs: number, blackCs: number): void {
-    this.snap.whiteTimeCs = whiteCs;
-    this.snap.blackTimeCs = blackCs;
-    this.sender.enqueue(null, { body: P.time('w', whiteCs, blackCs), latest: 'WTIME' });
-    this.sender.enqueue(null, { body: P.time('b', blackCs, whiteCs), latest: 'BTIME' });
+    this.clocksOn(this.boards[0], whiteCs, blackCs);
   }
 
   /** Also a latest-only WINFO/BINFO from `info`; not attached to xMOVE, so a game replay carries none. */
   emitPv(color: ColorCode, depth: number, scoreCp: number, timeCs: number, nodes: number, pv: string[], info: UciInfo): void {
-    const msg = P.pv(color, depth, scoreCp, timeCs, nodes, pv);
-    if (color === 'w') this.snap.lastWpv = msg;
-    else this.snap.lastBpv = msg;
-    this.pvSinceMove[color] = msg;
-    this.sender.enqueue(null, { body: msg, latest: color === 'w' ? 'WPV' : 'BPV' });
-    const infoMsg = P.info(color, info, pv);
-    if (color === 'w') this.snap.lastWinfo = infoMsg;
-    else this.snap.lastBinfo = infoMsg;
-    this.sender.enqueue(null, { body: infoMsg, latest: color === 'w' ? 'WINFO' : 'BINFO' });
+    this.pvOn(this.boards[0], color, depth, scoreCp, timeCs, nodes, pv, info);
   }
 
-  /** `gameNumber` (PGN authority only): after the result, queue a table capped at it per client. */
-  emitResult(result: string, gameNumber?: number): void {
-    this.game(P.result(result), true);
-    this.cur.finished = true;
+  /**
+   * `gameNumber` (PGN authority only): after the result, queue a table capped at it per client.
+   * `fromPgn`: it is the matched PGN entry's number, announced to TLCS-MG clients as `GAMENO`.
+   */
+  emitResult(result: string, gameNumber?: number, fromPgn?: boolean): void {
+    this.resultOn(this.boards[0], result, gameNumber, fromPgn);
+  }
+
+  private setPlayersOn(b: Board, white: string, black: string): void {
+    b.cur = { epoch: ++this.epochSeq, board: b.id, stream: [], finished: false };
+    this.records.set(b.cur.epoch, b.cur);
+    b.pvSinceMove = {};
+    this.gcRecords();
+    this.game(b, P.wplayer(white));
+    this.game(b, P.bplayer(black));
+  }
+
+  private initialPositionOn(b: Board, fenTruncated: string, fmr: number): void {
+    this.game(b, P.fen(fenTruncated));
+    this.game(b, P.fmr(fmr));
+  }
+
+  private moveOn(b: Board, args: { fenTruncated: string; color: ColorCode; fullMoveNumber: number; san: string; fmr: number }): void {
+    const pv = b.pvSinceMove[args.color];
+    delete b.pvSinceMove[args.color];
+    this.game(b, P.fen(args.fenTruncated));
+    this.game(b, P.move(args.color, args.fullMoveNumber, args.san), false, pv);
+    this.game(b, P.fmr(args.fmr));
+  }
+
+  private clocksOn(b: Board, whiteCs: number, blackCs: number): void {
+    b.snap.whiteTimeCs = whiteCs;
+    b.snap.blackTimeCs = blackCs;
+    this.latest(b, P.time('w', whiteCs, blackCs), 'WTIME');
+    this.latest(b, P.time('b', blackCs, whiteCs), 'BTIME');
+  }
+
+  private pvOn(b: Board, color: ColorCode, depth: number, scoreCp: number, timeCs: number, nodes: number, pv: string[], info: UciInfo): void {
+    const msg = P.pv(color, depth, scoreCp, timeCs, nodes, pv);
+    if (color === 'w') b.snap.lastWpv = msg;
+    else b.snap.lastBpv = msg;
+    b.pvSinceMove[color] = msg;
+    this.latest(b, msg, color === 'w' ? 'WPV' : 'BPV');
+    const infoMsg = P.info(color, info, pv);
+    if (color === 'w') b.snap.lastWinfo = infoMsg;
+    else b.snap.lastBinfo = infoMsg;
+    this.latest(b, infoMsg, color === 'w' ? 'WINFO' : 'BINFO');
+  }
+
+  private resultOn(b: Board, result: string, gameNumber?: number, fromPgn?: boolean): void {
+    if (fromPgn && gameNumber !== undefined) this.game(b, `GAMENO: ${gameNumber}`, false, undefined, true);
+    this.game(b, P.result(result), true);
+    b.cur.finished = true;
     if (gameNumber !== undefined) this.results?.onResultEmitted?.(gameNumber);
   }
 
-  /** Single path for every game-channel message: record it, then queue it for all clients. */
-  private game(body: string, critical = false, pv?: string): void {
-    const item: StreamItem = { body, epoch: this.cur.epoch, critical: critical || undefined, pv };
-    this.cur.stream.push(item);
-    this.sender.enqueue(null, item);
+  /** The form of a latest item `dest` gets, or null if it does not see board `board`. */
+  private latestFor(dest: string, board: number, body: string, key: string): Outbound | null {
+    if (this.multi.has(dest)) return { body: wrapBoard(board, body), latest: `${key}@${board}` };
+    return board === 1 ? { body, latest: key } : null;
   }
 
-  /** Keep `cur` and every epoch some client's queue or in-flight slot still references. */
+  private latest(b: Board, body: string, key: string): void {
+    for (const d of this.sender.clients()) {
+      const it = this.latestFor(d, b.id, body, key);
+      if (it) this.sender.enqueue(d, it);
+    }
+  }
+
+  /** Single path for every game-channel message: record it, then queue it for every client that sees the board. */
+  private game(b: Board, body: string, critical = false, pv?: string, multiOnly = false): void {
+    const item: StreamItem = { body, epoch: b.cur.epoch, board: b.id, critical: critical || undefined, pv, multiOnly: multiOnly || undefined };
+    b.cur.stream.push(item);
+    const wrapped: Outbound = { body: wrapBoard(b.id, body), epoch: item.epoch, board: b.id, critical: item.critical };
+    for (const d of this.sender.clients()) {
+      if (this.multi.has(d)) this.sender.enqueue(d, wrapped);
+      else if (b.id === 1 && !multiOnly) this.sender.enqueue(d, item);
+    }
+  }
+
+  /** Keep every board's current game and every epoch some client's queue or in-flight slot still references. */
   private gcRecords(): void {
     const live = this.sender.referencedEpochs();
-    for (const e of this.records.keys()) if (e !== this.cur.epoch && !live.has(e)) this.records.delete(e);
+    for (const b of this.boards) live.add(b.cur.epoch);
+    for (const e of this.records.keys()) if (!live.has(e)) this.records.delete(e);
   }
 
   /**
@@ -332,22 +474,27 @@ export class TlcsServer {
    * (players, setup sequence, level), then only the SANs (each preceded by the mover's
    * PV so node-tlcv does not label them "(Book)"), then the last FEN/FMR, then the result
    * iff `withResult`. Items are tagged with the epoch so the next splice replaces them.
+   * For a TLCS-MG `dest` every game line is wrapped (SITE is not) and `GAMENO` precedes the result.
    */
-  private replay(epoch: number, withResult: boolean): Outbound[] | null {
+  private replay(epoch: number, withResult: boolean, dest?: string): Outbound[] | null {
     const rec = this.records.get(epoch);
     if (!rec || rec.stream.length === 0) return null;
-    const site = this.snap.site;
-    if (rec.finished && rec.cache && rec.cache.site === site && rec.cache.withResult === withResult) {
-      return rec.cache.out;
-    }
+    const site = this.site;
+    const wrap = dest !== undefined && this.multi.has(dest);
+    if (!wrap && rec.board !== 1) return [];
+    const key = `${site ?? ''}|${withResult}|${wrap}`;
+    const cached = rec.finished ? rec.cache?.get(key) : undefined;
+    if (cached) return cached;
     const st = rec.stream;
+    const board = rec.board;
     const out: Outbound[] = [];
-    if (site) out.push({ body: P.site(site), epoch });
+    if (site) out.push({ body: P.site(site), epoch, board });
+    const body = (b: string) => (wrap ? wrapBoard(board, b) : b);
     const copied = new Set<StreamItem>();
     const copy = (it: StreamItem): void => {
       copied.add(it);
-      if (it.pv) out.push({ body: it.pv, epoch });
-      out.push({ body: it.body, epoch, critical: it.critical });
+      if (it.pv) out.push({ body: body(it.pv), epoch, board });
+      out.push({ body: body(it.body), epoch, board, critical: it.critical });
     };
 
     const firstMove = st.findIndex((it) => isMoveBody(it.body));
@@ -361,7 +508,7 @@ export class TlcsServer {
         }
       }
     }
-    for (let i = 0; i <= end; i++) if (!st[i].critical) copy(st[i]);
+    for (let i = 0; i <= end; i++) if (!st[i].critical && !st[i].multiOnly) copy(st[i]);
     for (let i = end + 1; i < st.length; i++) {
       if (isMoveBody(st[i].body) || st[i].body.startsWith('level ')) copy(st[i]);
     }
@@ -374,10 +521,12 @@ export class TlcsServer {
     if (lastFen && !copied.has(lastFen)) copy(lastFen);
     if (lastFmr && !copied.has(lastFmr)) copy(lastFmr);
     if (withResult) {
+      const no = wrap ? st.find((it) => it.multiOnly) : undefined;
+      if (no) out.push({ body: body(no.body), epoch, board });
       const res = st.find((it) => it.critical);
-      if (res) out.push({ body: res.body, epoch, critical: true });
+      if (res) out.push({ body: body(res.body), epoch, board, critical: true });
     }
-    if (rec.finished) rec.cache = { site, withResult, out };
+    if (rec.finished) (rec.cache ??= new Map()).set(key, out);
     return out;
   }
 
@@ -426,7 +575,10 @@ export class TlcsServer {
   }
 
   private dispatch(msg: string, ip: string, port: number, numbered: boolean): void {
-    if (msg.startsWith('LOGONv15')) this.admin.forget(destKey(ip, port)); // any re-logon revokes admin
+    if (msg.startsWith('LOGONv15')) {
+      this.admin.forget(destKey(ip, port)); // any re-logon revokes admin
+      this.multi.delete(destKey(ip, port)); // ...and the TLCS-MG opt-in (the client re-sends it)
+    }
     if (this.admin.handle(msg, ip, port)) return;
     if (this.commands.handle(msg, ip, port, numbered)) return;
     const dest = destKey(ip, port);
@@ -436,6 +588,8 @@ export class TlcsServer {
     } else if (msg === 'GAMELIST') {
       if (this.results) this.results.onGameList(dest);
       else logger.debug(`GAMELIST from ${dest}: no result service`);
+    } else if (MULTIGAME_RE.test(msg)) {
+      this.onMultigame(dest, Number(MULTIGAME_RE.exec(msg)![1]));
     } else {
       logger.debug(`Unhandled client message from ${destKey(ip, port)}: ${redactSecrets(msg)}`);
     }
