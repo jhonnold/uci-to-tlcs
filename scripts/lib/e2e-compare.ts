@@ -19,6 +19,23 @@ export const isFailure = (f: Finding): boolean => f.kind !== 'OK' && f.kind !== 
 export interface CompareOpts {
   allowStar?: boolean;
   strictNumbers?: boolean;
+  /**
+   * A node-tlcv game whose `[FEN]` is not the game's start (it joined mid-game, or a move did
+   * not apply and it reloaded the FEN) passes when its moves are the game's tail from exactly
+   * that position (reported as INFO).
+   */
+  allowPartial?: boolean;
+}
+
+/** Position (3-field head) after the first `k` plies of fastchess game `g`, or null if they do not replay. */
+function headAfter(g: PgnGame, k: number): string | null {
+  try {
+    const c = new Chess(g.headers.FEN?.trim() || undefined);
+    for (const san of g.sans.slice(0, k)) c.move(san, { strict: false });
+    return fenHead(c.fen());
+  } catch {
+    return null;
+  }
 }
 
 const players = (g: PgnGame): string => `${(g.headers.White ?? '').trim()} vs ${(g.headers.Black ?? '').trim()}`;
@@ -100,6 +117,16 @@ export function compareGames(fc: PgnGame[], nt: PgnGame[], opts: CompareOpts = {
     if (er !== gr) {
       ok = false;
       out.push({ kind: 'DIFF', field: 'result', game: label(f), msg: `${label(f)}: result: exp ${er} got ${gr}` });
+    }
+    const start = f.headers.FEN ? fenHead(f.headers.FEN) : STARTPOS_HEAD;
+    if (opts.allowPartial && n.headers.FEN !== undefined && fenHead(n.headers.FEN) !== start) {
+      const k = f.sans.length - n.sans.length;
+      if (k < 0 || !sameSans(f.sans.slice(k), n.sans) || headAfter(f, k) !== fenHead(n.headers.FEN)) {
+        out.push({ kind: 'DIFF', field: 'moves', game: label(f), msg: `${label(f)}: partial game is not the fastchess tail from its [FEN] ${n.headers.FEN}` });
+      } else if (ok) {
+        out.push({ kind: 'INFO', game: label(f), msg: `${label(f)}: partial OK (from ply ${k + 1}, ${n.sans.length} of ${f.sans.length} plies, ${er})` });
+      }
+      continue;
     }
     if (!sameSans(f.sans, n.sans)) {
       ok = false;

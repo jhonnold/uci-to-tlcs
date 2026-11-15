@@ -30,8 +30,8 @@ Three concerns, kept separate on purpose:
   (`GameRegistry`), the authority the pipeline asks for a game's `Result`, and the
   `RESULTTABLE`/`GAMELIST` renderers (`crosstable.ts`, `result-commands.ts`).
 - **`state/` + `app.ts`** own startup and restart: `app.ts` wires everything and runs the
-  silent, synchronous catch-up (`state/catch-up.ts`, `state/resume.ts`), `state-file.ts`
-  persists clients and their resume point, `debug-log.ts` implements `SAVEDEBUG`.
+  silent, synchronous catch-up to the game in progress (`state/catch-up.ts`, `state/start.ts`); nothing about clients is
+  persisted. `state/numbering.ts` is the numbering dump every LOGON gets; `debug-log.ts` implements `SAVEDEBUG`.
   `metrics.ts` (Prometheus counters) and `paced-sink.ts` (`DELAYAFTERMOVE`/`GAME`) sit
   between the pipeline and the server.
 

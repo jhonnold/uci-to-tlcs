@@ -58,6 +58,8 @@ export class MockSession {
   private limiter: ReloginLimiter;
   private silence: SilenceMonitor;
   private t0 = Date.now();
+  /** LOGON SUCCESSFUL (or a numbered line standing in for it) seen since the last LOGON. */
+  private logonOkSeen = false;
   private session = 1;
   private silent = false;
   private pingEnabled = false;
@@ -193,6 +195,7 @@ export class MockSession {
   }
 
   private sendLogon(ev: string, reason?: string): void {
+    this.logonOkSeen = false;
     this.event(ev, reason);
     this.send(`LOGONv15:${this.o.user}`);
   }
@@ -312,8 +315,10 @@ export class MockSession {
     if (mg?.kind === 'stray') this.log(`[mock] WARN bare game line after MULTIGAME: ${r.body}`);
 
     if (ok) {
-      if (r.body === 'LOGON SUCCESSFUL') {
-        this.event('logon-ok');
+      // LOGON SUCCESSFUL is unnumbered and can be lost: the first numbered line after the LOGON stands in for it.
+      if (r.body === 'LOGON SUCCESSFUL' || (!this.logonOkSeen && r.id !== undefined)) {
+        if (r.body === 'LOGON SUCCESSFUL') this.event('logon-ok');
+        this.logonOkSeen = true;
         const m = this.mg.onLogonOk(Date.now());
         if (m) this.send(m);
       }

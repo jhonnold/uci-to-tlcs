@@ -49,7 +49,7 @@ Details live in `docs/`, loaded only when relevant:
   WinBoard log tailing, `server.ini`, improvements, and the shipped-status table (§10).
   Reach for it when matching real-server behavior.
 - **`README.md`** — quick start, full CLI options, `server.ini` keys, the UCI→TLCS encoding table,
-  restart persistence and scope. `server.ini.example` is the annotated starting config.
+  restart and scope. `server.ini.example` is the annotated starting config.
 - **`../node-tlcv/src/`** — the wire contract's source of truth (`game-service.ts`,
   `kibitzer/uci-parser.ts`, `udp-transport.ts`); there is no official spec, but
   `docs/tlcs-server-spec.md` documents what the original server does.

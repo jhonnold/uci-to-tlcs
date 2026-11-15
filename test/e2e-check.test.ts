@@ -252,3 +252,16 @@ test('checkTranscript join snapshot: (setup) reload mid-game, then the remaining
   assert.deepEqual(checkTranscript(recs, { fc: FC1 }), []);
 });
 
+test('compareGames --allow-partial: a node-tlcv game that starts at a mid-game [FEN] passes when it is the tail', () => {
+  const fc = `[White "Berserk B"]\n[Black "Berserk A"]\n[Result "1/2-1/2"]\n\n1. d4 d5 2. c4 e6 1/2-1/2\n`;
+  const partial = (fen: string, moves: string) =>
+    `[White "Berserk B"]\n[Black "Berserk A"]\n[Result "1/2-1/2"]\n[SetUp "1"]\n[FEN "${fen}"]\n\n${moves} 1/2-1/2\n`;
+  const after2 = 'rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq - 0 2';
+  assert.equal(failures(fc, partial(after2, '2. c4 e6')).length, 1, 'without the flag: moves differ');
+  const ok = compareGames(parsePgn(fc), parsePgn(partial(after2, '2. c4 e6')), { allowPartial: true });
+  assert.deepEqual(ok.filter(isFailure), []);
+  assert.match(ok[0].msg, /partial OK \(from ply 3, 2 of 4 plies/);
+  const wrongFen = compareGames(parsePgn(fc), parsePgn(partial('rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR b KQkq - 0 2', '2. c4 e6')), { allowPartial: true });
+  assert.equal(wrongFen.filter(isFailure).length, 1);
+});
+
