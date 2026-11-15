@@ -8,16 +8,18 @@ import { Pipeline } from './pipeline.js';
 import { Demux } from './demux.js';
 import { PacedSink } from './paced-sink.js';
 import { makeSource } from './source/index.js';
-import { GameRegistry, ResultService, scanGameStarts } from './results/index.js';
+import { GameRegistry, ResultService } from './results/index.js';
 import { scanBoards } from './results/log-scan.js';
 import { ClaimingAuthority } from './results/claiming.js';
 import { startMetricsServer } from './metrics.js';
 import { logger } from './util/logger.js';
 import { loadState, type PersistedClient } from './state/state-file.js';
 import { StateStore } from './state/progress.js';
-import { ResumeSink, planResume, numberingDump, enqueueDump } from './state/resume.js';
+import { ResumeSink, planResume, numberingDump, enqueueDump, attachPersisted, type ResumePlan } from './state/resume.js';
 import { catchUpSync } from './state/catch-up.js';
 import { DebugLogSaver } from './state/debug-log.js';
+
+const SAVEDEBUG_CONCURRENT = 'SAVEDEBUG: disabled, the log has concurrent games (per-game debug logs need one game at a time)';
 
 export interface App {
   server: TlcsServer;
@@ -83,7 +85,7 @@ export async function startApp(cfg: Config): Promise<App> {
     let p = pacedBoards.get(id);
     if (!p) {
       pacedBoards.set(id, (p = new PacedSink(server.board(id), cfg)));
-      if (live) p.setLive(true);
+      p.setLive(live);
     }
     return p;
   };
@@ -103,7 +105,7 @@ export async function startApp(cfg: Config): Promise<App> {
     authority?.setConcurrent();
     results.setConcurrent();
     if (debug) {
-      logger.warn('SAVEDEBUG: disabled, the log has concurrent games (per-game debug logs need one game at a time)');
+      logger.warn(SAVEDEBUG_CONCURRENT);
       debug.close();
       debug = undefined;
     }
@@ -122,14 +124,15 @@ export async function startApp(cfg: Config): Promise<App> {
       /* log not there yet */
     }
     const fromEnd = first && !cfg.fromStart;
-    const boards = size > 0 && !fromEnd ? scanBoards(cfg.logPath, cfg.format) : { boards: [], count: 1, end: 0 };
+    const boards = size > 0 && !fromEnd ? scanBoards(cfg.logPath, cfg.format) : { boards: [], count: 1, starts: [], end: 0 };
     const concurrent = boards.count > 1;
-    const scan = size > 0 && !fromEnd && !concurrent ? scanGameStarts(cfg.logPath, cfg.format) : { starts: [], end: 0 };
+    const scan = concurrent ? { starts: [], end: 0 } : { starts: boards.starts, end: boards.end };
     if (first) firstScan = scan;
     const nextsIn = store ? store.restored() : restored;
     const rest = first ? nextsIn : [];
-    const plan = concurrent
-      ? { offset: Math.min(...boards.boards.map((b) => b.start)), firstGame: undefined, current: undefined, nexts: rest.map(() => 0), clamped: [] }
+    // Concurrent: live position only, from the oldest board's current game (no numbered replay).
+    const plan: ResumePlan = concurrent
+      ? { offset: Math.min(...boards.boards.map((b) => b.start)), nexts: [], clamped: [] }
       : planResume({
       starts: scan.starts,
       end: scan.end,
@@ -165,12 +168,8 @@ export async function startApp(cfg: Config): Promise<App> {
     };
 
     let pending: Array<PersistedClient & { next: number }> = [];
-    const attachNow = (c: PersistedClient) => {
-      server.addClient(c.ip, c.port, c.user);
-      if (c.multi) server.setMulti(`${c.ip}:${c.port}`);
-    };
     if (fromEnd) {
-      for (const c of rest) attachNow(c);
+      for (const c of rest) attachPersisted(server, c);
     } else if (!concurrent) {
       pending = rest.map((c, i) => ({ ...c, next: plan.nexts[i] }));
     }
@@ -187,10 +186,7 @@ export async function startApp(cfg: Config): Promise<App> {
     demux.endReservation();
     if (concurrent) {
       // Live position only: each restored client gets a full resync of every board it sees.
-      for (const c of rest) {
-        attachNow(c);
-        server.resync(`${c.ip}:${c.port}`);
-      }
+      for (const c of rest) server.resync(attachPersisted(server, c));
     }
     setLive(true);
     if (!fromEnd && !concurrent) {
@@ -221,7 +217,7 @@ export async function startApp(cfg: Config): Promise<App> {
   registry?.startPolling(() => cur.demux.onAuthorityTick());
 
   if (cfg.saveDebug && server.boardCount() > 1) {
-    logger.warn('SAVEDEBUG: disabled, the log has concurrent games (per-game debug logs need one game at a time)');
+    logger.warn(SAVEDEBUG_CONCURRENT);
   } else if (cfg.saveDebug) {
     const dir = cfg.iniPath ? dirname(cfg.iniPath) : dirname(resolve(cfg.logPath));
     debug = new DebugLogSaver(cfg.logPath, cfg.format, dir, registry, firstScan);

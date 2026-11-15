@@ -76,3 +76,10 @@ test('Demux.reserve: reserved channels get their boards; other channels wait unt
   demux.handleLine(src.normalize(T('30', 'C', 'ucinewgame'))!);
   assert.equal(demux.boardOf('30'), 2);
 });
+
+test('scanBoards.starts equals scanGameStarts (one pass serves the sequential restart plan too)', async () => {
+  const { scanGameStarts } = await import('../src/results/log-scan.js');
+  for (const [f, fmt] of [['fastchess-adjudicated.log', 'fastchess'], ['fastchess-multigame.log', 'fastchess'], ['multi-game.uci', 'raw']] as const) {
+    assert.deepEqual(scanBoards(fx(f), fmt).starts, scanGameStarts(fx(f), fmt).starts, f);
+  }
+});

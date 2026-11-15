@@ -177,6 +177,9 @@ test('checkTranscript multigame: a bare game line after the opt-in reply is a fi
   const id = counter();
   const recs = [ev('logon'), inn('MULTIGAME: 1', id()), inn('WMOVE: 1. e4', id())];
   assert.match(checkTranscript(recs)[0].msg, /bare game line/);
+  // also the extension lines node-tlcv's command table lacks (WINFO/BINFO)
+  const info = [ev('logon'), inn('MULTIGAME: 1', id()), inn('WINFO: depth 1 score cp 0 nodes 1 time 1 pv e2e4', undefined, 'unnumbered')];
+  assert.match(checkTranscript(info)[0].msg, /bare game line/);
 });
 
 test('checkTranscript legacy purity: a TLCS-MG token without opting in is a finding', () => {

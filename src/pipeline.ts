@@ -3,7 +3,7 @@ import { scoreToCentipawns, type UciInfo } from './uci/info.js';
 import { GameState, STARTPOS_TRUNC } from './game/game-state.js';
 import { msToCs, type ColorCode } from './tlcs/protocol.js';
 import type { NormalizedLine } from './source/log-source.js';
-import type { FinishedGame } from './results/registry.js';
+import { targetPlies, type FinishedGame } from './results/registry.js';
 import { logger } from './util/logger.js';
 
 /**
@@ -558,11 +558,6 @@ export class Pipeline {
     this.numbered = true;
   }
 
-  /** Plies the entry's PlyCount implies were played on the board (illegal move: not applied). */
-  private targetPlies(e: FinishedGame): number | undefined {
-    if (e.plyCount === undefined) return undefined;
-    return e.termination === 'illegal move' ? e.plyCount - 1 : e.plyCount;
-  }
 
   /** PGN names equal the bound names as an unordered set (true when names are not bound). */
   private namesMatchLoosely(e: FinishedGame): boolean {
@@ -581,7 +576,7 @@ export class Pipeline {
     }
     const e = auth.lookup(this.gameNumber, this.hint());
     if (!e || !this.namesMatchLoosely(e)) return;
-    const target = this.targetPlies(e);
+    const target = targetPlies(e);
     if (target === undefined || this.currentMoves.length < target) return;
     this.checkEntry(e, false);
     this.emittedEntry = e;
@@ -591,7 +586,7 @@ export class Pipeline {
   private warnOverrun(): void {
     const e = this.emittedEntry;
     if (!e || this.overrunWarned) return;
-    const target = this.targetPlies(e);
+    const target = targetPlies(e);
     if (target !== undefined && this.currentMoves.length > target) {
       this.overrunWarned = true;
       logger.warn(`game ${this.gameNumber}: ${this.currentMoves.length} plies exceed PGN PlyCount ${e.plyCount} (misaligned PGN?)`);
@@ -603,7 +598,7 @@ export class Pipeline {
       const [w, b] = this.boundNames;
       logger.warn(`game ${this.gameNumber}: PGN names "${e.white}" vs "${e.black}" differ from log "${w}" vs "${b}"`);
     }
-    const target = this.targetPlies(e);
+    const target = targetPlies(e);
     const plies = this.currentMoves.length;
     if (target !== undefined && plies > target) {
       logger.warn(`game ${this.gameNumber}: ${plies} plies exceed PGN PlyCount ${e.plyCount} (misaligned PGN?)`);

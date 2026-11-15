@@ -1,5 +1,7 @@
 import type { GameHint, ResultAuthority } from '../pipeline.js';
-import type { FinishedGame } from './registry.js';
+import { targetPlies, type FinishedGame } from './registry.js';
+import { normSan } from './pgn-parser.js';
+import { STARTPOS_FEN } from '../game/game-state.js';
 
 type Fit = 'no' | 'maybe' | 'exact';
 
@@ -10,9 +12,8 @@ export interface ClaimSource {
   refresh(): unknown;
 }
 
-const STARTPOS4 = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -';
-const fen4 = (fen: string | null | undefined): string => (fen ? fen.trim().split(/\s+/).slice(0, 4).join(' ') : STARTPOS4);
-const bareSan = (s: string): string => s.replace(/[+#!?]+$/, '');
+/** Board, side to move, castling, en passant: what identifies a start position. */
+const fen4 = (fen: string | null | undefined): string => (fen ?? STARTPOS_FEN).trim().split(/\s+/).slice(0, 4).join(' ');
 
 /**
  * PGN result authority for logs with concurrent games. fastchess writes PGN entries in
@@ -49,22 +50,39 @@ export class ClaimingAuthority implements ResultAuthority {
     const e = this.reg.lookup(n);
     if (!hint) return e;
     const free = (g: FinishedGame | undefined): g is FinishedGame => !!g && !this.claimed.has(g.number);
-    if (!this.concurrent && free(e) && fit(e, hint) !== 'no') return e;
-    for (const g of this.reg.games) if (free(g) && fit(g, hint) === 'exact') return g;
+    const h = new HintView(hint);
+    if (!this.concurrent && free(e) && this.fit(e, h) !== 'no') return e;
+    for (const g of this.reg.games) if (free(g) && this.fit(g, h) === 'exact') return g;
     if (!this.concurrent && free(e)) return e;
     return undefined;
   }
+
+  /** fen4 of an entry's start, computed once per entry. */
+  private startOf = new WeakMap<FinishedGame, string>();
+
+  private fit(e: FinishedGame, h: HintView): Fit {
+    if (e.white !== h.hint.white || e.black !== h.hint.black) return 'no';
+    let start = this.startOf.get(e);
+    if (start === undefined) this.startOf.set(e, (start = fen4(e.fen)));
+    if (start !== h.start) return 'no';
+    const target = targetPlies(e);
+    if (target === undefined || h.hint.plies < target) return 'maybe';
+    if (!e.moves || e.moves.length === 0) return 'exact';
+    const sans = h.sans();
+    const k = Math.min(e.moves.length, target);
+    for (let i = 0; i < k; i++) if (e.moves[i] !== sans[i]) return 'no';
+    return 'exact';
+  }
 }
 
-function fit(e: FinishedGame, h: GameHint): Fit {
-  if (e.white !== h.white || e.black !== h.black) return 'no';
-  if (fen4(e.fen) !== fen4(h.startFen)) return 'no';
-  if (e.plyCount === undefined) return 'maybe';
-  const target = e.termination === 'illegal move' ? e.plyCount - 1 : e.plyCount;
-  if (h.plies < target) return 'maybe';
-  if (!e.moves || e.moves.length === 0) return 'exact';
-  const sans = h.sans();
-  const k = Math.min(e.moves.length, target);
-  for (let i = 0; i < k; i++) if (bareSan(e.moves[i]) !== bareSan(sans[i] ?? '')) return 'no';
-  return 'exact';
+/** One lookup's view of a hint: its start FEN and (on first use) its normalized SANs, computed once. */
+class HintView {
+  readonly start: string;
+  private s?: string[];
+  constructor(readonly hint: GameHint) {
+    this.start = fen4(hint.startFen);
+  }
+  sans(): string[] {
+    return (this.s ??= this.hint.sans().map(normSan));
+  }
 }

@@ -16,7 +16,8 @@ interface Board {
   ended: boolean;
 }
 
-const isIn = (n: NormalizedLine, cmd: string): boolean => n.direction === 'in' && n.uci?.trim() === cmd;
+/** The trimmed GUI->engine command of a line, '' otherwise (one trim per line on the hot path). */
+const inCmd = (n: NormalizedLine): string => (n.direction === 'in' && n.uci ? n.uci.trim() : '');
 
 /**
  * Splits a log with concurrent games (one channel per game, e.g. a fastchess worker thread)
@@ -28,7 +29,6 @@ const isIn = (n: NormalizedLine, cmd: string): boolean => n.direction === 'in' &
  */
 export class Demux {
   private boards: Board[] = [];
-  private byChannel = new Map<string, Board>();
   /** While set (restart catch-up): channel -> board it must get; any other channel is ignored. */
   private reserved?: Map<string, number>;
 
@@ -45,16 +45,17 @@ export class Demux {
       this.boards[0].pipeline.handleLine(n);
       return;
     }
-    let b = this.byChannel.get(ch);
-    if (b && b.channel !== ch) b = undefined; // the board was taken over by another channel
-    if (isIn(n, 'ucinewgame') && !b) b = this.allocate(ch);
+    const cmd = inCmd(n);
+    // A channel is on at most one board: allocate only runs for a channel without one.
+    let b = this.boards.find((x) => x.channel === ch);
+    if (cmd === 'ucinewgame' && !b) b = this.allocate(ch);
     if (b) {
-      if (isIn(n, 'ucinewgame')) b.ended = false;
-      else if (isIn(n, 'quit')) b.ended = true; // the engine is gone: its game is over
+      if (cmd === 'ucinewgame') b.ended = false;
+      else if (cmd === 'quit') b.ended = true; // the engine is gone: its game is over
       b.pipeline.handleLine(n);
       return;
     }
-    if (isIn(n, 'quit')) {
+    if (cmd === 'quit') {
       // fastchess quits every engine from its main thread when the tournament ends.
       for (const x of this.boards) {
         x.ended = true;
@@ -79,8 +80,7 @@ export class Demux {
 
   /** The board channel `ch` currently shows a game on, if any. */
   boardOf(ch: string): number | undefined {
-    const b = this.byChannel.get(ch);
-    return b && b.channel === ch ? b.id : undefined;
+    return this.boards.find((b) => b.channel === ch)?.id;
   }
 
   /** Board count so far (ids are 1..count). */
@@ -90,10 +90,6 @@ export class Demux {
 
   pipeline(id: number): Pipeline | undefined {
     return this.boards[id - 1]?.pipeline;
-  }
-
-  pipelines(): Pipeline[] {
-    return this.boards.map((b) => b.pipeline);
   }
 
   onAuthorityTick(): void {
@@ -127,10 +123,8 @@ export class Demux {
         logger.info(`board ${b.id}: opened for channel ${ch}`);
       }
     }
-    if (b.channel !== undefined && this.byChannel.get(b.channel) === b) this.byChannel.delete(b.channel);
     b.channel = ch;
     b.ended = false;
-    this.byChannel.set(ch, b);
     return b;
   }
 }

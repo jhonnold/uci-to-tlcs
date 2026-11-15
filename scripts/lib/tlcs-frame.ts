@@ -127,3 +127,18 @@ export function parseResultBody(body: string): string | null {
   const m = /^result:?\s*(\S+)/.exec(body);
   return m ? m[1] : null;
 }
+
+// ---- TLCS-MG (docs/tlcs-multigame-spec.md) ----
+
+/** `BOARD <n> <game line>`: groups 1 = board, 2 = the wrapped line. */
+export const BOARD_LINE = /^BOARD (\d+) ([\s\S]*)$/;
+/** `MULTIGAME: <v>`: group 1 = version. */
+export const MULTIGAME_LINE = /^MULTIGAME:\s*(\d+)$/;
+/** Any TLCS-MG token (what a single-game client must never receive). */
+export const MG_TOKEN = /^(BOARD |BOARDS:|MULTIGAME:|GAMENO:)/;
+const GAME_LINE = /^(WPLAYER|BPLAYER|FEN|FMR|WMOVE|BMOVE|result|WTIME|BTIME|WPV|BPV|WINFO|BINFO):|^level /;
+
+/** A single-game game-channel line (wrapped per board under TLCS-MG). */
+export function isGameLine(body: string): boolean {
+  return GAME_LINE.test(body);
+}

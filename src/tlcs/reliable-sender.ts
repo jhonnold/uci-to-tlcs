@@ -165,16 +165,9 @@ export class ReliableSender {
    * them, so a replay can never split them (TLCS-MG `GAMENO` + `result`).
    */
   enqueueAll(dest: string, items: Outbound[]): void {
+    if (items.length === 1) return this.enqueue(dest, items[0]);
     const c = this.clientsMap.get(dest);
-    if (!c) return;
-    if (!c.inFlight && c.queue.length === 0) c.busySince = now();
-    c.queue.push(...items);
-    if (items.some((it) => it.epoch !== undefined)) {
-      if (c.stalled) this.dropStalled(dest, c);
-      this.maybeCoalesce(dest, c);
-    }
-    this.enforceHardCap(dest, c);
-    this.pump(dest, c);
+    if (c && items.length) this.pushNumbered(dest, c, items);
   }
 
   /** Queue `item` for `dest`, or for every registered client when `dest` is null. */
@@ -203,15 +196,19 @@ export class ReliableSender {
         c.queue.push(item);
         continue;
       }
-      if (!c.inFlight && c.queue.length === 0) c.busySince = now();
-      c.queue.push(item);
-      if (item.epoch !== undefined) {
-        if (c.stalled) this.dropStalled(d, c);
-        this.maybeCoalesce(d, c);
-      }
-      this.enforceHardCap(d, c);
-      this.pump(d, c);
+      this.pushNumbered(d, c, [item]);
     }
+  }
+
+  private pushNumbered(dest: string, c: ClientState, items: Outbound[]): void {
+    if (!c.inFlight && c.queue.length === 0) c.busySince = now();
+    c.queue.push(...items);
+    if (items.some((it) => it.epoch !== undefined)) {
+      if (c.stalled) this.dropStalled(dest, c);
+      this.maybeCoalesce(dest, c);
+    }
+    this.enforceHardCap(dest, c);
+    this.pump(dest, c);
   }
 
   ack(dest: string, id: number): void {

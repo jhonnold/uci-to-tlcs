@@ -16,7 +16,11 @@ export interface PgnGame {
 const HEADER_RE = /^\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]\s*$/;
 const TERMINATIONS = new Set(['1-0', '0-1', '1/2-1/2', '*']);
 const MOVE_NUMBER_RE = /^\d+\.+/;
-const ANNOTATION_RE = /[+#!?]+$/;
+
+/** A SAN without check/annotation marks, zero-castling spelled `O-O`: comparable across producers. */
+export function normSan(s: string): string {
+  return s.replace(/[+#!?]+$/, '').replace(/^0-0-0$/, 'O-O-O').replace(/^0-0$/, 'O-O');
+}
 
 /**
  * Line-fed PGN entry parser. Only headers matter; movetext is scanned just far
@@ -68,7 +72,7 @@ export class PgnStreamParser {
       if (t) {
         this.movetextTokens++;
         if (TERMINATIONS.has(t)) return t;
-        const san = t.replace(MOVE_NUMBER_RE, '').replace(ANNOTATION_RE, '');
+        const san = normSan(t.replace(MOVE_NUMBER_RE, ''));
         if (san && !san.startsWith('$')) this.moves.push(san);
       }
       return undefined;

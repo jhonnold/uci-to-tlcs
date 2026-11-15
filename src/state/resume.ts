@@ -98,6 +98,14 @@ export function enqueueDump(server: Pick<ResumeServer, 'enqueue'>, dest: string,
   b.forEach((body, i) => server.enqueue(dest, body, i === b.length - 1 && NUMBERING_HOLD_MS > 0 ? { holdMs: NUMBERING_HOLD_MS } : {}));
 }
 
+/** Re-register a persisted client (and its TLCS-MG opt-in) unless it is already registered; returns its dest. */
+export function attachPersisted(server: Pick<ResumeServer, 'addClient' | 'getClient' | 'setMulti'>, c: PersistedClient): string {
+  const dest = `${c.ip}:${c.port}`;
+  if (!server.getClient(dest)) server.addClient(c.ip, c.port, c.user);
+  if (c.multi) server.setMulti?.(dest);
+  return dest;
+}
+
 type Lazy = number | (() => number);
 const resolve = (v: Lazy): number => (typeof v === 'function' ? v() : v);
 
@@ -191,9 +199,7 @@ export class ResumeSink implements BroadcastSink {
   }
 
   private attach(c: PersistedClient, g: number): void {
-    const dest = `${c.ip}:${c.port}`;
-    if (!this.server.getClient(dest)) this.server.addClient(c.ip, c.port, c.user);
-    if (c.multi) this.server.setMulti?.(dest);
+    const dest = attachPersisted(this.server, c);
     this.attached.push(dest);
     logger.info(`resume: attached ${c.user}@${dest} at game ${g}`);
   }

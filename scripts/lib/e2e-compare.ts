@@ -1,6 +1,7 @@
 import type { PgnGame } from './pgn.js';
 import type { TranscriptRecord } from './transcript.js';
-import { parseResultBody, splitOnCommand } from './tlcs-frame.js';
+import { BOARD_LINE, MG_TOKEN, MULTIGAME_LINE, isGameLine, parseResultBody, splitOnCommand } from './tlcs-frame.js';
+import { isAccepted } from './mock-core.js';
 import { normSan } from './pgn.js';
 
 export type FindingKind = 'OK' | 'DIFF' | 'MISSING' | 'EXTRA' | 'COUNT' | 'STAR' | 'INFO' | 'TRANSCRIPT';
@@ -138,10 +139,12 @@ export interface TranscriptOpts {
   legacy?: boolean;
 }
 
-const ACCEPTED = new Set(['accepted', 'restart', 'unnumbered']);
-const BOARD_RE = /^BOARD (\d+) ([\s\S]*)$/;
-const MG_RE = /^(BOARD |BOARDS:|MULTIGAME:|GAMENO:)/;
-const GAME_CMDS = new Set(['WPLAYER', 'BPLAYER', 'FEN', 'FMR', 'WMOVE', 'BMOVE', 'result', 'WTIME', 'BTIME', 'WPV', 'BPV', 'WINFO', 'BINFO', 'level']);
+/** White, Black and Result headers of a fastchess game, trimmed. */
+const hdr = (g: PgnGame): [string, string, string] => [
+  (g.headers.White ?? '').trim(),
+  (g.headers.Black ?? '').trim(),
+  (g.headers.Result ?? '').trim(),
+];
 
 interface BoardView {
   armed: boolean; // expecting a FEN before any move
@@ -217,9 +220,7 @@ export function checkTranscript(records: TranscriptRecord[], opts: TranscriptOpt
       if (!g) return void fail(`${label}: no such fastchess game`);
       const i = unused.indexOf(g);
       if (i >= 0) unused.splice(i, 1);
-      const gw = (g.headers.White ?? '').trim();
-      const gb = (g.headers.Black ?? '').trim();
-      const gr = (g.headers.Result ?? '').trim();
+      const [gw, gb, gr] = hdr(g);
       if (gw !== v.wp || gb !== v.bp || gr !== res) {
         return void fail(`${label}: ${v.wp} vs ${v.bp} ${res}, fastchess has ${gw} vs ${gb} ${gr}`);
       }
@@ -229,8 +230,10 @@ export function checkTranscript(records: TranscriptRecord[], opts: TranscriptOpt
       }
       return;
     }
-    const match = (g: PgnGame) =>
-      (g.headers.White ?? '').trim() === v.wp && (g.headers.Black ?? '').trim() === v.bp && (g.headers.Result ?? '').trim() === res;
+    const match = (g: PgnGame) => {
+      const [w, b, r] = hdr(g);
+      return w === v.wp && b === v.bp && r === res;
+    };
     const i = unused.findIndex(match);
     const key = `${v.wp}|${v.bp}|${res}`;
     if (i >= 0) unused.splice(i, 1);
@@ -258,7 +261,7 @@ export function checkTranscript(records: TranscriptRecord[], opts: TranscriptOpt
       }
       continue;
     }
-    if (!ACCEPTED.has(v)) continue; // gated, duplicate, injected-*
+    if (!isAccepted(v)) continue; // gated, duplicate, injected-*
 
     if (r.id !== undefined) {
       const newEpoch =
@@ -279,23 +282,22 @@ export function checkTranscript(records: TranscriptRecord[], opts: TranscriptOpt
       lastId = r.id;
     }
 
-    if (MG_RE.test(body)) {
+    if (MG_TOKEN.test(body)) {
       if (opts.legacy) {
         fail(`${tag} t=${r.t}ms: TLCS-MG line to a single-game client: ${body}`);
         continue;
       }
-      if (/^MULTIGAME:\s*1$/.test(body)) {
+      if (MULTIGAME_LINE.exec(body)?.[1] === '1') {
         mg = true;
         rearm();
         continue;
       }
-      const w = BOARD_RE.exec(body);
+      const w = BOARD_LINE.exec(body);
       if (w && mg) game(Number(w[1]), w[2], r.t);
       else if (!mg && !body.startsWith('MULTIGAME:')) fail(`${tag} t=${r.t}ms: TLCS-MG line before the MULTIGAME reply: ${body}`);
       continue;
     }
-    const sp = splitOnCommand(body);
-    if (mg && (sp ? GAME_CMDS.has(sp[0]) : body.startsWith('level '))) {
+    if (mg && isGameLine(body)) {
       fail(`${tag} t=${r.t}ms: bare game line after the MULTIGAME reply: ${body}`);
       continue;
     }

@@ -7,6 +7,7 @@ import {
   DesktopSender,
   LossInjector,
   MultigameHandshake,
+  isAccepted,
   NodeTlcvReceiver,
   ReloginLimiter,
   SilenceMonitor,
@@ -302,7 +303,7 @@ export class MockSession {
       this.o.mode === 'desktop' ? this.desk.receive(raw) : this.nt.receive(raw);
     if (r.live) this.limiter.noteData(receivedAt);
     if (r.ack) this.send(r.ack);
-    const ok = r.verdict === 'accepted' || r.verdict === 'restart' || r.verdict === 'unnumbered';
+    const ok = isAccepted(r.verdict);
     const mg = this.o.multigame && ok ? this.mg.onBody(r.body) : undefined;
     const wrapped = mg?.kind === 'wrapped' ? { board: mg.board, line: mg.line } : {};
     this.rec({ dir: 'in', raw: raw.replace(/\r?\n$/, ''), id: r.id, body: r.body, verdict: r.verdict, ...wrapped });

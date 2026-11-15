@@ -1,7 +1,7 @@
 // Pure (socket-free) building blocks for the mock client. Everything that needs a
 // clock takes an injected `now()` so it can be unit-tested with a fake one.
 
-import { isIdRestart, isLive, mid, parseDesktop, parseNodeTlcv, vbVal } from './tlcs-frame.js';
+import { BOARD_LINE, MULTIGAME_LINE, isGameLine, isIdRestart, isLive, mid, parseDesktop, parseNodeTlcv, vbVal } from './tlcs-frame.js';
 
 export type Verdict =
   | 'accepted'
@@ -10,6 +10,9 @@ export type Verdict =
   | 'unnumbered'
   | 'gated'
   | 'duplicate';
+
+/** Verdicts of a datagram the client model processed (not dropped, gated or deduped). */
+export const isAccepted = (v: string | undefined): boolean => v === 'accepted' || v === 'restart' || v === 'unnumbered';
 
 export interface RecvResult {
   ack: string | null;
@@ -279,8 +282,6 @@ export type MgBody =
   | { kind: 'game' }
   | { kind: 'other' };
 
-const GAME_LINE = /^(WPLAYER|BPLAYER|FEN|FMR|WMOVE|BMOVE|result|WTIME|BTIME|WPV|BPV|WINFO|BINFO):|^level /;
-const BOARD_LINE = /^BOARD (\d+) ([\s\S]*)$/;
 
 /** TLCS-MG client side (docs/tlcs-multigame-spec.md §3): opt-in after LOGON SUCCESSFUL, 5 s retry, 3 tries. */
 export class MultigameHandshake {
@@ -319,7 +320,7 @@ export class MultigameHandshake {
   }
 
   onBody(body: string): MgBody {
-    const v = /^MULTIGAME:\s*(\d+)$/.exec(body);
+    const v = MULTIGAME_LINE.exec(body);
     if (v) {
       if (Number(v[1]) !== 1) return { kind: 'other' };
       this.state = 'on';
@@ -328,7 +329,7 @@ export class MultigameHandshake {
     if (body.startsWith('BOARDS:')) return { kind: 'boards', boards: body.slice(7).trim().split(/\s+/).filter(Boolean).map(Number) };
     const w = BOARD_LINE.exec(body);
     if (w) return { kind: 'wrapped', board: Number(w[1]), line: w[2] };
-    if (GAME_LINE.test(body)) return { kind: this.state === 'on' ? 'stray' : 'game' };
+    if (isGameLine(body)) return { kind: this.state === 'on' ? 'stray' : 'game' };
     return { kind: 'other' };
   }
 }

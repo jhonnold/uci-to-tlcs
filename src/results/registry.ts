@@ -6,6 +6,12 @@ export interface FinishedGame extends PgnGame {
   number: number;
 }
 
+/** Plies the entry's PlyCount implies were played on the board (illegal move: not applied). */
+export function targetPlies(e: FinishedGame): number | undefined {
+  if (e.plyCount === undefined) return undefined;
+  return e.termination === 'illegal move' ? e.plyCount - 1 : e.plyCount;
+}
+
 /** Ordered registry of finished games, fed by the tournament PGN. */
 export class GameRegistry {
   games: FinishedGame[] = [];

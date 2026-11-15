@@ -49,19 +49,25 @@ export function scanBoards(
   logPath: string,
   format: Format,
   chunkSize?: number,
-): { boards: BoardStart[]; count: number; end: number } {
+): { boards: BoardStart[]; count: number; starts: number[]; end: number } {
   const reader = new ByteLineReader(logPath, chunkSize);
   const source = makeSource(format);
+  const all = new GameSegmenter(); // the sequential view, as scanGameStarts (one pass for both)
+  const starts: number[] = [];
   const segs = new Map<string, GameSegmenter>();
-  const games: Array<{ channel: string; start: number; end: number }> = [];
-  const open = new Map<string, { channel: string; start: number; end: number }>();
+  const games: ScannedGame[] = [];
+  const open = new Map<string, ScannedGame>();
   const prefilter = (raw: Buffer): boolean =>
     raw.includes('ucinewgame') || raw.includes('go') || raw.includes('bestmove');
   reader.readAvailable((line, off) => {
     const n = source.normalize(line);
-    if (!n || !n.uci || n.channel === undefined) return;
-    const ch = n.channel;
+    if (!n || !n.uci) return;
     const uci = n.uci.trim();
+    const isGo = n.direction === 'in' && uci !== 'ucinewgame' && parseLine(uci)?.type === 'go';
+    if (n.direction === 'in' && uci === 'ucinewgame' && all.onUciNewGame(n.engineId)) starts.push(off);
+    else if (isGo) all.onGo(n.engineId);
+    if (n.channel === undefined) return;
+    const ch = n.channel;
     let seg = segs.get(ch);
     if (n.direction === 'in' && uci === 'ucinewgame') {
       if (!seg) segs.set(ch, (seg = new GameSegmenter()));
@@ -75,25 +81,24 @@ export function scanBoards(
     const g = open.get(ch);
     if (!g) return;
     g.end = off;
-    if (n.direction === 'in' && parseLine(uci)?.type === 'go') seg!.onGo(n.engineId);
+    if (isGo) seg!.onGo(n.engineId);
   }, prefilter);
 
-  // Replay the allocation in start order.
-  const cur: Array<{ channel: string; start: number; end: number } | undefined> = [];
-  const owner = new Map<string, number>(); // channel -> board index it holds
-  // A game is over at `at` once its channel wrote its last line of that game before `at`.
-  const over = (g: { end: number }, at: number) => g.end < at;
+  // Replay the allocation in start order: the channel's own board, else the lowest board whose
+  // game is over (its channel wrote its last line of it before this start), else a new one.
+  const cur: ScannedGame[] = [];
   for (const g of games) {
-    let i = owner.get(g.channel);
-    if (i === undefined || cur[i]?.channel !== g.channel) {
-      i = cur.findIndex((x) => !x || over(x, g.start));
-      if (i < 0) i = cur.length;
-      const prev = cur[i];
-      if (prev && owner.get(prev.channel) === i) owner.delete(prev.channel);
-    }
-    cur[i] = g;
-    owner.set(g.channel, i);
+    let i = cur.findIndex((x) => x.channel === g.channel);
+    if (i < 0) i = cur.findIndex((x) => x.end < g.start);
+    cur[i < 0 ? cur.length : i] = g;
   }
-  const boards = cur.flatMap((g, i) => (g ? [{ id: i + 1, channel: g.channel, start: g.start }] : []));
-  return { boards, count: Math.max(1, cur.length), end: reader.lineEnd };
+  const boards = cur.map((g, i) => ({ id: i + 1, channel: g.channel, start: g.start }));
+  return { boards, count: Math.max(1, cur.length), starts, end: reader.lineEnd };
+}
+
+interface ScannedGame {
+  channel: string;
+  start: number;
+  /** Offset of the channel's last scanned line of this game. */
+  end: number;
 }
