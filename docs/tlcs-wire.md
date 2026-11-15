@@ -104,7 +104,8 @@ Opt-in extension, specified in `docs/tlcs-multigame-spec.md`: a client sends `MU
 and from the reply on gets every board's game lines wrapped as `BOARD <n> <line>` (numbered/unnumbered as the line
 it wraps), a `BOARDS:` list and `GAMENO: <n>` before each PGN-matched result. A client that does not opt in gets
 board 1 on the bare commands and never a new token. One id counter per client across boards; a re-LOGON drops the
-opt-in. Per client, the latest keys are `WPV@<board>` etc.; `GAMENO`+`result` are enqueued as one unit
+opt-in (queued wrapped latest items are dropped; queued games are re-encoded by the LOGON resync). On opt-in, the
+client's queued games are taken out (`takeGameItems`) and replayed wrapped after the reply, results included. Per client, the latest keys are `WPV@<board>` etc.; `GAMENO`+`result` are enqueued as one unit
 (`enqueueAll`) so a coalescing replay cannot split them; `BOARDS:` is pinned against hard-cap eviction.
 
 ## Deliberate deviations from the reference server

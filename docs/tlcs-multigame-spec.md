@@ -111,7 +111,9 @@ The `CT:` game section lists every finished game of every board, newest first, a
   (`SITE`, players, setup, `level`, SANs each preceded by the mover's PV, last `FEN`/`FMR`),
   every line wrapped; after all replays, each board's latest clocks/PV/INFO as wrapped latest items. A board whose
   current game is already finished is skipped (its result was delivered before); it shows nothing
-  until its next game starts.
+  until its next game starts. Games still owed to the client when it opts in (queued, not yet
+  delivered, e.g. a lagging client's last result) are replayed wrapped first, with their `GAMENO`
+  and `result:`; nothing owed is lost by switching.
 - **Give-up resync**: when one numbered item of a board's game cannot be delivered (30 s), the
   server replays that game, wrapped, under new ids. The client must apply a replay of the game in
   progress on that board exactly as a single-game client applies a replay (a startpos `FEN` after
