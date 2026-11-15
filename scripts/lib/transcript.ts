@@ -13,6 +13,9 @@ export interface TranscriptRecord {
   verdict?: string;
   event?: string;
   reason?: string;
+  /** TLCS-MG: the board of a `BOARD <n> <line>` body, and the unwrapped line. */
+  board?: number;
+  line?: string;
 }
 
 /** Synchronous JSONL writer so a kill never loses buffered lines. */

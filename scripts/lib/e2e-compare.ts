@@ -1,6 +1,7 @@
 import type { PgnGame } from './pgn.js';
 import type { TranscriptRecord } from './transcript.js';
 import { parseResultBody, splitOnCommand } from './tlcs-frame.js';
+import { normSan } from './pgn.js';
 
 export type FindingKind = 'OK' | 'DIFF' | 'MISSING' | 'EXTRA' | 'COUNT' | 'STAR' | 'INFO' | 'TRANSCRIPT';
 
@@ -133,11 +134,30 @@ export function compareGames(fc: PgnGame[], nt: PgnGame[], opts: CompareOpts = {
 export interface TranscriptOpts {
   fc?: PgnGame[];
   expectContiguous?: boolean;
+  /** The client never opted in: any TLCS-MG token (BOARD/BOARDS/MULTIGAME/GAMENO) is a finding. */
+  legacy?: boolean;
 }
 
 const ACCEPTED = new Set(['accepted', 'restart', 'unnumbered']);
+const BOARD_RE = /^BOARD (\d+) ([\s\S]*)$/;
+const MG_RE = /^(BOARD |BOARDS:|MULTIGAME:|GAMENO:)/;
+const GAME_CMDS = new Set(['WPLAYER', 'BPLAYER', 'FEN', 'FMR', 'WMOVE', 'BMOVE', 'result', 'WTIME', 'BTIME', 'WPV', 'BPV', 'WINFO', 'BINFO', 'level']);
 
-/** Invariants over one mock transcript. */
+interface BoardView {
+  armed: boolean; // expecting a FEN before any move
+  wp?: string;
+  bp?: string;
+  sans: string[];
+  gameno?: number;
+  prevResult?: string;
+}
+
+/**
+ * Invariants over one mock transcript. Game lines are tracked per board: bare lines are the
+ * single-game stream, `BOARD <n> <line>` (after a `MULTIGAME:` reply) is board n. A result with a
+ * preceding `GAMENO` must be that fastchess game (names, result and every SAN); without one it
+ * must match some unused fastchess game by names and result.
+ */
 export function checkTranscript(records: TranscriptRecord[], opts: TranscriptOpts = {}): Finding[] {
   const out: Finding[] = [];
   const fail = (msg: string) => out.push({ kind: 'TRANSCRIPT', msg });
@@ -146,15 +166,86 @@ export function checkTranscript(records: TranscriptRecord[], opts: TranscriptOpt
 
   let lastId: number | undefined;
   let accepted = new Set<number>();
-  let armed = false; // expecting a FEN before any move
-  let wp: string | undefined;
-  let bp: string | undefined;
+  let mg = false;
+  const boards = new Map<number, BoardView>();
+  const view = (b: number): BoardView => {
+    let v = boards.get(b);
+    if (!v) boards.set(b, (v = { armed: true, sans: [] }));
+    return v;
+  };
+  const rearm = () => {
+    for (const v of boards.values()) v.armed = true;
+  };
+  view(0);
   const unused = opts.fc ? [...opts.fc] : [];
-  let prevResult: string | undefined;
+  const claimed = new Map<number, number>(); // GAMENO -> board
+
+  const game = (b: number, body: string, t: number) => {
+    const v = view(b);
+    const sp = splitOnCommand(body);
+    if (!sp) {
+      const no = /^GAMENO:\s*(\d+)$/.exec(body);
+      if (no) v.gameno = Number(no[1]);
+      return;
+    }
+    const [cmd, arg] = sp;
+    const where = b ? ` board ${b}` : '';
+    if (cmd === 'FEN') v.armed = false;
+    else if ((cmd === 'WMOVE' || cmd === 'BMOVE') && v.armed) {
+      fail(`${tag} t=${t}ms:${where} ${cmd} before any FEN after (re)logon/restart`);
+      v.armed = false;
+    } else if (cmd === 'WPLAYER') {
+      v.wp = arg;
+      v.sans = [];
+    } else if (cmd === 'BPLAYER') v.bp = arg;
+    if (cmd === 'WMOVE' || cmd === 'BMOVE') {
+      const san = arg.replace(/^\d+\.+\s*/, '').trim();
+      if (san !== '(setup)') v.sans.push(normSan(san));
+    }
+    if (cmd !== 'result' || !opts.fc) return;
+    const res = parseResultBody(body);
+    const no = v.gameno;
+    v.gameno = undefined;
+    if (no !== undefined) {
+      const key = `#${no}`;
+      if (v.prevResult === key) return; // a replay of the same result
+      v.prevResult = key;
+      const g = opts.fc[no - 1];
+      const label = `${tag} t=${t}ms:${where} GAMENO ${no}`;
+      if (claimed.has(no)) return void fail(`${label} already reported on board ${claimed.get(no)}`);
+      claimed.set(no, b);
+      if (!g) return void fail(`${label}: no such fastchess game`);
+      const i = unused.indexOf(g);
+      if (i >= 0) unused.splice(i, 1);
+      const gw = (g.headers.White ?? '').trim();
+      const gb = (g.headers.Black ?? '').trim();
+      const gr = (g.headers.Result ?? '').trim();
+      if (gw !== v.wp || gb !== v.bp || gr !== res) {
+        return void fail(`${label}: ${v.wp} vs ${v.bp} ${res}, fastchess has ${gw} vs ${gb} ${gr}`);
+      }
+      if (v.sans.length !== g.sans.length || v.sans.some((x, k) => x !== g.sans[k])) {
+        const k = lcp(v.sans, g.sans);
+        fail(`${label}: moves differ at ply ${k + 1} (got ${v.sans[k] ?? 'end'}, exp ${g.sans[k] ?? 'end'})`);
+      }
+      return;
+    }
+    const match = (g: PgnGame) =>
+      (g.headers.White ?? '').trim() === v.wp && (g.headers.Black ?? '').trim() === v.bp && (g.headers.Result ?? '').trim() === res;
+    const i = unused.findIndex(match);
+    const key = `${v.wp}|${v.bp}|${res}`;
+    if (i >= 0) unused.splice(i, 1);
+    else if (key !== v.prevResult || !opts.fc.some(match)) {
+      fail(`${tag} t=${t}ms:${where} result ${res} for ${v.wp} vs ${v.bp} matches no unused fastchess game`);
+    }
+    v.prevResult = key;
+  };
 
   for (const r of records) {
     if (r.dir === 'event') {
-      if (r.event === 'logon' || r.event === 'relogon') armed = true;
+      if (r.event === 'logon' || r.event === 'relogon') {
+        rearm();
+        mg = false;
+      }
       continue;
     }
     if (r.dir !== 'in' || !r.verdict) continue;
@@ -176,7 +267,7 @@ export function checkTranscript(records: TranscriptRecord[], opts: TranscriptOpt
       if (newEpoch) {
         accepted = new Set();
         lastId = undefined;
-        armed = true;
+        rearm();
       }
       if (lastId !== undefined && r.id <= lastId) {
         fail(`${tag} t=${r.t}ms: accepted id ${r.id} not greater than previous ${lastId}`);
@@ -188,27 +279,27 @@ export function checkTranscript(records: TranscriptRecord[], opts: TranscriptOpt
       lastId = r.id;
     }
 
-    const sp = splitOnCommand(body);
-    if (!sp) continue;
-    const [cmd, arg] = sp;
-    if (cmd === 'FEN') armed = false;
-    else if ((cmd === 'WMOVE' || cmd === 'BMOVE') && armed) {
-      fail(`${tag} t=${r.t}ms: ${cmd} before any FEN after (re)logon/restart`);
-      armed = false;
-    } else if (cmd === 'WPLAYER') wp = arg;
-    else if (cmd === 'BPLAYER') bp = arg;
-    else if (cmd === 'result' && opts.fc) {
-      const res = parseResultBody(body);
-      const match = (g: PgnGame) =>
-        (g.headers.White ?? '').trim() === wp && (g.headers.Black ?? '').trim() === bp && (g.headers.Result ?? '').trim() === res;
-      const i = unused.findIndex(match);
-      const key = `${wp}|${bp}|${res}`;
-      if (i >= 0) unused.splice(i, 1);
-      else if (key !== prevResult || !opts.fc.some(match)) {
-        fail(`${tag} t=${r.t}ms: result ${res} for ${wp} vs ${bp} matches no unused fastchess game`);
+    if (MG_RE.test(body)) {
+      if (opts.legacy) {
+        fail(`${tag} t=${r.t}ms: TLCS-MG line to a single-game client: ${body}`);
+        continue;
       }
-      prevResult = key;
+      if (/^MULTIGAME:\s*1$/.test(body)) {
+        mg = true;
+        rearm();
+        continue;
+      }
+      const w = BOARD_RE.exec(body);
+      if (w && mg) game(Number(w[1]), w[2], r.t);
+      else if (!mg && !body.startsWith('MULTIGAME:')) fail(`${tag} t=${r.t}ms: TLCS-MG line before the MULTIGAME reply: ${body}`);
+      continue;
     }
+    const sp = splitOnCommand(body);
+    if (mg && (sp ? GAME_CMDS.has(sp[0]) : body.startsWith('level '))) {
+      fail(`${tag} t=${r.t}ms: bare game line after the MULTIGAME reply: ${body}`);
+      continue;
+    }
+    game(0, body, r.t);
   }
   return out;
 }
