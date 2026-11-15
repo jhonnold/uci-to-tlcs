@@ -101,7 +101,8 @@ or touching game boundaries / player-name binding in `pipeline.ts` and
 
 ## Startup and restart
 
-`src/app.ts` (`startApp`) runs: load `STATEFILE` -> `registry.refresh()` -> `scanGameStarts` -> `planResume`
+`src/app.ts` (`startApp`) runs: load `STATEFILE` -> `registry.refresh()` -> `scanBoards` (one pass: board allocation and
+the sequential game starts, as `scanGameStarts`) -> `planResume` (more than one board: the concurrent catch-up above instead)
 (start game `S` = min(current game, every restored client's `next`, clamped to the last 3) ) -> bind the socket ->
 in the `listening` turn, synchronously feed the log from `starts[S-1]` to EOF through `PacedSink` (not live) and
 `ResumeSink` -> `setLive()` -> start the tailer at the catch-up's end offset. `ResumeSink` attaches each restored
@@ -111,8 +112,8 @@ re-inserts a game's replay at its first removed index, so a game never crosses i
 the oldest game it has not fully ACKed (game item of g -> g, `result` of g -> g+1), persisted by `StateStore` in the
 same JS turn as the ACK. Rotation re-runs the same session for the new file's current game.
 
-- **Segmentation plus the PGN game count let a restart skip finished games.** `scanGameStarts` finds the
-  log's game boundaries with the same rules as the live segmenter, and the registry says how many games are
+- **Segmentation plus the PGN game count let a restart skip finished games.** `scanBoards`' `starts` (same as
+  `scanGameStarts`) are the log's game boundaries with the same rules as the live segmenter, and the registry says how many games are
   finished. `planResume` therefore starts the catch-up at the oldest game any restored client still needs
   (default: the game in progress) and feeds only that part of the log; earlier games are never replayed.
   Clients that were not restored (no `STATEFILE`, or a corrupt/stale one) receive nothing until they re-LOGON,
