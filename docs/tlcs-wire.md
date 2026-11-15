@@ -98,6 +98,15 @@ changing reply/targeting logic, or touching the FEN/time/score/PV encoding in
   must precede move 1** or the shown move is wiped (`buildGameDelta`); (3) `gameStartArmed`/
   PGN finalize re-arm **only on `result:`** (`onResult`) — hence the synthesized `*`.
 
+## Several games per port (TLCS-MG)
+
+Opt-in extension, specified in `docs/tlcs-multigame-spec.md`: a client sends `MULTIGAME: 1` after `LOGON SUCCESSFUL`
+and from the reply on gets every board's game lines wrapped as `BOARD <n> <line>` (numbered/unnumbered as the line
+it wraps), a `BOARDS:` list and `GAMENO: <n>` before each PGN-matched result. A client that does not opt in gets
+board 1 on the bare commands and never a new token. One id counter per client across boards; a re-LOGON drops the
+opt-in. Per client, the latest keys are `WPV@<board>` etc.; `GAMENO`+`result` are enqueued as one unit
+(`enqueueAll`) so a coalescing replay cannot split them; `BOARDS:` is pinned against hard-cap eviction.
+
 ## Deliberate deviations from the reference server
 
 Everything else follows `docs/tlcs-server-spec.md`; these differ on purpose (all accepted by node-tlcv and the desktop TLCV):

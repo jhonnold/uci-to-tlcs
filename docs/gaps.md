@@ -20,7 +20,7 @@ behaviour is a known limitation. Status as of `8dc7903`.
 |---|---|---|
 | A. One-shot LOGON | A missed LOGON (boot race, server restart) left node-tlcv with only PONGs | **FIXED.** Unknown clients get `MSG: … no longer connected` on `PING`/`CHAT`/`CHANGE`; node-tlcv re-LOGONs on it. The desktop TLCV must be reconnected by the operator after a restart without `STATEFILE` |
 | B. Results were board-only | Resign/adjudication/forfeit broadcast as `*` | **FIXED with `TOURNEYPGN`** (PGN `Result` is authoritative). Without it: board result, else `*` |
-| C. Sequential games only | One board, one `GameState` | **Remains.** `-concurrency 1` is required; interleaved logs cannot be demuxed |
+| C. Sequential games only | One board, one `GameState` | **FIXED server-side (TLCS-MG v1).** `-concurrency N` logs are demuxed by fastchess worker thread into boards; opted-in clients get every board (`docs/tlcs-multigame-spec.md`), legacy clients board 1. **node-tlcv follow-up:** implement the client side of the spec |
 | D. Board reset on non-startpos | node-tlcv resets only on a startpos FEN | **FIXED** with the synthetic `(setup)` move (`FENSETUPMOVE`, default on); see `tlcs-wire.md` |
 | E. `currentGameNumber` pinned at 1 | RESULTTABLE was a stub | **FIXED.** Numbered `RESULTTABLE`/`GAMELIST` crosstable from the PGN registry; node-tlcv files are `N_<white>_vs_<black>.pgn` |
 | F. Clocks only on `go` | No ticking between moves; the increment is not modeled | **Remains** (fine for replay) |
@@ -42,7 +42,12 @@ Handled from clients (`tlcs/server.ts`, `commands.ts`, `admin.ts`, `results/resu
 
 ## Known limitations
 
-- **Concurrency:** `-concurrency 1` only (gap C).
+- **Concurrency (gap C):** legacy clients (today's node-tlcv, desktop TLCV) see board 1 only, and a legacy node-tlcv may save a
+  board-1 game under another game's number (it derives numbers from the newest `CT:` row). A restart with `STATEFILE` of a
+  concurrent log catches up to the live position only (no numbered replay of games that ended while down). `SAVEDEBUG` is
+  disabled once a second board exists. PGN matching uses SAN movetext (`-pgnout notation=san`, the default); with other
+  notations two concurrent games with the same pairing, start and length can swap numbers. Verified on Linux fastchess
+  1.8.2 only (worker-thread id = game). Stop-and-wait is shared by all boards (~3 numbered items per move per board per client).
 - **Strict addressing / WinBoard adapter:** not implemented (replies always go to the source `ip:port`; fastchess and raw UCI are the
   only producers).
 - **Desktop TLCV:** only emulated (gap H). It cannot send `ADMIN:`, so admin is done from a script (`mock-client --control`).

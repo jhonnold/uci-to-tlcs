@@ -58,7 +58,8 @@ Audience: a client implementer, mainly node-tlcv. The spec is self-contained; it
 `BOARDS: 1 2 3` (numbered) lists every board that exists, ascending, space separated. It is sent
 right after the `MULTIGAME:` reply and again whenever a board is added. The newest list is
 complete: a board id the client has not seen before is new. A board appears in the list before its
-first wrapped line.
+first wrapped line. A client should still create a board implicitly for a `BOARD <n>` line it has
+not seen in a list (robustness; a v1 server does not do this).
 
 ## 5. Wrapped game lines
 
@@ -108,7 +109,7 @@ The `CT:` game section lists every finished game of every board, newest first, a
 - **Opt-in resync** (step 6) and every later full resync (re-opt-in, server restart §8): for each
   board in ascending order, the board's current game replayed as in the single-game LOGON resync
   (`SITE`, players, setup, `level`, SANs each preceded by the mover's PV, last `FEN`/`FMR`),
-  every line wrapped; then the board's latest clocks/PV/INFO as wrapped latest items. A board whose
+  every line wrapped; after all replays, each board's latest clocks/PV/INFO as wrapped latest items. A board whose
   current game is already finished is skipped (its result was delivered before); it shows nothing
   until its next game starts.
 - **Give-up resync**: when one numbered item of a board's game cannot be delivered (30 s), the
@@ -120,8 +121,9 @@ The `CT:` game section lists every finished game of every board, newest first, a
 ## 8. Server restart
 
 - Ids restart at 1 per process (as in single-game mode); `isIdRestart` rules apply unchanged.
-- With a state file the server restores each client and its opt-in; a restored opted-in client gets
-  a full resync (§7) without re-LOGON. Board ids are recomputed from the log and match the previous
+- With a state file the server restores each client and its opt-in. For a log with concurrent games a
+  restored opted-in client gets a full resync (§7) without re-LOGON; for a sequential log it gets the
+  usual numbered replay of missed games, wrapped as board 1. Board ids are recomputed from the log and match the previous
   process for the games in progress. Games that finished while the server was down are not
   replayed (they remain in `CT:`/`GL:`).
 - Without a state file the client gets the `MSG: … no longer connected` notice on its next `PING`,
@@ -163,10 +165,47 @@ Where the single-game assumption lives today (node-tlcv @ `9e3e6ee`):
 - Identity: the port keys the broadcast map, routes (`/:port`), Socket.IO rooms, metrics labels,
   webhooks and archive filenames. A board needs a sub-key (`/:port/:board`, room `port:board`);
   board 1 keeps the existing routes for compatibility.
-- Ignore any `BOARD` line for a board not (yet) in `BOARDS:` only after logging; v1 servers always
-  send `BOARDS:` first.
+- A `BOARD` line for a board not (yet) in `BOARDS:` creates that board (§4); log it, since a v1 server
+  always sends `BOARDS:` first (it is never evicted from the queue).
 
 ## 12. Test vectors
 
-See §12 of this file after the reference run (filled from a captured `mock-client --multigame`
-transcript).
+Captured from a live run (fastchess 1.8.2, 4 engines, `-concurrency 3`, `tc=8+0.08`, 12 games), client
+`mock-client --multigame` in node-tlcv mode. `<N>` = numbered, no prefix = unnumbered. Long lines cut.
+
+Handshake (the client opted in before any game; boards appear as fastchess workers start):
+
+```
+C->S  LOGONv15:mg
+S->C  LOGON SUCCESSFUL
+S->C  <1>FEATURE: PING          ... <5>ADDUSER: legacy      (normal single-game burst)
+C->S  MULTIGAME: 1
+S->C  <6>MULTIGAME: 1
+S->C  <7>BOARDS: 1
+S->C  <9>BOARDS: 1 2
+S->C  <10>BOARDS: 1 2 3
+S->C  <11>SITE: MGE2E
+S->C  <12>BOARD 1 WPLAYER: Berserk B
+S->C  <13>BOARD 1 BPLAYER: Berserk A
+S->C  <14>BOARD 1 FEN: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq
+S->C  <15>BOARD 1 FMR: 0
+S->C  <16>BOARD 1 level 0 0:08 0.08
+S->C  BOARD 1 WTIME: 808 otim 808
+S->C  BOARD 1 BTIME: 808 otim 808
+S->C  BOARD 1 WPV: 1 47 0 20 d2d4
+```
+
+End of a game (board 2 finished first, so it is PGN game 1):
+
+```
+S->C  BOARD 3 BINFO: depth 24 seldepth 24 score cp 0 wdl 5 990 5 nodes 125531 nps 2615229 ...
+S->C  <1159>BOARD 2 FEN: 5R2/8/8/2Pr4/1P3k2/4p1p1/1P2K3/8 b -
+S->C  <1160>BOARD 2 WMOVE: 62. Rf8+
+S->C  <1161>BOARD 2 FMR: 10
+S->C  <1162>BOARD 2 GAMENO: 1
+S->C  <1163>BOARD 2 result: 1/2-1/2
+```
+
+Reference setup to reproduce: `docs/e2e-testing.md` §8 (bridge + concurrent fastchess + mocks; check with
+`npm run e2e-check -- --fastchess games.pgn --transcript mg.jsonl`, which verifies every `GAMENO` game's names,
+result and full move list against fastchess).
