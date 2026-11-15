@@ -314,11 +314,14 @@ export class TlcsServer {
       logger.debug(`MULTIGAME ${version} from ${dest}: unsupported version, ignored`);
       return;
     }
-    const dropped = this.sender.dropGameItems(dest);
+    // Queued games were encoded for the previous mode: take them out, answer, then queue their
+    // replays again (wrapped) so the reply precedes every wrapped line and no owed result is lost.
+    const owed = this.sender.takeGameItems(dest);
     this.multi.add(dest);
-    logger.info(`MULTIGAME ${dest}: ${this.boards.length} board(s) (dropped ${dropped} queued single-game items)`);
+    logger.info(`MULTIGAME ${dest}: ${this.boards.length} board(s) (re-queued ${owed.length} owed game(s))`);
     this.enqueue(dest, P.multigame(P.MULTIGAME_VERSION));
     this.sendBoards(dest);
+    for (const o of owed) this.sender.enqueueAll(dest, this.replay(o.epoch, o.withResult, dest) ?? []);
     this.resync(dest);
     this.opts.onClientsChanged?.();
   }
@@ -585,7 +588,9 @@ export class TlcsServer {
   private dispatch(msg: string, ip: string, port: number, numbered: boolean): void {
     if (msg.startsWith('LOGONv15')) {
       this.admin.forget(destKey(ip, port)); // any re-logon revokes admin
-      this.multi.delete(destKey(ip, port)); // ...and the TLCS-MG opt-in (the client re-sends it)
+      // ...and the TLCS-MG opt-in (the client re-sends it). Queued wrapped game items are
+      // re-encoded by the LOGON resync splice; wrapped latest items are simply dropped.
+      if (this.multi.delete(destKey(ip, port))) this.sender.dropLatest(destKey(ip, port));
     }
     if (this.admin.handle(msg, ip, port)) return;
     if (this.commands.handle(msg, ip, port, numbered)) return;

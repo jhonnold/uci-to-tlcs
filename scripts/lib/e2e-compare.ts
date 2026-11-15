@@ -170,6 +170,7 @@ export function checkTranscript(records: TranscriptRecord[], opts: TranscriptOpt
   let lastId: number | undefined;
   let accepted = new Set<number>();
   let mg = false;
+  let mgSeen = false; // the client opted in at some point (lines in flight across a re-LOGON are fine)
   const boards = new Map<number, BoardView>();
   const view = (b: number): BoardView => {
     let v = boards.get(b);
@@ -289,12 +290,13 @@ export function checkTranscript(records: TranscriptRecord[], opts: TranscriptOpt
       }
       if (MULTIGAME_LINE.exec(body)?.[1] === '1') {
         mg = true;
+        mgSeen = true;
         rearm();
         continue;
       }
       const w = BOARD_LINE.exec(body);
       if (w && mg) game(Number(w[1]), w[2], r.t);
-      else if (!mg && !body.startsWith('MULTIGAME:')) fail(`${tag} t=${r.t}ms: TLCS-MG line before the MULTIGAME reply: ${body}`);
+      else if (!mg && !mgSeen && !body.startsWith('MULTIGAME:')) fail(`${tag} t=${r.t}ms: TLCS-MG line before the MULTIGAME reply: ${body}`);
       continue;
     }
     if (mg && isGameLine(body)) {

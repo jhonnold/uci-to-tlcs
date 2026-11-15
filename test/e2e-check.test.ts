@@ -189,3 +189,9 @@ test('checkTranscript legacy purity: a TLCS-MG token without opting in is a find
     assert.equal(checkTranscript(recs, { legacy: true }).length, 1, body);
   }
 });
+
+test('checkTranscript multigame: wrapped lines in flight across a re-LOGON are not findings', () => {
+  const id = counter();
+  const recs = [ev('logon'), inn('MULTIGAME: 1', id()), inn('BOARD 2 FMR: 0', id()), ev('relogon'), inn('BOARD 2 FMR: 1', id())];
+  assert.deepEqual(checkTranscript(recs), []);
+});

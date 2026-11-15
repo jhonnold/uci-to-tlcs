@@ -10,6 +10,7 @@ import { Demux } from '../src/demux.js';
 import { FastchessSource } from '../src/source/fastchess-source.js';
 import type { NormalizedLine } from '../src/source/log-source.js';
 import { parseInfoLine } from '../src/uci/info.js';
+import { MG_TOKEN, isGameLine } from '../scripts/lib/tlcs-frame.js';
 
 const HOST = '127.0.0.1';
 
@@ -24,6 +25,8 @@ function startServer(): Promise<TlcsServer> {
 class Client {
   readonly sock: Socket = createSocket('udp4');
   readonly got: Array<{ body: string; numbered: boolean }> = [];
+  /** While false, numbered datagrams are neither ACKed nor recorded (a client that lags). */
+  acking = true;
   private seen = new Set<number>();
   constructor(private readonly port: number) {}
   static async open(port: number): Promise<Client> {
@@ -35,6 +38,7 @@ class Client {
   private onMsg(raw: string): void {
     const m = /^<(\d+)>([\s\S]*)$/.exec(raw);
     if (!m) return void this.got.push({ body: raw, numbered: false });
+    if (!this.acking) return;
     const id = Number(m[1]);
     this.send(`ACK: ${id}`);
     if (this.seen.has(id)) return;
@@ -78,8 +82,8 @@ async function settle(c: Client, quietMs = 150, ms = 10_000): Promise<void> {
   }
 }
 
-const GAME_TOKENS = /^(WPLAYER|BPLAYER|FEN|FMR|WMOVE|BMOVE|result|WTIME|BTIME|WPV|BPV|WINFO|BINFO):|^level /;
-const MG_TOKENS = /^(BOARD |BOARDS:|MULTIGAME:|GAMENO:)/;
+const GAME_TOKENS = { test: isGameLine };
+const MG_TOKENS = MG_TOKEN;
 
 const fixtureLines = (): NormalizedLine[] => {
   const src = new FastchessSource();
@@ -215,5 +219,54 @@ test('re-LOGON drops the opt-in (bare board-1 resync); MULTIGAME from an unknown
   await sleep(50);
   assert.deepEqual(stranger.bodies(), []);
   for (const x of [c, stranger]) x.close();
+  s.close();
+});
+
+test('opt-in of a lagging client: its undelivered result is still delivered (wrapped)', async () => {
+  const s = await startServer();
+  const c = await Client.open(s.address().port);
+  c.send('LOGONv15:lag');
+  await waitFor(() => c.bodies().includes('LOGON SUCCESSFUL'));
+  await settle(c);
+  c.acking = false;
+  s.setPlayers('X', 'Y');
+  s.emitInitialPosition('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq', 0);
+  s.emitResult('1-0', 4, true);
+  c.send('MULTIGAME: 1');
+  await sleep(100);
+  c.acking = true;
+  await waitFor(() => c.bodies().includes('BOARD 1 result: 1-0'), 5000);
+  const nb = c.numbered();
+  assert.equal(nb[nb.indexOf('BOARD 1 result: 1-0') - 1], 'BOARD 1 GAMENO: 4');
+  assert.ok(nb.indexOf('MULTIGAME: 1') < nb.indexOf('BOARD 1 WPLAYER: X'));
+  c.close();
+  s.close();
+});
+
+test('re-LOGON of a lagging TLCS-MG client: no wrapped line reaches it afterwards', async () => {
+  const s = await startServer();
+  const c = await Client.open(s.address().port);
+  c.send('LOGONv15:mg');
+  await waitFor(() => c.bodies().includes('LOGON SUCCESSFUL'));
+  c.send('MULTIGAME: 1');
+  await waitFor(() => c.bodies().includes('BOARDS: 1'));
+  await settle(c);
+  c.acking = false;
+  const b2 = s.board(2);
+  b2.setPlayers('A', 'B');
+  b2.emitClocks(100, 100);
+  s.setPlayers('X', 'Y');
+  s.emitClocks(200, 200);
+  c.send('LOGONv15:mg');
+  await sleep(100);
+  const n = c.got.length;
+  c.acking = true;
+  await waitFor(() => c.got.slice(n).some((g) => g.body === 'WPLAYER: X'), 5000);
+  await settle(c);
+  // the in-flight item may still be a wrapped one; nothing queued after the LOGON is
+  const after = c.got.slice(n).map((g) => g.body);
+  const firstBare = after.indexOf('WPLAYER: X');
+  assert.deepEqual(after.slice(firstBare).filter((x) => MG_TOKEN.test(x)), []);
+  c.close();
   s.close();
 });

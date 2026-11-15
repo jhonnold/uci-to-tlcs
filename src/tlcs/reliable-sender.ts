@@ -284,15 +284,28 @@ export class ReliableSender {
   }
 
   /**
-   * Drop every queued game item and latest item of `dest` (not the in-flight one): the client
-   * switches how it is sent games (TLCS-MG opt-in) and gets a full resync right after.
+   * Take `dest`'s queued game items and latest items out of its queue (not the in-flight one)
+   * because the client switches how it is sent games (TLCS-MG opt-in). Returns each removed game
+   * epoch, in queue order, with whether its result was among them, so the caller can queue the
+   * replays again in the new form: nothing still owed to the client is lost.
    */
-  dropGameItems(dest: string): number {
+  takeGameItems(dest: string): Array<{ epoch: number; withResult: boolean }> {
     const c = this.clientsMap.get(dest);
-    if (!c) return 0;
-    const before = c.queue.length;
-    c.queue = c.queue.filter((it) => !it.latest && it.epoch === undefined);
-    return before - c.queue.length;
+    if (!c) return [];
+    const owed = new Map<number, boolean>();
+    c.queue = c.queue.filter((it) => {
+      if (it.latest) return false;
+      if (it.epoch === undefined) return true;
+      owed.set(it.epoch, (owed.get(it.epoch) ?? false) || !!it.critical);
+      return false;
+    });
+    return [...owed].map(([epoch, withResult]) => ({ epoch, withResult }));
+  }
+
+  /** Drop `dest`'s queued latest-only items (they are encoded for the client's previous mode). */
+  dropLatest(dest: string): void {
+    const c = this.clientsMap.get(dest);
+    if (c) c.queue = c.queue.filter((it) => !it.latest);
   }
 
   close(): void {

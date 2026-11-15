@@ -90,14 +90,19 @@ test('resyncAll appends each unfinished current game in board order', () =>
     h.s.close();
   }));
 
-test('dropGameItems removes queued game and latest items, keeps control items and the in-flight one', () =>
+test('takeGameItems removes queued game and latest items, reports owed epochs, keeps control items and the in-flight one', () =>
   quiet(async () => {
     const h = harness();
     h.s.enqueue('A', item('inflight', 1, 1));
     h.s.enqueue('A', item('g', 1, 1));
+    h.s.enqueue('A', item('res', 1, 1, true));
+    h.s.enqueue('A', item('g2', 2, 1));
     h.s.enqueue('A', { body: 'WPV: 1', latest: 'WPV' });
     h.s.enqueue('A', { body: 'CHAT: hi' });
-    assert.equal(h.s.dropGameItems('A'), 2);
+    assert.deepEqual(h.s.takeGameItems('A'), [
+      { epoch: 1, withResult: true },
+      { epoch: 2, withResult: false },
+    ]);
     assert.equal(h.s.depth('A'), 2); // in flight + CHAT
     h.setAck(true);
     h.s.ack('A', 1);
