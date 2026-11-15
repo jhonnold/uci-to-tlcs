@@ -251,7 +251,7 @@ test('sender: over maxQueue, each board\'s queued move steps collapse to its pos
   const dr0 = mg('tlcs_dropped_total', { reason: 'stale' });
   const log = captureLogs();
   try {
-    const h = harness({ maxQueue: 8 }, () => null);
+    const h = harness({ maxQueue: 5 }, () => null);
     h.s.addClient('A');
     h.s.enqueue('A', ctl('lead')); // in flight, never ACKed by the policy
     h.s.enqueue('A', game('WPLAYER: a'));
@@ -263,7 +263,7 @@ test('sender: over maxQueue, each board\'s queued move steps collapse to its pos
     h.s.enqueue('A', step('FEN: c', 'fc'));
     h.s.enqueue('A', step('BOARD 2 FEN: y', 'fy', 2));
     assert.equal(h.s.depth('A'), 1 + 8, 'at the cap: nothing dropped');
-    h.s.enqueue('A', step('FEN: d', 'fd')); // 9 > 8
+    h.s.enqueue('A', step('FEN: d', 'fd')); // 6 queued steps > 5
     assert.deepEqual(h.collapses.sort(), [[1, 'fd'], [2, 'fy']]);
     for (let id = 1; id <= 6; id++) h.s.ack('A', id);
     assert.deepEqual(h.firstSeen('A').map((x) => x.body), ['lead', 'WPLAYER: a', 'result: 1-0', 'WPLAYER: b', 'P2:fy', 'P1:fd']);
@@ -275,15 +275,39 @@ test('sender: over maxQueue, each board\'s queued move steps collapse to its pos
   }
 });
 
+test('sender: a long control backlog (a crosstable dump) never collapses the moves queued behind it', async () => {
+  const h = harness({ maxQueue: 8 }, () => null);
+  h.s.addClient('A');
+  h.s.enqueue('A', ctl('lead'));
+  for (let i = 0; i < 20; i++) h.s.enqueue('A', ctl(`CT:${i}`));
+  h.s.enqueue('A', step('FEN: a', 'fa'));
+  h.s.enqueue('A', step('WMOVE: a', 'fa'));
+  h.s.enqueue('A', step('FMR: 0', 'fa'));
+  assert.deepEqual(h.collapses, [], 'only queued move steps count towards maxQueue');
+  assert.equal(h.s.depth('A'), 1 + 20 + 3);
+  h.s.close();
+});
+
+test('sender: a board collapses only when its queued steps outnumber the position steps replacing them', async () => {
+  const h = harness({ maxQueue: 4 }, () => null, (b, pos) => Array.from({ length: 3 }, (_, i) => ({ body: `P${b}:${pos.fen}:${i}`, board: b, step: pos })));
+  h.s.addClient('A');
+  h.s.enqueue('A', ctl('lead'));
+  h.s.enqueue('A', step('BOARD 2 FEN: x', 'fx', 2)); // board 2: 1 step, never worth collapsing
+  for (const f of ['a', 'b', 'c', 'd']) h.s.enqueue('A', step(`FEN: ${f}`, `f${f}`)); // 5 steps > 4
+  for (let id = 1; id <= 5; id++) h.s.ack('A', id);
+  assert.deepEqual(h.firstSeen('A').map((x) => x.body), ['lead', 'BOARD 2 FEN: x', 'P1:fd:0', 'P1:fd:1', 'P1:fd:2']);
+  h.s.close();
+});
+
 test('sender: latest items and control lines survive a stale collapse in place', async () => {
-  const h = harness({ maxQueue: 4 }, () => null);
+  const h = harness({ maxQueue: 2 }, () => null);
   h.s.addClient('A');
   h.s.enqueue('A', ctl('lead'));
   h.s.enqueue('A', step('FEN: a', 'fa'));
   h.s.enqueue('A', { body: 'WPV: 1', latest: 'WPV', board: 1 });
   h.s.enqueue('A', ctl('CHAT: hi'));
   h.s.enqueue('A', step('FEN: b', 'fb'));
-  h.s.enqueue('A', step('FEN: c', 'fc')); // 5 > 4
+  h.s.enqueue('A', step('FEN: c', 'fc')); // 3 steps > 2
   for (let id = 1; id <= 3; id++) h.s.ack('A', id);
   assert.deepEqual(h.rx.map((r) => r.body), ['lead', 'WPV: 1', 'CHAT: hi', 'P1:fc']);
   h.s.close();

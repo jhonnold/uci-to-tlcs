@@ -21,8 +21,8 @@ changing reply/targeting logic, or touching the FEN/time/score/PV encoding in
     players, control; a control line's `onGiveUp` runs), and the next one goes out. A client's board recovers by
     itself: every move is preceded by its post-move `FEN:`, and node-tlcv reloads that FEN when a move does not apply
     (`onMove` catch → `resetFromFen()`); only its PGN history is lost (that game's PGN starts at the reload, with
-    `[SetUp][FEN]`; a lost `result:` means that game is not saved). A client whose queue passes `maxQueue` (256) has
-    fallen behind: per board its queued move steps (`FEN`/`xMOVE`/`FMR`) are dropped and the **position steps** of the
+    `[SetUp][FEN]`; a lost `result:` means that game is not saved). A client with more than `maxQueue` (256) move steps queued
+    has fallen behind (control lines such as a crosstable dump do not count): per board its queued move steps (`FEN`/`xMOVE`/`FMR`) are dropped and the **position steps** of the
     newest one take its place (see "Position steps"); players, `level`, `GAMENO`, `result`, PV/clock and control lines
     stay. Metrics: `tlcs_giveups_total{kind}`, `tlcs_dropped_total{reason=giveup|stale}`. Used for SITE / PLAYER /
     FEN / MOVE / FMR / level / result / user / chat.

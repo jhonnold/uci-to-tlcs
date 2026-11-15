@@ -53,7 +53,8 @@ Handled from clients (`tlcs/server.ts`, `commands.ts`, `admin.ts`, `results/resu
   After a server restart the operator must reconnect it (it shows the "no longer connected" notice; it does not re-LOGON by
   itself, measured with the desktop mock 2026-11-15).
 - **Best-effort delivery (by design):** a lost line (5 s), a stale-move drop or a mid-game join costs a client its PGN history
-  for that game: node-tlcv saves it from the reload position (`[SetUp][FEN]`); a lost `result:` means the game is not saved.
+  for that game: node-tlcv saves it from the reload position (`[SetUp][FEN]`); a lost `result:` means the game is not saved,
+  and since node-tlcv re-requests `RESULTTABLE` only after a result, it saves the next game under the lost game's number.
   Rarely a move after a lost one is legal on the stale board, so node-tlcv shows a wrong board until a later move fails to
   apply (no forced reload on a give-up). Desktop TLCV gets gaps in its move list.
 - **Restart:** games that end during the outage are not sent to anyone (node-tlcv does not save them; they stay in `CT:`/`GL:`);

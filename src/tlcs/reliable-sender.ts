@@ -168,7 +168,10 @@ export class ReliableSender {
 
   private pushNumbered(dest: string, c: ClientState, items: Outbound[]): void {
     c.queue.push(...items);
-    if (c.queue.length > this.opts.maxQueue) this.dropStale(dest, c);
+    // Only queued move steps measure how far behind a client is (a crosstable dump is not a backlog of moves).
+    if (items.some((it) => it.step) && c.queue.length > this.opts.maxQueue && c.queue.filter((it) => it.step).length > this.opts.maxQueue) {
+      this.dropStale(dest, c);
+    }
     this.enforceHardCap(dest, c);
     this.pump(dest, c);
   }
@@ -313,27 +316,38 @@ export class ReliableSender {
   }
 
   /**
-   * A client that fell behind (queue over maxQueue): per board, its queued move steps are
-   * stale, so they go and that board's position steps for the newest one take the place of
-   * that newest step. Players, level, GAMENO, result, latest and control lines are kept.
+   * A client that fell behind (more than maxQueue move steps queued): per board, its queued
+   * move steps are stale, so they go and that board's position steps for the newest one take
+   * the place of that newest step, when they are fewer than the steps they replace. Players,
+   * level, GAMENO, result, latest and control lines are kept.
    */
   private dropStale(dest: string, c: ClientState): void {
     if (!this.hooks.positionSteps) return;
-    const newest = new Map<number, number>();
+    const steps = new Map<number, { count: number; newest: number }>();
     c.queue.forEach((it, i) => {
-      if (it.step && it.board !== undefined) newest.set(it.board, i);
+      if (!it.step || it.board === undefined) return;
+      const s = steps.get(it.board) ?? { count: 0, newest: i };
+      s.count++;
+      s.newest = i;
+      steps.set(it.board, s);
     });
-    if (newest.size === 0) return;
+    const replace = new Map<number, Outbound[]>();
+    for (const [board, s] of steps) {
+      const r = this.hooks.positionSteps(dest, board, c.queue[s.newest].step!);
+      if (r.length < s.count) replace.set(board, r);
+    }
+    if (replace.size === 0) return;
     const out: Outbound[] = [];
     let dropped = 0;
     c.queue.forEach((it, i) => {
-      if (!it.step || it.board === undefined) return void out.push(it);
+      const r = it.step && it.board !== undefined ? replace.get(it.board) : undefined;
+      if (!r) return void out.push(it);
       dropped++;
-      if (newest.get(it.board) === i) out.push(...this.hooks.positionSteps!(dest, it.board, it.step));
+      if (steps.get(it.board!)!.newest === i) out.push(...r);
     });
     c.queue = out;
     metrics.inc('tlcs_dropped_total', { reason: 'stale' }, dropped);
-    logger.info(`stale: ${dest} dropped ${dropped} move step(s) on board(s) ${[...newest.keys()].join(',')}`);
+    logger.info(`stale: ${dest} dropped ${dropped} move step(s) on board(s) ${[...replace.keys()].join(',')}`);
   }
 
   private enforceHardCap(dest: string, c: ClientState): void {

@@ -126,7 +126,7 @@ restarts there).
   recovers on the first move that does not apply. Rarely, a move is legal on the stale board too: the board stays
   wrong until a later move fails. A lost `result:` means the game is not saved; a client must therefore drop a pending
   `GAMENO` when that board's next `WPLAYER` arrives, so it never names the next game with it.
-- **Falling behind** (more than 256 numbered lines queued): per board, the queued move steps are replaced by the
+- **Falling behind** (more than 256 move steps queued; other lines do not count): per board, the queued move steps are replaced by the
   position steps of the newest one; players, `level`, `GAMENO`, `result` and broadcast lines are kept, in order.
 
 ## 8. Server restart
@@ -155,7 +155,7 @@ restarts there).
   with the same pairing, start and length can swap numbers.
 - Stop-and-wait delivery is shared by all boards: per client ~3 numbered items per move per board. A slow or lossy
   client therefore loses lines (§7) rather than falling further behind: 5 s per undeliverable line, and stale moves
-  are dropped once more than 256 lines are queued.
+  are dropped once more than 256 move steps are queued.
 - Verified with fastchess 1.8.2 on Linux; the worker-thread id in the log identifies the game.
   Windows fastchess is unverified.
 
