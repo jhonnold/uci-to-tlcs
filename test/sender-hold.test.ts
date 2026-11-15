@@ -1,18 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ReliableSender, type Outbound } from '../src/tlcs/reliable-sender.js';
+import { ReliableSender } from '../src/tlcs/reliable-sender.js';
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 function mk() {
   const sent: Array<{ t: number; payload: string }> = [];
-  const acked: string[] = [];
   const s = new ReliableSender(
-    { rawSend: (payload) => void sent.push({ t: performance.now(), payload }), replay: () => null, onAcked: (_d, it: Outbound) => void acked.push(it.body) },
+    { rawSend: (payload) => void sent.push({ t: performance.now(), payload }) },
     { initialRtoMs: 200, minRtoMs: 100, maxRtoMs: 400 },
   );
   s.addClient('c');
-  return { s, sent, acked, ackLast: () => { const m = /^<(\d+)>/.exec(sent[sent.length - 1].payload); s.ack('c', Number(m![1])); } };
+  return { s, sent, ackLast: () => { const m = /^<(\d+)>/.exec(sent[sent.length - 1].payload); s.ack('c', Number(m![1])); } };
 }
 
 test('hold: nothing numbered is sent for holdMs after the ACK, then the next id goes out', async () => {
@@ -55,12 +54,11 @@ test('hold: removeClient during the hold clears the timer; nothing is sent after
   s.close();
 });
 
-test('items without holdMs behave as before; onAcked fires per ACK', () => {
-  const { s, sent, acked, ackLast } = mk();
+test('items without holdMs behave as before', () => {
+  const { s, sent, ackLast } = mk();
   s.enqueue('c', { body: 'one' });
   s.enqueue('c', { body: 'two' });
   ackLast();
   assert.equal(sent.length, 2);
-  assert.deepEqual(acked, ['one']);
   s.close();
 });

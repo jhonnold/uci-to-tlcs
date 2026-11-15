@@ -64,7 +64,7 @@ function mkCfg(dir: string, port: number): Config {
   return {
     logPath: path.join(dir, 'fc.log'), format: 'fastchess', port, bindAddr: HOST, white: 'White', black: 'Black', site: 'T',
     fromStart: true, delayMs: 100, delayAfterMoveMs: 0, delayAfterGameMs: 0, fenSetupMove: true, menus: [],
-    tourneyPgn: path.join(dir, 'games.pgn'), saveDebug: false, stateFile: path.join(dir, 'state.json'),
+    tourneyPgn: path.join(dir, 'games.pgn'), saveDebug: false,
     clientTimeoutMs: 70000, maxClients: 0, bannedIps: [], pvIntervalMs: 0, logFormat: 'human',
   };
 }
@@ -138,7 +138,7 @@ test('concurrent log end to end: 3 boards, every GAMENO matches the PGN, legacy 
   restore();
 });
 
-test('concurrent restart with state: TLCS-MG client restored without re-LOGON, boards resynced, results correct', async () => {
+test('concurrent restart: the client re-LOGONs and opts in, gets every board\'s live position, then correct results', async () => {
   const restore = quiet();
   const dir = mkdtempSync(path.join(tmpdir(), 'mg-restart-'));
   const cut = lineAfter(LOG, Math.floor(LOG.length * 0.35));
@@ -152,19 +152,21 @@ test('concurrent restart with state: TLCS-MG client restored without re-LOGON, b
   mg.send('MULTIGAME: 1');
   await waitFor(() => mg.rx.includes('BOARDS: 1 2 3'));
   await sleep(200);
-  const state = JSON.parse(readFileSync(path.join(dir, 'state.json'), 'utf8'));
-  assert.equal(state.clients[0].multi, true);
-  app1.close({ flush: false });
+  app1.close();
 
   const before = mg.rx.length;
   mg.resetSeen();
   const app2 = await startApp(mkCfg(dir, port));
-  assert.equal(app2.server.isMulti(mg.dest()), true);
+  assert.equal(app2.server.isMulti(mg.dest()), false, 'nothing restored');
   assert.equal(app2.server.boardCount(), 3);
+  mg.send('LOGONv15:mg');
+  await waitFor(() => mg.rx.slice(before).includes('LOGON SUCCESSFUL'));
+  mg.send('MULTIGAME: 1');
   await waitFor(() => [1, 2, 3].every((b) => mg.rx.slice(before).some((l) => l.startsWith(`BOARD ${b} WPLAYER:`))));
-  assert.ok(!mg.rx.slice(before).some((l) => /^(WPLAYER|WMOVE|BMOVE|FEN):/.test(l)), 'no bare game line after the restart');
+  const reply = mg.rx.indexOf('MULTIGAME: 1', before);
+  assert.ok(!mg.rx.slice(reply).some((l) => /^(WPLAYER|WMOVE|BMOVE|FEN):/.test(l)), 'no bare game line after the reply');
   appendFileSync(path.join(dir, 'fc.log'), LOG.subarray(cut));
-  const after = () => mgResults(mg.rx.slice(before));
+  const after = () => mgResults(mg.rx.slice(reply));
   await waitFor(() => after().length >= 3, 15000);
   await sleep(300);
   checkAgainstPgn(after());

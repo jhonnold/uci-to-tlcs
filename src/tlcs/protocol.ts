@@ -45,6 +45,19 @@ export function fmr(halfmoveClock: number): string {
   return `FMR: ${halfmoveClock}`;
 }
 
+/**
+ * The SAN of the synthetic setup move: chess.js rejects it, so node-tlcv's `onMove` catch runs
+ * `resetFromFen()` and loads the FEN just sent (desktop TLCV shows `n. (setup)` once).
+ */
+export const SETUP_SAN = '(setup)';
+
+/** A board position as the move steps leave it: truncated FEN, halfmove clock, fullmove number. */
+export interface Position {
+  fen: string;
+  fmr: number;
+  fullmove: number;
+}
+
 export function move(color: ColorCode, fullMoveNumber: number, san: string): string {
   const cmd = color === 'w' ? 'WMOVE' : 'BMOVE';
   const sep = color === 'w' ? '.' : '...';

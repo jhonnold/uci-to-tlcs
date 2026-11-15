@@ -1,7 +1,7 @@
 import { parseLine, type GoEvent, type PositionEvent } from './uci/parser.js';
 import { scoreToCentipawns, type UciInfo } from './uci/info.js';
 import { GameState, STARTPOS_TRUNC } from './game/game-state.js';
-import { msToCs, type ColorCode } from './tlcs/protocol.js';
+import { msToCs, SETUP_SAN, type ColorCode } from './tlcs/protocol.js';
 import type { NormalizedLine } from './source/log-source.js';
 import { targetPlies, type FinishedGame } from './results/registry.js';
 import { logger } from './util/logger.js';
@@ -78,14 +78,6 @@ export interface PipelineMeta {
   /** Non-startpos games: precede the base FEN with a synthetic `(setup)` move so node-tlcv loads it. Default true. */
   fenSetupMove?: boolean;
 }
-
-/**
- * Synthetic SAN for the setup move. node-tlcv's `onMove` fails to apply it in chess.js and
- * its catch runs `resetFromFen()`, which loads the preceding `FEN` header onto a board that
- * is already loaded (a bare non-startpos FEN is otherwise only stored as a backup). Desktop
- * TLCV appends move text unvalidated, so it shows `1. (setup)` once; its board is correct.
- */
-const SETUP_SAN = '(setup)';
 
 /** PGN result token for an unfinished/adjudicated game (no board-terminal result). */
 const RESULT_UNKNOWN = '*';

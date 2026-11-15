@@ -26,7 +26,6 @@ export interface IniValues {
   tourneyPgn?: string;
   saveDebug?: boolean;
   fenSetupMove?: boolean;
-  stateFile?: string;
   clientTimeoutMs?: number;
   adminPass?: string;
   maxClients?: number;
@@ -60,7 +59,7 @@ export function parseIni(text: string, baseDir: string): IniResult {
     if (!(x >= min && x <= max)) fail(n, key, v);
     return x;
   };
-  const path = (key: 'logPath' | 'tourneyPgn' | 'stateFile', v: string): void => {
+  const path = (key: 'logPath' | 'tourneyPgn', v: string): void => {
     const t = v.trim();
     if (t === '') delete values[key];
     else values[key] = resolve(baseDir, t);
@@ -110,7 +109,7 @@ export function parseIni(text: string, baseDir: string): IniResult {
         path('tourneyPgn', v);
         break;
       case 'STATEFILE':
-        path('stateFile', v);
+        warnings.push('STATEFILE is no longer used (a restart catches up to the live position; clients re-LOGON), ignored');
         break;
       case 'PORT':
         values.port = int(n, key, v, 1, 65535);

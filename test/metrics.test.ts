@@ -26,9 +26,9 @@ test('metrics: render on a fresh instance seeds known series, omits open-ended o
     'tlcs_retransmits_total 0',
     'tlcs_giveups_total{kind="game"} 0',
     'tlcs_giveups_total{kind="control"} 0',
-    'tlcs_giveups_total{kind="critical"} 0',
+    'tlcs_dropped_total{reason="giveup"} 0',
+    'tlcs_dropped_total{reason="stale"} 0',
     'tlcs_resyncs_total{kind="full"} 0',
-    'tlcs_resyncs_total{kind="giveup"} 0',
   ]) assert(out.split('\n').includes(l), l);
   assert(!out.includes('tlcs_messages_sent_total{'));
   m.inc('tlcs_giveups_total', { kind: 'game' });

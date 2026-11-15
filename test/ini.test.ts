@@ -84,10 +84,11 @@ test('MENU lines', () => {
 });
 
 test('paths resolve against baseDir', () => {
-  const v = p('PATH=fc.log\nTOURNEYPGN=/abs/g.pgn\nSTATEFILE=s.json').values;
+  const r = p('PATH=fc.log\nTOURNEYPGN=/abs/g.pgn\nSTATEFILE=s.json');
+  const v = r.values;
   assert.equal(v.logPath, path.resolve(B, 'fc.log'));
   assert.equal(v.tourneyPgn, '/abs/g.pgn');
-  assert.equal(v.stateFile, path.resolve(B, 's.json'));
+  assert.ok(r.warnings.some((w) => /STATEFILE is no longer used/.test(w)), 'old server.ini keeps working');
   assert.equal(p('TOURNEYPGN=').values.tourneyPgn, undefined);
 });
 

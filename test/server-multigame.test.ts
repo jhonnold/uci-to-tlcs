@@ -14,9 +14,9 @@ import { MG_TOKEN, isGameLine } from '../scripts/lib/tlcs-frame.js';
 
 const HOST = '127.0.0.1';
 
-function startServer(): Promise<TlcsServer> {
+function startServer(maxQueue?: number): Promise<TlcsServer> {
   return new Promise((resolve) => {
-    const s = new TlcsServer({ port: 0, bindAddr: HOST });
+    const s = new TlcsServer({ port: 0, bindAddr: HOST, maxQueue });
     s.start(() => resolve(s));
   });
 }
@@ -108,8 +108,9 @@ const firstChannel = (lines: NormalizedLine[]) => lines.find((n) => n.direction 
 
 test('legacy client: board-1 game lines equal a board-1-only run; no TLCS-MG token ever', async () => {
   const lines = fixtureLines();
-  const a = await startServer();
-  const b = await startServer();
+  // the whole fixture arrives at once: a queue that never fills, so no stale move is dropped
+  const a = await startServer(100_000);
+  const b = await startServer(100_000);
   const ca = await Client.open(a.address().port);
   const cb = await Client.open(b.address().port);
   ca.send('LOGONv15:legacy');
@@ -133,7 +134,7 @@ test('legacy client: board-1 game lines equal a board-1-only run; no TLCS-MG tok
   b.close();
 });
 
-test('opt-in: MULTIGAME reply, BOARDS, then every board replayed wrapped; no bare game line after the reply', async () => {
+test('opt-in: MULTIGAME reply, BOARDS, then every board\'s snapshot wrapped; no bare game line after the reply', async () => {
   const lines = fixtureLines();
   // stop mid-tournament: drop everything after the first game result on any thread
   const s = await startServer();
@@ -155,9 +156,10 @@ test('opt-in: MULTIGAME reply, BOARDS, then every board replayed wrapped; no bar
     const mine = after.filter((x) => x.startsWith(`BOARD ${id} `));
     assert.match(mine[0], new RegExp(`^BOARD ${id} WPLAYER: `));
     assert.match(mine[1], new RegExp(`^BOARD ${id} BPLAYER: `));
-    assert.ok(mine.some((x) => /^BOARD \d+ WMOVE: 1\. /.test(x)), `board ${id} replayed its moves`);
+    assert.ok(mine.some((x) => /^BOARD \d+ [WB]MOVE: \d+\.+ \(setup\)$/.test(x)), `board ${id} got its position`);
+    assert.ok(!mine.some((x) => /^BOARD \d+ [WB]MOVE: \d+\.+ [^(]/.test(x)), `board ${id}: no move history`);
   }
-  // boards come in order: board 1's replay before board 2's
+  // boards come in order: board 1's snapshot before board 2's
   const firstOf = (id: number) => after.findIndex((x) => x.startsWith(`BOARD ${id} `));
   assert.ok(firstOf(1) < firstOf(2) && firstOf(2) < firstOf(3));
   c.close();
@@ -222,7 +224,7 @@ test('re-LOGON drops the opt-in (bare board-1 resync); MULTIGAME from an unknown
   s.close();
 });
 
-test('opt-in of a lagging client: its undelivered result is still delivered (wrapped)', async () => {
+test('opt-in of a lagging client: its queued bare lines become the wrapped snapshot; a finished game is not resent', async () => {
   const s = await startServer();
   const c = await Client.open(s.address().port);
   c.send('LOGONv15:lag');
@@ -232,13 +234,16 @@ test('opt-in of a lagging client: its undelivered result is still delivered (wra
   s.setPlayers('X', 'Y');
   s.emitInitialPosition('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq', 0);
   s.emitResult('1-0', 4, true);
+  s.board(2).setPlayers('A', 'B');
   c.send('MULTIGAME: 1');
   await sleep(100);
   c.acking = true;
-  await waitFor(() => c.bodies().includes('BOARD 1 result: 1-0'), 5000);
+  await waitFor(() => c.bodies().includes('BOARD 2 BPLAYER: B'), 5000);
+  await settle(c);
   const nb = c.numbered();
-  assert.equal(nb[nb.indexOf('BOARD 1 result: 1-0') - 1], 'BOARD 1 GAMENO: 4');
-  assert.ok(nb.indexOf('MULTIGAME: 1') < nb.indexOf('BOARD 1 WPLAYER: X'));
+  const after = nb.slice(nb.indexOf('MULTIGAME: 1'));
+  assert.deepEqual(after.filter((x) => GAME_TOKENS.test(x)), [], 'no bare game line after the reply');
+  assert.ok(!nb.some((x) => /result|GAMENO/.test(x)), 'the finished game is not resent');
   c.close();
   s.close();
 });
