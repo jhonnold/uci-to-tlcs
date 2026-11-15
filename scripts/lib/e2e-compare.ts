@@ -1,3 +1,4 @@
+import { Chess } from 'chess.js';
 import type { PgnGame } from './pgn.js';
 import type { TranscriptRecord } from './transcript.js';
 import { BOARD_LINE, MG_TOKEN, MULTIGAME_LINE, isGameLine, parseResultBody, splitOnCommand } from './tlcs-frame.js';
@@ -153,13 +154,50 @@ interface BoardView {
   sans: string[];
   gameno?: number;
   prevResult?: string;
+  /** node-tlcv's board model (only once a valid FEN arrived): moves apply, a failed one reloads `fen`. */
+  chess?: Chess;
+  fen?: string;
+  fmr: number;
+  /** Position the recorded `sans` start from (3-field FEN head). */
+  from?: string;
+}
+
+const STARTPOS_HEAD = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq';
+
+/** A 3-field TLCS FEN with node-tlcv's completion (castling `-` if missing, ep `-`), or null if chess.js rejects it. */
+function loadFen(fen: string, fmr: number, moveNo: number): Chess | null {
+  const t = fen.trim().split(/\s+/);
+  if (t[1] === 'w' || t[1] === 'b') {
+    if (t.length === 2) t.push('-');
+  }
+  try {
+    return new Chess([...t.slice(0, 3), '-', fmr, Math.max(1, moveNo)].join(' '));
+  } catch {
+    return null;
+  }
+}
+
+/** The final position of a fastchess game (3-field head), or null if its moves do not replay. */
+function finalHead(g: PgnGame): string | null {
+  try {
+    const c = new Chess(g.headers.FEN?.trim() || undefined);
+    for (const san of g.sans) c.move(san, { strict: false });
+    return fenHead(c.fen());
+  } catch {
+    return null;
+  }
 }
 
 /**
  * Invariants over one mock transcript. Game lines are tracked per board: bare lines are the
- * single-game stream, `BOARD <n> <line>` (after a `MULTIGAME:` reply) is board n. A result with a
- * preceding `GAMENO` must be that fastchess game (names, result and every SAN); without one it
- * must match some unused fastchess game by names and result.
+ * single-game stream, `BOARD <n> <line>` (after a `MULTIGAME:` reply) is board n. Each board is
+ * modelled as node-tlcv does it: moves apply to a chess board, a move that does not apply
+ * reloads the last `FEN:` and history restarts there (a lost line, a join snapshot's `(setup)`
+ * move), a startpos `FEN:` resets a loaded board. A result with a preceding `GAMENO` must be that
+ * fastchess game: names and result, and every SAN when the history starts at the game's start
+ * position; otherwise (a client that joined late or lost lines) the received SANs must be the
+ * game's tail and the final board its final position. Without `GAMENO` the result must match
+ * some unused fastchess game by names and result.
  */
 export function checkTranscript(records: TranscriptRecord[], opts: TranscriptOpts = {}): Finding[] {
   const out: Finding[] = [];
@@ -174,7 +212,7 @@ export function checkTranscript(records: TranscriptRecord[], opts: TranscriptOpt
   const boards = new Map<number, BoardView>();
   const view = (b: number): BoardView => {
     let v = boards.get(b);
-    if (!v) boards.set(b, (v = { armed: true, sans: [] }));
+    if (!v) boards.set(b, (v = { armed: true, sans: [], fmr: 0 }));
     return v;
   };
   const rearm = () => {
@@ -194,17 +232,45 @@ export function checkTranscript(records: TranscriptRecord[], opts: TranscriptOpt
     }
     const [cmd, arg] = sp;
     const where = b ? ` board ${b}` : '';
-    if (cmd === 'FEN') v.armed = false;
+    if (cmd === 'FEN') {
+      v.armed = false;
+      v.fen = arg;
+      const head = fenHead(arg);
+      if (!v.chess || head === STARTPOS_HEAD) {
+        // not loaded yet: load it; loaded + startpos: node-tlcv reset()
+        v.chess = loadFen(arg, 0, 1) ?? undefined;
+        v.from = head;
+        v.sans = [];
+      }
+    } else if (cmd === 'FMR') v.fmr = Number(arg) || 0;
     else if ((cmd === 'WMOVE' || cmd === 'BMOVE') && v.armed) {
       fail(`${tag} t=${t}ms:${where} ${cmd} before any FEN after (re)logon/restart`);
       v.armed = false;
     } else if (cmd === 'WPLAYER') {
       v.wp = arg;
       v.sans = [];
+      v.from = v.chess ? fenHead(v.chess.fen()) : v.from;
     } else if (cmd === 'BPLAYER') v.bp = arg;
     if (cmd === 'WMOVE' || cmd === 'BMOVE') {
+      const moveNo = parseInt(arg, 10) || 1;
       const san = arg.replace(/^\d+\.+\s*/, '').trim();
-      if (san !== '(setup)') v.sans.push(normSan(san));
+      if (!v.chess) {
+        if (san !== '(setup)') v.sans.push(normSan(san));
+      } else {
+        let ok = false;
+        try {
+          v.chess.move(san, { strict: false });
+          ok = true;
+        } catch {
+          /* node-tlcv: "Failed to parse ... Loading from FEN" */
+        }
+        if (ok) v.sans.push(normSan(san));
+        else if (v.fen) {
+          v.chess = loadFen(v.fen, v.fmr, moveNo) ?? v.chess;
+          v.from = fenHead(v.fen);
+          v.sans = [];
+        }
+      }
     }
     if (cmd !== 'result' || !opts.fc) return;
     const res = parseResultBody(body);
@@ -225,10 +291,22 @@ export function checkTranscript(records: TranscriptRecord[], opts: TranscriptOpt
       if (gw !== v.wp || gb !== v.bp || gr !== res) {
         return void fail(`${label}: ${v.wp} vs ${v.bp} ${res}, fastchess has ${gw} vs ${gb} ${gr}`);
       }
-      if (v.sans.length !== g.sans.length || v.sans.some((x, k) => x !== g.sans[k])) {
-        const k = lcp(v.sans, g.sans);
-        fail(`${label}: moves differ at ply ${k + 1} (got ${v.sans[k] ?? 'end'}, exp ${g.sans[k] ?? 'end'})`);
+      const start = g.headers.FEN ? fenHead(g.headers.FEN) : STARTPOS_HEAD;
+      if (!v.chess || v.from === start) {
+        if (v.sans.length !== g.sans.length || v.sans.some((x, k) => x !== g.sans[k])) {
+          const k = lcp(v.sans, g.sans);
+          fail(`${label}: moves differ at ply ${k + 1} (got ${v.sans[k] ?? 'end'}, exp ${g.sans[k] ?? 'end'})`);
+        }
+        return;
       }
+      // Joined late or lost lines: the history is the game's tail, the board its final position.
+      const tail = g.sans.slice(g.sans.length - v.sans.length);
+      if (v.sans.length > g.sans.length || v.sans.some((x, k) => x !== tail[k])) {
+        fail(`${label}: moves after the reload are not the game's last ${v.sans.length} ply`);
+      }
+      const want = finalHead(g);
+      const got = fenHead(v.chess.fen());
+      if (want !== null && got !== want) fail(`${label}: final board ${got}, fastchess ends at ${want}`);
       return;
     }
     const match = (g: PgnGame) => {

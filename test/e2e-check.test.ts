@@ -195,3 +195,60 @@ test('checkTranscript multigame: wrapped lines in flight across a re-LOGON are n
   const recs = [ev('logon'), inn('MULTIGAME: 1', id()), inn('BOARD 2 FMR: 0', id()), ev('relogon'), inn('BOARD 2 FMR: 1', id())];
   assert.deepEqual(checkTranscript(recs), []);
 });
+
+test('checkTranscript lossy client: lost moves reload from the next FEN; the tail and the final board are checked', () => {
+  // game 1 of FC: 1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 1-0; the client lost 1... e5, 2. Nf3 and 2... Nc6 (and their FENs)
+  const id = counter();
+  const after = (fen: string) => inn(`BOARD 1 FEN: ${fen}`, id());
+  const base = [
+    ev('logon'),
+    inn('MULTIGAME: 1', id()),
+    inn('BOARD 1 WPLAYER: Berserk A', id()),
+    inn('BOARD 1 BPLAYER: Berserk B', id()),
+    inn(`BOARD 1 ${START}`, id()),
+    after('rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq'),
+    inn('BOARD 1 WMOVE: 1. e4', id()),
+  ];
+  const tail = (lastFen: string) => [
+    after('r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq'),
+    inn('BOARD 1 WMOVE: 3. Bb5', id()), // illegal on the stale board (black to move): reload
+    inn('BOARD 1 FMR: 3', id()),
+    after(lastFen),
+    inn('BOARD 1 BMOVE: 3... a6', id()),
+    inn('BOARD 1 GAMENO: 1', id()),
+    inn('BOARD 1 result: 1-0', id()),
+  ];
+  const good = [...base, ...tail('r1bqkbnr/1ppp1ppp/p1n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq')];
+  assert.deepEqual(checkTranscript(good, { fc: FC1 }), []);
+
+  // lost moves whose successor is legal on the stale board (1... e5 and 2. Nf3 lost, 2... Nc6
+  // applies): node-tlcv's board silently diverges; the checker reports it
+  const id2 = counter();
+  const recs = [...base, ...tail('r1bqkbnr/1ppp1ppp/p1n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq')];
+  recs.splice(recs.length - 7, 0, inn('BOARD 1 BMOVE: 2... Nc6', 0));
+  const out = checkTranscript(recs.map((r) => ({ ...r, id: r.id === undefined ? undefined : id2() })), { fc: FC1 });
+  assert.ok(out.some((f) => /moves differ|final board/.test(f.msg)), JSON.stringify(out));
+});
+
+test('checkTranscript join snapshot: (setup) reload mid-game, then the remaining moves', () => {
+  const id = counter();
+  const recs = [
+    ev('logon'),
+    inn('MULTIGAME: 1', id()),
+    inn('BOARD 1 WPLAYER: Berserk B', id()),
+    inn('BOARD 1 BPLAYER: Berserk A', id()),
+    inn(`BOARD 1 ${START}`, id()),
+    inn('BOARD 1 FMR: 0', id()),
+    inn('BOARD 1 FEN: rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq', id()),
+    inn('BOARD 1 FMR: 0', id()),
+    inn('BOARD 1 FEN: rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq', id()),
+    inn('BOARD 1 WMOVE: 2. (setup)', id()),
+    inn('BOARD 1 FMR: 0', id()),
+    inn('BOARD 1 WMOVE: 2. c4', id()),
+    inn('BOARD 1 BMOVE: 2... e6', id()),
+    inn('BOARD 1 GAMENO: 2', id()),
+    inn('BOARD 1 result: 1/2-1/2', id()),
+  ];
+  assert.deepEqual(checkTranscript(recs, { fc: FC1 }), []);
+});
+
