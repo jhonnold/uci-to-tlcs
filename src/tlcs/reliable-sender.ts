@@ -17,6 +17,8 @@ export interface Outbound {
   onGiveUp?: (dest: string) => void;
   /** Control items only: after this item's ACK, send nothing numbered to this client for holdMs. */
   holdMs?: number;
+  /** Control items only: never evicted by the hard cap (TLCS-MG `BOARDS:` must precede its boards' lines). */
+  pinned?: boolean;
 }
 
 export interface SenderHooks {
@@ -156,6 +158,23 @@ export class ReliableSender {
       for (const it of c.queue) if (it.epoch !== undefined) out.add(it.epoch);
     }
     return out;
+  }
+
+  /**
+   * Queue numbered items for one client as a unit: nothing (coalesce, hard cap) runs between
+   * them, so a replay can never split them (TLCS-MG `GAMENO` + `result`).
+   */
+  enqueueAll(dest: string, items: Outbound[]): void {
+    const c = this.clientsMap.get(dest);
+    if (!c) return;
+    if (!c.inFlight && c.queue.length === 0) c.busySince = now();
+    c.queue.push(...items);
+    if (items.some((it) => it.epoch !== undefined)) {
+      if (c.stalled) this.dropStalled(dest, c);
+      this.maybeCoalesce(dest, c);
+    }
+    this.enforceHardCap(dest, c);
+    this.pump(dest, c);
   }
 
   /** Queue `item` for `dest`, or for every registered client when `dest` is null. */
@@ -448,7 +467,7 @@ export class ReliableSender {
 
   private enforceHardCap(dest: string, c: ClientState): void {
     while (c.queue.length > this.opts.hardCap) {
-      const i = c.queue.findIndex((it) => !it.latest && it.epoch === undefined);
+      const i = c.queue.findIndex((it) => !it.latest && it.epoch === undefined && !it.pinned);
       if (i < 0) return;
       const [it] = c.queue.splice(i, 1);
       logger.warn(`hard cap: evicted control item for ${dest}: ${it.body}`);

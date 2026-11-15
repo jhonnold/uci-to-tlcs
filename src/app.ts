@@ -5,9 +5,12 @@ import type { Config } from './config.js';
 import { FileTailer } from './tail.js';
 import { TlcsServer } from './tlcs/server.js';
 import { Pipeline } from './pipeline.js';
+import { Demux } from './demux.js';
 import { PacedSink } from './paced-sink.js';
 import { makeSource } from './source/index.js';
 import { GameRegistry, ResultService, scanGameStarts } from './results/index.js';
+import { scanBoards } from './results/log-scan.js';
+import { ClaimingAuthority } from './results/claiming.js';
 import { startMetricsServer } from './metrics.js';
 import { logger } from './util/logger.js';
 import { loadState, type PersistedClient } from './state/state-file.js';
@@ -72,12 +75,39 @@ export async function startApp(cfg: Config): Promise<App> {
   store = cfg.stateFile ? new StateStore(cfg.stateFile, server, loaded, undefined, cfg.logPath) : undefined;
 
   const resume = new ResumeSink(server, store, registry);
+  // Board 1 (the single-game stream) goes through ResumeSink; boards >= 2 straight to their server board.
   const paced = new PacedSink(resume, cfg);
+  const pacedBoards = new Map<number, PacedSink>([[1, paced]]);
+  let live = false;
+  const pacedFor = (id: number): PacedSink => {
+    let p = pacedBoards.get(id);
+    if (!p) {
+      pacedBoards.set(id, (p = new PacedSink(server.board(id), cfg)));
+      if (live) p.setLive(true);
+    }
+    return p;
+  };
+  const setLive = (v: boolean) => {
+    live = v;
+    for (const p of pacedBoards.values()) p.setLive(v);
+  };
   // Every finished game's result is "emitted" by the end of the synchronous catch-up.
-  server.setResultService(new ResultService(server, registry, registry ? registry.finishedCount() : Infinity));
+  const results = new ResultService(server, registry, registry ? registry.finishedCount() : Infinity);
+  server.setResultService(results);
+  const authority = registry ? new ClaimingAuthority(registry) : undefined;
 
   const meta = { white: cfg.white, black: cfg.black, site: cfg.site, fenSetupMove: cfg.fenSetupMove };
-  const cur = { pipeline: undefined as unknown as Pipeline, feed: (_l: string): void => {} };
+  const cur = { demux: undefined as unknown as Demux, feed: (_l: string): void => {} };
+  let debug: DebugLogSaver | undefined;
+  const onConcurrent = () => {
+    authority?.setConcurrent();
+    results.setConcurrent();
+    if (debug) {
+      logger.warn('SAVEDEBUG: disabled, the log has concurrent games (per-game debug logs need one game at a time)');
+      debug.close();
+      debug = undefined;
+    }
+  };
   let firstScan: { starts: number[]; end: number } = { starts: [], end: 0 };
 
   /** Build a fresh pipeline for the log's current state and synchronously catch up. Returns the tail offset. */
@@ -92,11 +122,15 @@ export async function startApp(cfg: Config): Promise<App> {
       /* log not there yet */
     }
     const fromEnd = first && !cfg.fromStart;
-    const scan = size > 0 && !fromEnd ? scanGameStarts(cfg.logPath, cfg.format) : { starts: [], end: 0 };
+    const boards = size > 0 && !fromEnd ? scanBoards(cfg.logPath, cfg.format) : { boards: [], count: 1, end: 0 };
+    const concurrent = boards.count > 1;
+    const scan = size > 0 && !fromEnd && !concurrent ? scanGameStarts(cfg.logPath, cfg.format) : { starts: [], end: 0 };
     if (first) firstScan = scan;
     const nextsIn = store ? store.restored() : restored;
     const rest = first ? nextsIn : [];
-    const plan = planResume({
+    const plan = concurrent
+      ? { offset: Math.min(...boards.boards.map((b) => b.start)), firstGame: undefined, current: undefined, nexts: rest.map(() => 0), clamped: [] }
+      : planResume({
       starts: scan.starts,
       end: scan.end,
       finished: registry?.finishedCount(),
@@ -107,26 +141,37 @@ export async function startApp(cfg: Config): Promise<App> {
     for (const i of plan.clamped) {
       logger.info(`resume: ${rest[i].ip}:${rest[i].port} missed more than ${3} games; replaying the last 3`);
     }
-    cur.pipeline?.close();
+    cur.demux?.close();
     const lazyFirst = () => (registry!.refresh(), registry!.finishedCount() + 1);
-    const pipeline = new Pipeline(
-      paced,
-      meta,
-      registry
-        ? { pvIntervalMs: cfg.pvIntervalMs, authority: registry, firstGameNumber: plan.firstGame ?? lazyFirst }
-        : { pvIntervalMs: cfg.pvIntervalMs },
-    );
-    cur.pipeline = pipeline;
+    const makePipeline = (id: number) =>
+      new Pipeline(
+        pacedFor(id),
+        meta,
+        authority
+          ? { pvIntervalMs: cfg.pvIntervalMs, authority, firstGameNumber: id === 1 ? (plan.firstGame ?? lazyFirst) : lazyFirst }
+          : { pvIntervalMs: cfg.pvIntervalMs },
+      );
+    const demux = new Demux(makePipeline, { onBoardAdded: onConcurrent });
+    if (concurrent) {
+      demux.reserve(new Map(boards.boards.map((b) => [b.channel, b.id])), boards.count);
+      logger.info(`resume: ${boards.count} concurrent boards; catching up from offset ${plan.offset} (live position only)`);
+    }
+    const pipeline = demux.pipeline(1)!;
+    cur.demux = demux;
     const source = makeSource(cfg.format);
     cur.feed = (line) => {
       const n = source.normalize(line);
-      if (n) pipeline.handleLine(n);
+      if (n) demux.handleLine(n);
     };
 
     let pending: Array<PersistedClient & { next: number }> = [];
+    const attachNow = (c: PersistedClient) => {
+      server.addClient(c.ip, c.port, c.user);
+      if (c.multi) server.setMulti(`${c.ip}:${c.port}`);
+    };
     if (fromEnd) {
-      for (const c of rest) server.addClient(c.ip, c.port, c.user);
-    } else {
+      for (const c of rest) attachNow(c);
+    } else if (!concurrent) {
       pending = rest.map((c, i) => ({ ...c, next: plan.nexts[i] }));
     }
     resume.begin(
@@ -135,12 +180,20 @@ export async function startApp(cfg: Config): Promise<App> {
       plan.current ?? (() => (registry ? (registry.refresh(), registry.finishedCount() + 1) : 1)),
       () => pipeline.currentGameNumber(),
     );
-    paced.setLive(false);
+    setLive(false);
     const t0 = Date.now();
     const endOff = fromEnd ? size : catchUpSync(cfg.logPath, plan.offset, cur.feed);
     resume.finishCatchUp();
-    paced.setLive(true);
-    if (!fromEnd) {
+    demux.endReservation();
+    if (concurrent) {
+      // Live position only: each restored client gets a full resync of every board it sees.
+      for (const c of rest) {
+        attachNow(c);
+        server.resync(`${c.ip}:${c.port}`);
+      }
+    }
+    setLive(true);
+    if (!fromEnd && !concurrent) {
       logger.info(
         `resume: log has ${scan.starts.length} game start(s), PGN ${registry ? registry.finishedCount() : 'n/a'} finished; ` +
           `caught up games ${plan.firstGame}..${pipeline.currentGameNumber()} from offset ${plan.offset} to ${endOff} ` +
@@ -165,10 +218,11 @@ export async function startApp(cfg: Config): Promise<App> {
     },
   });
   tailer.start();
-  registry?.startPolling(() => cur.pipeline.onAuthorityTick());
+  registry?.startPolling(() => cur.demux.onAuthorityTick());
 
-  let debug: DebugLogSaver | undefined;
-  if (cfg.saveDebug) {
+  if (cfg.saveDebug && server.boardCount() > 1) {
+    logger.warn('SAVEDEBUG: disabled, the log has concurrent games (per-game debug logs need one game at a time)');
+  } else if (cfg.saveDebug) {
     const dir = cfg.iniPath ? dirname(cfg.iniPath) : dirname(resolve(cfg.logPath));
     debug = new DebugLogSaver(cfg.logPath, cfg.format, dir, registry, firstScan);
     debug.start();
@@ -185,7 +239,7 @@ export async function startApp(cfg: Config): Promise<App> {
       tailer.close();
       registry?.close();
       debug?.close();
-      cur.pipeline.close();
+      cur.demux.close();
       store?.close(flush);
       metricsServer?.close();
       server.close();

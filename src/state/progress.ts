@@ -4,6 +4,7 @@ import { saveState, type PersistedClient } from './state-file.js';
 /** The slice of TlcsServer the store needs. */
 export interface StoreHost {
   clientList(): Array<{ dest: string; ip: string; port: number; user: string }>;
+  isMulti?(dest: string): boolean;
 }
 
 const SAVE_INTERVAL_MS = 10_000;
@@ -42,7 +43,13 @@ export class StateStore {
   /** Clients to re-attach; their `next` is dropped when the log is a different file. */
   restored(): PersistedClient[] {
     const sameLog = this.loadedIno === undefined || this.logIno === undefined || this.loadedIno === this.logIno;
-    return this.loaded.map((c) => ({ ip: c.ip, port: c.port, user: c.user, ...(sameLog && c.next !== undefined ? { next: c.next } : {}) }));
+    return this.loaded.map((c) => ({
+      ip: c.ip,
+      port: c.port,
+      user: c.user,
+      ...(sameLog && c.next !== undefined ? { next: c.next } : {}),
+      ...(c.multi ? { multi: true as const } : {}),
+    }));
   }
 
   mapEpoch(epoch: number, game: number): void {
@@ -77,7 +84,13 @@ export class StateStore {
     for (const d of [...this.next.keys()]) if (!live.has(d)) this.next.delete(d);
     const clients: PersistedClient[] = list.map((c) => {
       const n = this.next.get(c.dest);
-      return { ip: c.ip, port: c.port, user: c.user, ...(n !== undefined ? { next: n } : {}) };
+      return {
+        ip: c.ip,
+        port: c.port,
+        user: c.user,
+        ...(n !== undefined ? { next: n } : {}),
+        ...(this.host.isMulti?.(c.dest) ? { multi: true as const } : {}),
+      };
     });
     saveState(this.path, { version: 1, savedAt: this.now(), logIno: this.logIno, clients });
   }

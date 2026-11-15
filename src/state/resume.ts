@@ -86,6 +86,7 @@ export interface ResumeServer extends BroadcastSink {
   getClient(dest: string): unknown;
   enqueue(dest: string | null, body: string, opts?: { holdMs?: number }): void;
   currentEpoch(): number;
+  setMulti?(dest: string): void;
 }
 
 export interface ResumeStore {
@@ -192,6 +193,7 @@ export class ResumeSink implements BroadcastSink {
   private attach(c: PersistedClient, g: number): void {
     const dest = `${c.ip}:${c.port}`;
     if (!this.server.getClient(dest)) this.server.addClient(c.ip, c.port, c.user);
+    if (c.multi) this.server.setMulti?.(dest);
     this.attached.push(dest);
     logger.info(`resume: attached ${c.user}@${dest} at game ${g}`);
   }

@@ -192,8 +192,8 @@ export class TlcsServer {
   }
 
   /** Numbered control item to one client, or to every registered client when `dest` is null. */
-  enqueue(dest: string | null, body: string, opts: { onGiveUp?: (dest: string) => void; holdMs?: number } = {}): void {
-    this.sender.enqueue(dest, { body, onGiveUp: opts.onGiveUp, holdMs: opts.holdMs });
+  enqueue(dest: string | null, body: string, opts: { onGiveUp?: (dest: string) => void; holdMs?: number; pinned?: boolean } = {}): void {
+    this.sender.enqueue(dest, { body, onGiveUp: opts.onGiveUp, holdMs: opts.holdMs, pinned: opts.pinned });
   }
 
   /** Unnumbered, immediate send (LOGON SUCCESSFUL, MSG to unknown clients, PONG). */
@@ -291,8 +291,7 @@ export class TlcsServer {
     if (!Number.isInteger(id) || id < 1) throw new Error(`bad board id ${id}`);
     if (id > this.boards.length) {
       while (this.boards.length < id) this.boards.push(this.newBoard(this.boards.length + 1));
-      const list = this.boardsLine();
-      for (const d of this.multi) this.enqueue(d, list);
+      for (const d of this.multi) this.sendBoards(d);
     }
     if (id === 1) return this;
     const b = this.boards[id - 1];
@@ -332,7 +331,7 @@ export class TlcsServer {
     this.multi.add(dest);
     logger.info(`MULTIGAME ${dest}: ${this.boards.length} board(s) (dropped ${dropped} queued single-game items)`);
     this.enqueue(dest, `MULTIGAME: ${MULTIGAME_VERSION}`);
-    this.enqueue(dest, this.boardsLine());
+    this.sendBoards(dest);
     this.resync(dest);
     this.opts.onClientsChanged?.();
   }
@@ -432,8 +431,22 @@ export class TlcsServer {
   }
 
   private resultOn(b: Board, result: string, gameNumber?: number, fromPgn?: boolean): void {
-    if (fromPgn && gameNumber !== undefined) this.game(b, `GAMENO: ${gameNumber}`, false, undefined, true);
-    this.game(b, P.result(result), true);
+    if (fromPgn && gameNumber !== undefined) {
+      // GAMENO and its result travel as one unit to TLCS-MG clients (a coalesce can't split them).
+      const no: StreamItem = { body: `GAMENO: ${gameNumber}`, epoch: b.cur.epoch, board: b.id, multiOnly: true };
+      const res: StreamItem = { body: P.result(result), epoch: b.cur.epoch, board: b.id, critical: true };
+      b.cur.stream.push(no, res);
+      for (const d of this.sender.clients()) {
+        if (this.multi.has(d)) {
+          this.sender.enqueueAll(d, [
+            { body: wrapBoard(b.id, no.body), epoch: no.epoch, board: b.id },
+            { body: wrapBoard(b.id, res.body), epoch: res.epoch, board: b.id, critical: true },
+          ]);
+        } else if (b.id === 1) this.sender.enqueue(d, res);
+      }
+    } else {
+      this.game(b, P.result(result), true);
+    }
     b.cur.finished = true;
     if (gameNumber !== undefined) this.results?.onResultEmitted?.(gameNumber);
   }
@@ -451,15 +464,23 @@ export class TlcsServer {
     }
   }
 
-  /** Single path for every game-channel message: record it, then queue it for every client that sees the board. */
-  private game(b: Board, body: string, critical = false, pv?: string, multiOnly = false): void {
-    const item: StreamItem = { body, epoch: b.cur.epoch, board: b.id, critical: critical || undefined, pv, multiOnly: multiOnly || undefined };
+  /** Single path for every game-channel message (but GAMENO+result): record it, then queue it for every client that sees the board. */
+  private game(b: Board, body: string, critical = false, pv?: string): void {
+    const item: StreamItem = { body, epoch: b.cur.epoch, board: b.id, critical: critical || undefined, pv };
     b.cur.stream.push(item);
     const wrapped: Outbound = { body: wrapBoard(b.id, body), epoch: item.epoch, board: b.id, critical: item.critical };
     for (const d of this.sender.clients()) {
       if (this.multi.has(d)) this.sender.enqueue(d, wrapped);
-      else if (b.id === 1 && !multiOnly) this.sender.enqueue(d, item);
+      else if (b.id === 1) this.sender.enqueue(d, item);
     }
+  }
+
+  /** `BOARDS:` to one TLCS-MG client: never evicted, re-sent (current list) if given up. */
+  private sendBoards(dest: string): void {
+    this.enqueue(dest, this.boardsLine(), {
+      pinned: true,
+      onGiveUp: (d) => setImmediate(() => this.multi.has(d) && this.sendBoards(d)),
+    });
   }
 
   /** Keep every board's current game and every epoch some client's queue or in-flight slot still references. */

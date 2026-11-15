@@ -118,3 +118,41 @@ test('latest items of different boards do not replace each other', () =>
     assert.deepEqual(h.sent.slice(1), ['BOARD 2 WPV: b', 'BOARD 1 WPV: c']);
     h.s.close();
   }));
+
+test('hard cap never evicts a pinned control item (BOARDS:)', () =>
+  quiet(async () => {
+    const sent: string[] = [];
+    const s = new ReliableSender({ rawSend: (p) => void sent.push(p), replay: () => null }, { hardCap: 3, maxQueue: 1000, initialRtoMs: 1000 });
+    s.addClient('A');
+    s.enqueue('A', { body: 'inflight' });
+    s.enqueue('A', { body: 'BOARDS: 1 2', pinned: true });
+    for (let i = 0; i < 5; i++) s.enqueue('A', { body: `c${i}` });
+    assert.equal(s.depth('A'), 4); // in flight + 3 kept: the pinned one and the newest control items
+    for (let i = 1; i <= 4; i++) s.ack('A', i);
+    assert.ok(sent.includes('<2>BOARDS: 1 2'));
+    s.close();
+  }));
+
+test('enqueueAll: a coalesce in between cannot split GAMENO from its result', () =>
+  quiet(async () => {
+    const recs = new Map<number, Outbound[]>();
+    const s = new ReliableSender(
+      { rawSend: () => {}, replay: (e, wr) => (wr ? recs.get(e)! : recs.get(e)!.filter((x) => !x.critical && !/GAMENO/.test(x.body))) },
+      { maxQueue: 2, initialRtoMs: 1000 },
+    );
+    s.addClient('A');
+    const g = [item('m1', 1, 2), item('m2', 1, 2), item('m3', 1, 2)];
+    const no = item('BOARD 2 GAMENO: 4', 1, 2);
+    const res = item('BOARD 2 result: 1-0', 1, 2, true);
+    recs.set(1, [item('short', 1, 2), no, res]);
+    s.enqueue('A', { body: 'inflight' });
+    for (const x of g) s.enqueue('A', x);
+    s.enqueueAll('A', [no, res]);
+    assert.ok(s.referencedEpochs().has(1));
+    // the queue now holds the replay with both lines, in order
+    const bodies: string[] = [];
+    const s2 = s as unknown as { clientsMap: Map<string, { queue: Outbound[] }> };
+    for (const it of s2.clientsMap.get('A')!.queue) bodies.push(it.body);
+    assert.deepEqual(bodies.slice(-2), ['BOARD 2 GAMENO: 4', 'BOARD 2 result: 1-0']);
+    s.close();
+  }));

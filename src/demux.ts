@@ -29,6 +29,8 @@ const isIn = (n: NormalizedLine, cmd: string): boolean => n.direction === 'in' &
 export class Demux {
   private boards: Board[] = [];
   private byChannel = new Map<string, Board>();
+  /** While set (restart catch-up): channel -> board it must get; any other channel is ignored. */
+  private reserved?: Map<string, number>;
 
   constructor(
     private readonly make: (board: number) => Pipeline,
@@ -61,6 +63,26 @@ export class Demux {
     }
   }
 
+  /**
+   * Restart catch-up: create boards 1..count and pin each listed channel to its board (the
+   * allocation the previous process made, from scanBoards). Until endReservation, games of
+   * other channels are not shown.
+   */
+  reserve(channels: Map<string, number>, count: number): void {
+    this.grow(count);
+    this.reserved = channels;
+  }
+
+  endReservation(): void {
+    this.reserved = undefined;
+  }
+
+  /** The board channel `ch` currently shows a game on, if any. */
+  boardOf(ch: string): number | undefined {
+    const b = this.byChannel.get(ch);
+    return b && b.channel === ch ? b.id : undefined;
+  }
+
   /** Board count so far (ids are 1..count). */
   count(): number {
     return this.boards.length;
@@ -82,14 +104,28 @@ export class Demux {
     for (const b of this.boards) b.pipeline.close();
   }
 
-  private allocate(ch: string): Board {
-    const idle = (b: Board) => b.ended || !b.pipeline.busy();
-    let b = this.boards.find(idle);
-    if (!b) {
-      b = { id: this.boards.length + 1, pipeline: this.make(this.boards.length + 1), ended: false };
+  private grow(count: number): void {
+    while (this.boards.length < count) {
+      const b: Board = { id: this.boards.length + 1, pipeline: this.make(this.boards.length + 1), ended: false };
       this.boards.push(b);
-      logger.info(`board ${b.id}: opened for channel ${ch}`);
       this.opts.onBoardAdded?.(b.id);
+    }
+  }
+
+  private allocate(ch: string): Board | undefined {
+    let b: Board | undefined;
+    if (this.reserved) {
+      const id = this.reserved.get(ch);
+      if (id === undefined) return undefined;
+      b = this.boards[id - 1];
+    } else {
+      const idle = (x: Board) => x.ended || !x.pipeline.busy();
+      b = this.boards.find(idle);
+      if (!b) {
+        this.grow(this.boards.length + 1);
+        b = this.boards[this.boards.length - 1];
+        logger.info(`board ${b.id}: opened for channel ${ch}`);
+      }
     }
     if (b.channel !== undefined && this.byChannel.get(b.channel) === b) this.byChannel.delete(b.channel);
     b.channel = ch;
