@@ -160,6 +160,7 @@ export class ReliableSender {
           }
         }
         c.queue.push(item);
+        this.maybeDropStale(d, c);
         continue;
       }
       this.pushNumbered(d, c, [item]);
@@ -168,10 +169,7 @@ export class ReliableSender {
 
   private pushNumbered(dest: string, c: ClientState, items: Outbound[]): void {
     c.queue.push(...items);
-    // Only queued move steps measure how far behind a client is (a crosstable dump is not a backlog of moves).
-    if (items.some((it) => it.step) && c.queue.length > this.opts.maxQueue && c.queue.filter((it) => it.step).length > this.opts.maxQueue) {
-      this.dropStale(dest, c);
-    }
+    this.maybeDropStale(dest, c);
     this.enforceHardCap(dest, c);
     this.pump(dest, c);
   }
@@ -315,39 +313,59 @@ export class ReliableSender {
     this.pump(dest, c);
   }
 
+  /** Only queued game lines (moves, players, PV/clock) measure how far behind a client is; a crosstable dump does not. */
+  private maybeDropStale(dest: string, c: ClientState): void {
+    if (c.queue.length <= this.opts.maxQueue) return;
+    if (c.queue.filter((it) => it.board !== undefined).length > this.opts.maxQueue) this.dropStale(dest, c);
+  }
+
   /**
-   * A client that fell behind (more than maxQueue move steps queued): per board, its queued
-   * move steps are stale, so they go and that board's position steps for the newest one take
-   * the place of that newest step, when they are fewer than the steps they replace. Players,
-   * level, GAMENO, result, latest and control lines are kept.
+   * A client that fell behind (more than maxQueue game lines queued): per board and game (a run
+   * of the board's move steps and PV/clock lines between its other game lines, such as
+   * `result`/`WPLAYER`), the move steps and the PV/clock lines before the newest step are stale.
+   * They go, and the position steps of that newest step take its place, when they are fewer than
+   * what they replace. Each game thus ends on its real final position ahead of its result.
+   * Players, level, GAMENO, result, later PV/clock and control lines are kept, in order.
    */
   private dropStale(dest: string, c: ClientState): void {
     if (!this.hooks.positionSteps) return;
-    const steps = new Map<number, { count: number; newest: number }>();
+    interface Seg { board: number; members: number[]; newest: number }
+    const open = new Map<number, Seg>();
+    const segs: Seg[] = [];
+    const close = (board: number) => {
+      const g = open.get(board);
+      if (g && g.newest >= 0) segs.push(g);
+      open.delete(board);
+    };
     c.queue.forEach((it, i) => {
-      if (!it.step || it.board === undefined) return;
-      const s = steps.get(it.board) ?? { count: 0, newest: i };
-      s.count++;
-      s.newest = i;
-      steps.set(it.board, s);
+      if (it.board === undefined) return;
+      if (!it.step && !it.latest) return close(it.board);
+      const g = open.get(it.board) ?? { board: it.board, members: [], newest: -1 };
+      open.set(it.board, g);
+      g.members.push(i);
+      if (it.step) g.newest = i;
     });
-    const replace = new Map<number, Outbound[]>();
-    for (const [board, s] of steps) {
-      const r = this.hooks.positionSteps(dest, board, c.queue[s.newest].step!);
-      if (r.length < s.count) replace.set(board, r);
+    for (const b of [...open.keys()]) close(b);
+    const drop = new Set<number>();
+    const insert = new Map<number, Outbound[]>();
+    const boards = new Set<number>();
+    for (const g of segs) {
+      const stale = g.members.filter((i) => i <= g.newest);
+      const r = this.hooks.positionSteps(dest, g.board, c.queue[g.newest].step!);
+      if (r.length >= stale.length) continue;
+      for (const i of stale) drop.add(i);
+      insert.set(g.newest, r);
+      boards.add(g.board);
     }
-    if (replace.size === 0) return;
+    if (drop.size === 0) return;
     const out: Outbound[] = [];
-    let dropped = 0;
     c.queue.forEach((it, i) => {
-      const r = it.step && it.board !== undefined ? replace.get(it.board) : undefined;
-      if (!r) return void out.push(it);
-      dropped++;
-      if (steps.get(it.board!)!.newest === i) out.push(...r);
+      if (!drop.has(i)) out.push(it);
+      else if (insert.has(i)) out.push(...insert.get(i)!);
     });
     c.queue = out;
-    metrics.inc('tlcs_dropped_total', { reason: 'stale' }, dropped);
-    logger.info(`stale: ${dest} dropped ${dropped} move step(s) on board(s) ${[...replace.keys()].join(',')}`);
+    metrics.inc('tlcs_dropped_total', { reason: 'stale' }, drop.size);
+    logger.info(`stale: ${dest} dropped ${drop.size} queued game line(s) on board(s) ${[...boards].join(',')}`);
   }
 
   private enforceHardCap(dest: string, c: ClientState): void {

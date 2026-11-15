@@ -53,7 +53,7 @@ interface Rx {
 function harness(
   opts: Partial<SenderOptions> = {},
   policy: AckPolicy = () => 0,
-  positionSteps: (board: number, pos: Position) => Outbound[] = (b, pos) => [{ body: `P${b}:${pos.fen}`, board: b }],
+  positionSteps: (board: number, pos: Position) => Outbound[] = (b, pos) => [{ body: `P${b}:${pos.fen}`, board: b, step: pos }],
 ) {
   const rx: Rx[] = [];
   const copies = new Map<string, number>();
@@ -247,11 +247,11 @@ test('sender: a line acked before giveUpMs is never dropped', async () => {
   h.s.close();
 });
 
-test('sender: over maxQueue, each board\'s queued move steps collapse to its position steps at the newest step', async () => {
+test('sender: over maxQueue, each game\'s queued move steps collapse to its position steps at its newest step', async () => {
   const dr0 = mg('tlcs_dropped_total', { reason: 'stale' });
   const log = captureLogs();
   try {
-    const h = harness({ maxQueue: 5 }, () => null);
+    const h = harness({ maxQueue: 8 }, () => null);
     h.s.addClient('A');
     h.s.enqueue('A', ctl('lead')); // in flight, never ACKed by the policy
     h.s.enqueue('A', game('WPLAYER: a'));
@@ -263,12 +263,13 @@ test('sender: over maxQueue, each board\'s queued move steps collapse to its pos
     h.s.enqueue('A', step('FEN: c', 'fc'));
     h.s.enqueue('A', step('BOARD 2 FEN: y', 'fy', 2));
     assert.equal(h.s.depth('A'), 1 + 8, 'at the cap: nothing dropped');
-    h.s.enqueue('A', step('FEN: d', 'fd')); // 6 queued steps > 5
-    assert.deepEqual(h.collapses.sort(), [[1, 'fd'], [2, 'fy']]);
-    for (let id = 1; id <= 6; id++) h.s.ack('A', id);
-    assert.deepEqual(h.firstSeen('A').map((x) => x.body), ['lead', 'WPLAYER: a', 'result: 1-0', 'WPLAYER: b', 'P2:fy', 'P1:fd']);
+    h.s.enqueue('A', step('FEN: d', 'fd')); // 9 queued game lines > 8
+    assert.deepEqual(h.collapses.sort(), [[1, 'fb'], [1, 'fd'], [2, 'fy']]);
+    for (let id = 1; id <= 7; id++) h.s.ack('A', id);
+    // each game keeps its own final position ahead of its result
+    assert.deepEqual(h.firstSeen('A').map((x) => x.body), ['lead', 'WPLAYER: a', 'P1:fb', 'result: 1-0', 'WPLAYER: b', 'P2:fy', 'P1:fd']);
     assert.equal(mg('tlcs_dropped_total', { reason: 'stale' }) - dr0, 6);
-    assert.equal(log.count(/info: stale: A dropped 6 move step/), 1);
+    assert.equal(log.count(/info: stale: A dropped 6 queued game line/), 1);
     h.s.close();
   } finally {
     log.done();
@@ -299,17 +300,32 @@ test('sender: a board collapses only when its queued steps outnumber the positio
   h.s.close();
 });
 
-test('sender: latest items and control lines survive a stale collapse in place', async () => {
-  const h = harness({ maxQueue: 2 }, () => null);
+test('sender: a collapse drops the stale PV/clock lines of the dropped moves, keeps later ones and control lines', async () => {
+  const h = harness({ maxQueue: 5 }, () => null);
   h.s.addClient('A');
   h.s.enqueue('A', ctl('lead'));
   h.s.enqueue('A', step('FEN: a', 'fa'));
   h.s.enqueue('A', { body: 'WPV: 1', latest: 'WPV', board: 1 });
   h.s.enqueue('A', ctl('CHAT: hi'));
+  h.s.enqueue('A', { body: 'WTIME: 1', latest: 'WTIME', board: 1 });
   h.s.enqueue('A', step('FEN: b', 'fb'));
-  h.s.enqueue('A', step('FEN: c', 'fc')); // 3 steps > 2
+  h.s.enqueue('A', { body: 'BPV: 2', latest: 'BPV', board: 1 });
+  h.s.enqueue('A', step('FEN: c', 'fc')); // 6 game lines > 5
+  h.s.enqueue('A', { body: 'WPV: 3', latest: 'WPV', board: 1 }); // after the newest step: kept
   for (let id = 1; id <= 3; id++) h.s.ack('A', id);
-  assert.deepEqual(h.rx.map((r) => r.body), ['lead', 'WPV: 1', 'CHAT: hi', 'P1:fc']);
+  assert.deepEqual(h.rx.map((r) => r.body), ['lead', 'CHAT: hi', 'P1:fc', 'WPV: 3']);
+  h.s.close();
+});
+
+test('sender: PV/clock lines count towards maxQueue (they cannot pile up to the hard cap)', async () => {
+  const h = harness({ maxQueue: 6, hardCap: 12 }, () => null);
+  h.s.addClient('A');
+  h.s.enqueue('A', ctl('lead'));
+  for (let i = 0; i < 40; i++) {
+    h.s.enqueue('A', { body: `WPV: ${i}`, latest: 'WPV', board: 1 });
+    h.s.enqueue('A', step(`FEN: ${i}`, `f${i}`));
+  }
+  assert.ok(h.s.depth('A') <= 1 + 6 + 1, `depth ${h.s.depth('A')}`);
   h.s.close();
 });
 
