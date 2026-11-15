@@ -247,6 +247,8 @@ Gates:
 
 Measured (2026-11-15, coder, fastchess 1.8.2, 12 games, 3 boards): gates 1-3 passed. The 20 %-loss TLCS-MG mock ended
 about 4 min behind live (stop-and-wait over 3 boards, ~3 numbered items per move per board) and then held all 12 games
-correctly, with no stall or lost result. The `-concurrency 1` rerun passed; node-tlcv's first file was numbered 13
-because the same node-tlcv instance kept its counter from the previous tournament (restart without `STATEFILE`, §gaps).
+correctly, with no stall or lost result. The `-concurrency 1` rerun (fresh node-tlcv, bridge first, `--multigame` mock attached) passed
+`--strict-numbers` for all 6 games; the mock saw board 1 only, with 6 `GAMENO`s. Run each scenario on a fresh node-tlcv:
+node-tlcv's `SITE` handler does not reset `currentGameNumber`, so a reused instance can number a new tournament's first
+game after the previous tournament's last.
 
