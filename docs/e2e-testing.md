@@ -250,18 +250,20 @@ Gates:
 
 Measured (2026-11-15, coder, fastchess 1.8.2, 4 engines, EPD book, tc 8+0.08, 12 games; `.tasks/T13-lighter-delivery/`):
 
-- `-concurrency 3`, bridge killed at +75 s and restarted 3 s later (1 s silent catch-up of 3 boards): gates 1-4 passed.
-  Re-LOGON after the restart: node-tlcv +2.3 s, mocks +4.8 to +6.8 s; node-tlcv loaded the live board-1 position (move 125,
-  right FMR) 0.4 s after its LOGON and saved that game from ply 249 (exact tail); its other 3 PGNs are complete. The desktop
-  mock never re-LOGONs (the desktop TLCV waits for its operator). The 20 %-loss mock lost its `LOGON SUCCESSFUL` and never
-  opted in during the first session (fixed since: the first numbered line stands in for it); after the restart it opted in and
-  got its results 7-8 s after the loss-free mock (before best-effort delivery: about 4 min behind). 4 give-ups, 585 stale-move
-  collapses (all for the lossy mock), no hard-cap eviction.
-- Per client, loss-free, during play: 3 boards 12.3 KB/s, 140 datagrams/s (52 numbered/s); 1 board 3.6 KB/s, 46 datagrams/s
-  (17.5 numbered/s); largest datagram 391 B (a long PV), median 48 B.
-- `-concurrency 1`, same restart at +150 s: `--strict-numbers --allow-partial` PASS for all 12 games (the game in progress at the
-  restart saved from ply 125), 0 node-tlcv warnings; the 20 %-loss mock got all 12 results, 0.1-9 s after the loss-free one
-  (1 give-up, 189 stale collapses).
+- `-concurrency 3` (run4), bridge killed at +75 s and restarted 3 s later (1.8 s silent catch-up of 3 boards): gates 1-4
+  passed. Re-LOGON after the restart: all node-tlcv-mode clients within +5 s; node-tlcv's board-1 game in progress was
+  saved from the reload (exact tail, `partial OK`). The two games that ended during the outage were sent to nobody (by
+  design). The desktop mock never re-LOGONs (the desktop TLCV waits for its operator). The 20 %-loss TLCS-MG mock got
+  every result the loss-free one got, 0.8-13 s later (before best-effort delivery: about 4 min behind); 4 give-ups, 72
+  stale collapses (all for the lossy mock), no hard-cap eviction.
+- Per client, loss-free, during play (run1, run4): 3 boards 12-15 KB/s, 140-170 datagrams/s (52-63 numbered/s); 1 board
+  3.6-5.3 KB/s, 46-66 datagrams/s (17-26 numbered/s); largest datagram 391 B (a long PV), median 44-48 B.
+- `-concurrency 1` (run2), same restart at +150 s: `--strict-numbers --allow-partial` PASS for all 12 games (the game in
+  progress at the restart saved from ply 125), 0 node-tlcv warnings; the 20 %-loss mock got all 12 results, 0.1-9 s after the
+  loss-free one. (run2 predates the per-game stale drop; run1/run3 exposed the two collapse bugs fixed since: a control backlog
+  triggering collapses, and a collapse across a game boundary leaving the old game on a stale board.)
+- Found on the way: a TLCS-MG client whose `LOGON SUCCESSFUL` is lost never opted in (mock fixed: the first numbered line
+  stands in for it; spec §3 updated).
 
 Run each scenario on a fresh node-tlcv: node-tlcv's `SITE` handler does not reset `currentGameNumber`, so a reused instance can
 number a new tournament's first game after the previous tournament's last.
