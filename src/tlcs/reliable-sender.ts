@@ -1,16 +1,14 @@
 import { logger } from '../util/logger.js';
 import { metrics } from '../metrics.js';
-import { frame } from './protocol.js';
+import { frame, type Position } from './protocol.js';
 
 /** One message for a client. */
 export interface Outbound {
   body: string;
-  /** Set => game item (replayable / coalescable); unset => control item. */
-  epoch?: number;
-  /** Game items: the board the epoch belongs to (a stalled client keeps the newest epoch per board). */
+  /** Set => game item of this board (a resync replaces it); unset => control item. */
   board?: number;
-  /** A `result`: retried until stallMs, never replayed on its own. */
-  critical?: boolean;
+  /** Game items: a move step (`FEN`/`xMOVE`/`FMR`) that leaves the board at this position (droppable when stale). */
+  step?: Position;
   /** 'WPV'|'BPV'|'WINFO'|'BINFO'|'WTIME'|'BTIME': unnumbered, latest-only per key, never retransmitted. */
   latest?: string;
   /** Control items only: called when the item is given up or evicted. */
@@ -23,12 +21,11 @@ export interface Outbound {
 
 export interface SenderHooks {
   rawSend(payload: string, dest: string): void;
-  /** Full replay of game `epoch` (result included iff withResult) as `dest` must see it, or null if no record. */
-  replay(epoch: number, withResult: boolean, dest?: string): Outbound[] | null;
-  /** Called once per stall episode (no ACK progress for stallMs while busy). */
-  onStalled?(dest: string): void;
-  /** Called in ack() once the in-flight item clears, before the next one is pumped. */
-  onAcked?(dest: string, item: Outbound): void;
+  /**
+   * The lines that put `dest`'s view of `board` straight onto `pos` (forcing a reload on a client
+   * whose board is already loaded); they replace a stale run of move steps.
+   */
+  positionSteps?(dest: string, board: number, pos: Position): Outbound[];
 }
 
 export interface SenderOptions {
@@ -37,7 +34,6 @@ export interface SenderOptions {
   maxRtoMs: number;
   backoffFactor: number;
   giveUpMs: number;
-  stallMs: number;
   maxQueue: number;
   hardCap: number;
 }
@@ -47,8 +43,7 @@ export const DEFAULT_SENDER_OPTIONS: SenderOptions = {
   minRtoMs: 50,
   maxRtoMs: 2000,
   backoffFactor: 2,
-  giveUpMs: 30_000,
-  stallMs: 60_000,
+  giveUpMs: 5_000,
   maxQueue: 256,
   hardCap: 1024,
 };
@@ -72,24 +67,20 @@ interface ClientState {
   rttvar?: number;
   rto: number;
   samples: number;
-  lastProgressAt: number;
-  /** When the client last went from idle to busy (stall is measured from here at the earliest). */
-  busySince: number;
-  stalled: boolean;
-  coalesceLogged: Set<number>;
 }
 
 const now = (): number => performance.now();
 
 /**
- * Per-client ordered reliable delivery for the `<N>body` channel.
+ * Per-client ordered delivery for the `<N>body` channel, best effort.
  *
  * node-tlcv drops any id <= its high-water mark, so each client is strict
  * stop-and-wait: one numbered message in flight, the next id assigned only after
  * the ACK (a window could land a resend behind a newer id). Ids are per client,
  * strictly increasing and never reset while the process lives. A slow client never
- * stalls another. The RTO is adaptive (RFC 6298 / Karn) so a lossy-but-alive client
- * keeps up; nothing is dropped for a client that is merely behind (see dropStalled).
+ * stalls another. The RTO is adaptive (RFC 6298 / Karn). A line still unACKed after
+ * giveUpMs is dropped, whatever it is (a client's board recovers from the next move's
+ * FEN); a client that falls behind loses its stale move steps (see dropStale).
  */
 export class ReliableSender {
   private clientsMap = new Map<string, ClientState>();
@@ -105,7 +96,6 @@ export class ReliableSender {
 
   addClient(dest: string): void {
     if (this.clientsMap.has(dest)) return;
-    const t = now();
     this.clientsMap.set(dest, {
       queue: [],
       inFlight: null,
@@ -113,10 +103,6 @@ export class ReliableSender {
       hold: null,
       rto: this.opts.initialRtoMs,
       samples: 0,
-      lastProgressAt: t,
-      busySince: t,
-      stalled: false,
-      coalesceLogged: new Set(),
     });
   }
 
@@ -150,26 +136,6 @@ export class ReliableSender {
     return { srtt: c.srtt, rttvar: c.rttvar!, rto: c.rto };
   }
 
-  /** Epochs of all queued and in-flight game items across all clients. */
-  referencedEpochs(): Set<number> {
-    const out = new Set<number>();
-    for (const c of this.clientsMap.values()) {
-      if (c.inFlight?.item.epoch !== undefined) out.add(c.inFlight.item.epoch);
-      for (const it of c.queue) if (it.epoch !== undefined) out.add(it.epoch);
-    }
-    return out;
-  }
-
-  /**
-   * Queue numbered items for one client as a unit: nothing (coalesce, hard cap) runs between
-   * them, so a replay can never split them (TLCS-MG `GAMENO` + `result`).
-   */
-  enqueueAll(dest: string, items: Outbound[]): void {
-    if (items.length === 1) return this.enqueue(dest, items[0]);
-    const c = this.clientsMap.get(dest);
-    if (c && items.length) this.pushNumbered(dest, c, items);
-  }
-
   /** Queue `item` for `dest`, or for every registered client when `dest` is null. */
   enqueue(dest: string | null, item: Outbound): void {
     const targets = dest === null ? this.clients() : [dest];
@@ -194,6 +160,7 @@ export class ReliableSender {
           }
         }
         c.queue.push(item);
+        this.maybeDropStale(d, c);
         continue;
       }
       this.pushNumbered(d, c, [item]);
@@ -201,12 +168,8 @@ export class ReliableSender {
   }
 
   private pushNumbered(dest: string, c: ClientState, items: Outbound[]): void {
-    if (!c.inFlight && c.queue.length === 0) c.busySince = now();
     c.queue.push(...items);
-    if (items.some((it) => it.epoch !== undefined)) {
-      if (c.stalled) this.dropStalled(dest, c);
-      this.maybeCoalesce(dest, c);
-    }
+    this.maybeDropStale(dest, c);
     this.enforceHardCap(dest, c);
     this.pump(dest, c);
   }
@@ -228,15 +191,9 @@ export class ReliableSender {
       const base = c.srtt !== undefined ? this.rtoFromEstimate(c) : c.rto;
       c.rto = this.clampRto(Math.min(Math.max(base, t - f.firstSentAt), 2 * c.rto));
     }
-    c.lastProgressAt = t;
-    if (c.stalled) {
-      c.stalled = false;
-      logger.info(`unstalled ${dest}`);
-    }
     if (c.timer) clearTimeout(c.timer);
     c.timer = null;
     c.inFlight = null;
-    this.hooks.onAcked?.(dest, f.item);
     if (f.item.holdMs) {
       c.hold = setTimeout(() => {
         c.hold = null;
@@ -248,64 +205,18 @@ export class ReliableSender {
   }
 
   /**
-   * Re-send the current game from scratch to `dest`: every queued epoch is replaced by
-   * its replay (so nothing is duplicated), plus the current game's replay when nothing of
-   * it is queued and it is unfinished. The in-flight item is untouched (a result in flight
-   * keeps its id).
+   * Replace `dest`'s queued game lines and latest items (the in-flight item and control
+   * items stay) by `items`, a fresh snapshot of what it should see (LOGON, opt-in).
    */
-  resync(dest: string, curEpoch: number, curFinished: boolean): void {
-    this.resyncAll(dest, [{ epoch: curEpoch, finished: curFinished }]);
-  }
-
-  /** {@link resync} for several current games (one per board), appended in the given order. */
-  resyncAll(dest: string, curs: Array<{ epoch: number; finished: boolean }>): void {
+  resync(dest: string, items: Outbound[]): void {
     const c = this.clientsMap.get(dest);
     if (!c) return;
-    const epochs = this.queuedEpochs(c);
-    for (const e of epochs) this.splice(dest, c, e);
-    let note = `epochs [${epochs.join(',')}]`;
-    for (const cur of curs) {
-      if (epochs.includes(cur.epoch)) continue;
-      const tag = curs.length > 1 ? ` ${cur.epoch}` : '';
-      if (cur.finished) {
-        note += ` (cur${tag} finished, skipped)`;
-      } else {
-        const r = this.hooks.replay(cur.epoch, false, dest);
-        if (r) {
-          if (!c.inFlight && c.queue.length === 0) c.busySince = now();
-          c.queue.push(...r);
-          note += ` (+cur${tag})`;
-        }
-      }
-    }
+    const before = c.queue.length;
+    c.queue = c.queue.filter((it) => it.board === undefined && !it.latest);
     metrics.inc('tlcs_resyncs_total', { kind: 'full' });
-    logger.info(`resync ${dest}: ${note}`);
+    logger.info(`resync ${dest}: dropped ${before - c.queue.length} queued game line(s), queued ${items.length}`);
+    for (const it of items) this.enqueue(dest, it);
     this.pump(dest, c);
-  }
-
-  /**
-   * Take `dest`'s queued game items and latest items out of its queue (not the in-flight one)
-   * because the client switches how it is sent games (TLCS-MG opt-in). Returns each removed game
-   * epoch, in queue order, with whether its result was among them, so the caller can queue the
-   * replays again in the new form: nothing still owed to the client is lost.
-   */
-  takeGameItems(dest: string): Array<{ epoch: number; withResult: boolean }> {
-    const c = this.clientsMap.get(dest);
-    if (!c) return [];
-    const owed = new Map<number, boolean>();
-    c.queue = c.queue.filter((it) => {
-      if (it.latest) return false;
-      if (it.epoch === undefined) return true;
-      owed.set(it.epoch, (owed.get(it.epoch) ?? false) || !!it.critical);
-      return false;
-    });
-    return [...owed].map(([epoch, withResult]) => ({ epoch, withResult }));
-  }
-
-  /** Drop `dest`'s queued latest-only items (they are encoded for the client's previous mode). */
-  dropLatest(dest: string): void {
-    const c = this.clientsMap.get(dest);
-    if (c) c.queue = c.queue.filter((it) => !it.latest);
   }
 
   close(): void {
@@ -373,18 +284,7 @@ export class ReliableSender {
     const s = c?.inFlight;
     if (!c || !s) return;
     const t = now();
-
-    // Stall: no ACK progress for stallMs. Measured from when the client became busy at
-    // the earliest, so a client that was merely idle is not "stalled" by one lost copy.
-    if (!c.stalled && t - Math.max(c.lastProgressAt, c.busySince) >= this.opts.stallMs) {
-      c.stalled = true;
-      this.dropStalled(dest, c, true);
-      metrics.inc('tlcs_stalls_total');
-      this.hooks.onStalled?.(dest);
-    }
-
-    const limit = s.item.critical ? this.opts.stallMs : this.opts.giveUpMs;
-    if (t - s.firstSentAt >= limit) {
+    if (t - s.firstSentAt >= this.opts.giveUpMs) {
       this.giveUp(dest, c);
       return;
     }
@@ -398,124 +298,83 @@ export class ReliableSender {
     logger.debug(`retransmit ${s.id} -> ${dest} (send ${s.sends}, rto ${s.timerMs})`);
   }
 
+  /** Drop the in-flight item, whatever it is, and move on. */
   private giveUp(dest: string, c: ClientState): void {
     const s = c.inFlight!;
     if (c.timer) clearTimeout(c.timer);
     c.timer = null;
     c.inFlight = null;
     const secs = ((now() - s.firstSentAt) / 1000).toFixed(1);
-    if (s.item.critical) {
-      // No replay: delivery is ambiguous and a second save in node-tlcv is possible.
-      metrics.inc('tlcs_giveups_total', { kind: 'critical' });
-      logger.error(`give-up critical ${s.id} -> ${dest} after ${secs}s (dropped): ${s.item.body}`);
-    } else if (s.item.epoch === undefined) {
-      metrics.inc('tlcs_giveups_total', { kind: 'control' });
-      logger.warn(`give-up ${s.id} -> ${dest} (control, dropped): ${s.item.body}`);
-      s.item.onGiveUp?.(dest);
-    } else {
-      const n = this.splice(dest, c, s.item.epoch);
-      metrics.inc('tlcs_giveups_total', { kind: 'game' });
-      metrics.inc('tlcs_resyncs_total', { kind: 'giveup' });
-      logger.warn(`give-up ${s.id} -> ${dest} after ${secs}s; resync game ${s.item.epoch} (${n} msgs)`);
-    }
+    const kind = s.item.board === undefined ? 'control' : 'game';
+    metrics.inc('tlcs_giveups_total', { kind });
+    metrics.inc('tlcs_dropped_total', { reason: 'giveup' });
+    logger.warn(`give-up ${s.id} -> ${dest} after ${secs}s (${kind}, dropped): ${s.item.body}`);
+    s.item.onGiveUp?.(dest);
     this.pump(dest, c);
   }
 
-  private queuedEpochs(c: ClientState): number[] {
-    const set = new Set<number>();
-    for (const it of c.queue) if (!it.latest && it.epoch !== undefined) set.add(it.epoch);
-    return Array.from(set).sort((a, b) => a - b);
-  }
-
-  /** Replace epoch `e`'s queued items by its replay (at the first removed index, else the head). */
-  private splice(dest: string, c: ClientState, e: number, replayed?: Outbound[] | null): number {
-    let at = -1;
-    let kept = 0;
-    let withResult = false;
-    c.queue = c.queue.filter((it) => {
-      if (it.latest || it.epoch !== e) {
-        kept++;
-        return true;
-      }
-      if (at < 0) at = kept;
-      if (it.critical) withResult = true;
-      return false;
-    });
-    const r = replayed ?? this.hooks.replay(e, withResult, dest);
-    if (!r) {
-      logger.error(`give-up/coalesce ${dest}: no record for game ${e}`);
-      return 0;
-    }
-    c.queue.splice(at < 0 ? 0 : at, 0, ...r);
-    return r.length;
-  }
-
-  // Cost note (T10/T12): once over maxQueue, every game enqueue re-measures each queued
-  // epoch's replay; an unfinished `cur` is not cached, so that is O(stream) per enqueue.
-  private maybeCoalesce(dest: string, c: ClientState): void {
+  /** Only queued game lines (moves, players, PV/clock) measure how far behind a client is; a crosstable dump does not. */
+  private maybeDropStale(dest: string, c: ClientState): void {
     if (c.queue.length <= this.opts.maxQueue) return;
-    for (const e of this.queuedEpochs(c)) {
-      let n = 0;
-      let hasCritical = false;
-      for (const it of c.queue) {
-        if (it.latest || it.epoch !== e) continue;
-        n++;
-        if (it.critical) hasCritical = true;
-      }
-      const r = this.hooks.replay(e, hasCritical, dest);
-      if (!r || r.length >= n) continue;
-      this.splice(dest, c, e, r); // same withResult as hasCritical, so r is reusable
-      metrics.inc('tlcs_coalesces_total');
-      const msg = `coalesced ${dest} game ${e}: ${n} -> ${r.length}`;
-      if (c.coalesceLogged.has(e)) logger.debug(msg);
-      else {
-        c.coalesceLogged.add(e);
-        logger.info(msg);
-      }
+    if (c.queue.filter((it) => it.board !== undefined).length > this.opts.maxQueue) this.dropStale(dest, c);
+  }
+
+  /**
+   * A client that fell behind (more than maxQueue game lines queued): per board and game (a run
+   * of the board's move steps and PV/clock lines between its other game lines, such as
+   * `result`/`WPLAYER`), the move steps and the PV/clock lines before the newest step are stale.
+   * They go, and the position steps of that newest step take its place, when they are fewer than
+   * what they replace. Each game thus ends on its real final position ahead of its result.
+   * Players, level, GAMENO, result, later PV/clock and control lines are kept, in order.
+   */
+  private dropStale(dest: string, c: ClientState): void {
+    if (!this.hooks.positionSteps) return;
+    interface Seg { board: number; members: number[]; newest: number }
+    const open = new Map<number, Seg>();
+    const segs: Seg[] = [];
+    const close = (board: number) => {
+      const g = open.get(board);
+      if (g && g.newest >= 0) segs.push(g);
+      open.delete(board);
+    };
+    c.queue.forEach((it, i) => {
+      if (it.board === undefined) return;
+      if (!it.step && !it.latest) return close(it.board);
+      const g = open.get(it.board) ?? { board: it.board, members: [], newest: -1 };
+      open.set(it.board, g);
+      g.members.push(i);
+      if (it.step) g.newest = i;
+    });
+    for (const b of [...open.keys()]) close(b);
+    const drop = new Set<number>();
+    const insert = new Map<number, Outbound[]>();
+    const boards = new Set<number>();
+    for (const g of segs) {
+      const stale = g.members.filter((i) => i <= g.newest);
+      const r = this.hooks.positionSteps(dest, g.board, c.queue[g.newest].step!);
+      if (r.length >= stale.length) continue;
+      for (const i of stale) drop.add(i);
+      insert.set(g.newest, r);
+      boards.add(g.board);
     }
+    if (drop.size === 0) return;
+    const out: Outbound[] = [];
+    c.queue.forEach((it, i) => {
+      if (!drop.has(i)) out.push(it);
+      else if (insert.has(i)) out.push(...insert.get(i)!);
+    });
+    c.queue = out;
+    metrics.inc('tlcs_dropped_total', { reason: 'stale' }, drop.size);
+    logger.info(`stale: ${dest} dropped ${drop.size} queued game line(s) on board(s) ${[...boards].join(',')}`);
   }
 
   private enforceHardCap(dest: string, c: ClientState): void {
     while (c.queue.length > this.opts.hardCap) {
-      const i = c.queue.findIndex((it) => !it.latest && it.epoch === undefined && !it.pinned);
+      const i = c.queue.findIndex((it) => !it.latest && it.board === undefined && !it.pinned);
       if (i < 0) return;
       const [it] = c.queue.splice(i, 1);
       logger.warn(`hard cap: evicted control item for ${dest}: ${it.body}`);
       it.onGiveUp?.(dest);
     }
-  }
-
-  /**
-   * The ONLY path that discards game data: keep just the newest queued epoch. Runs when a
-   * stall episode starts (`announce`) and again for each new epoch queued while stalled.
-   */
-  // Note: a give-up of an in-flight item from an epoch dropped here re-inserts that epoch's
-  // replay at the head; the next new-epoch enqueue drops it again (harmless, bounded churn).
-  private dropStalled(dest: string, c: ClientState, announce = false): void {
-    const epochs = this.queuedEpochs(c);
-    let dropped = 0;
-    let lostResults = 0;
-    // Newest queued epoch per board (items without a board form one group, as before boards).
-    const newest = new Map<number | undefined, number>();
-    for (const it of c.queue) {
-      if (it.latest || it.epoch === undefined) continue;
-      newest.set(it.board, Math.max(newest.get(it.board) ?? -Infinity, it.epoch));
-    }
-    if (epochs.length > newest.size) {
-      c.queue = c.queue.filter((it) => {
-        if (it.latest || it.epoch === undefined || it.epoch >= newest.get(it.board)!) return true;
-        dropped++;
-        if (it.critical) lostResults++;
-        return false;
-      });
-    }
-    const kept = new Set(newest.values());
-    if (announce || dropped > 0) {
-      logger.error(
-        `stalled ${dest}: no ACK progress for ${(this.opts.stallMs / 1000).toFixed(0)}s; ` +
-          `dropped ${dropped} msgs of games [${epochs.filter((e) => !kept.has(e)).join(',')}] (${lostResults} results lost)`,
-      );
-    }
-    this.maybeCoalesce(dest, c);
   }
 }

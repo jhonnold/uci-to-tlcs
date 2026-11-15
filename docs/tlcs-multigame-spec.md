@@ -36,10 +36,11 @@ Audience: a client implementer, mainly node-tlcv. The spec is self-contained; it
 | 3 | C→S | `MULTIGAME: 1` | plain or numbered |
 | 4 | S→C | `MULTIGAME: 1` | numbered |
 | 5 | S→C | `BOARDS: <id> <id> …` | numbered |
-| 6 | S→C | per board, a full resync of its current game, wrapped (§5, §7) | numbered + latest |
+| 6 | S→C | per board, a snapshot of its current game, wrapped (§5, §7) | numbered + latest |
 
 - The client sends step 3 after **every** `LOGON SUCCESSFUL` (a re-LOGON makes the server forget the
-  opt-in). If no `MULTIGAME:` arrives within 5 s, resend; after 3 tries treat the server as
+  opt-in). `LOGON SUCCESSFUL` is unnumbered and can be lost: a client that gets numbered lines after its LOGON
+  without having seen it sends step 3 on the first of them. If no `MULTIGAME:` arrives within 5 s, resend; after 3 tries treat the server as
   single-game. Resending after success is harmless (the server answers again with steps 4-6).
 - `1` is the protocol version. A server answers with the highest version ≤ the requested one it
   supports; v1 servers always answer `1`. A client must ignore a `MULTIGAME:` whose version it does
@@ -104,32 +105,39 @@ head of a board resync); an unchanged value is a no-op.
 
 The `CT:` game section lists every finished game of every board, newest first, as today.
 
-## 7. Resync
+## 7. Snapshots and lost lines
 
-- **Opt-in resync** (step 6) and every later full resync (re-opt-in, server restart §8): for each
-  board in ascending order, the board's current game replayed as in the single-game LOGON resync
-  (`SITE`, players, setup, `level`, SANs each preceded by the mover's PV, last `FEN`/`FMR`),
-  every line wrapped; after all replays, each board's latest clocks/PV/INFO as wrapped latest items. A board whose
-  current game is already finished is skipped (its result was delivered before); it shows nothing
-  until its next game starts. Games still owed to the client when it opts in (queued, not yet
-  delivered, e.g. a lagging client's last result) are replayed wrapped first, with their `GAMENO`
-  and `result:`; nothing owed is lost by switching.
-- **Give-up resync**: when one numbered item of a board's game cannot be delivered (30 s), the
-  server replays that game, wrapped, under new ids. The client must apply a replay of the game in
-  progress on that board exactly as a single-game client applies a replay (a startpos `FEN` after
-  `WPLAYER`/`BPLAYER` resets the board).
-- A stalled client (no ACK progress for 60 s) keeps only the newest game per board.
+Delivery is best effort: the server never replays history. A client keeps each board right from the `FEN:` lines,
+as node-tlcv already does for a single game (a move that does not apply → reload the last `FEN:`; its PGN history
+restarts there).
+
+- **Opt-in snapshot** (step 6), also after a re-LOGON (bare, board 1 only) and after a server restart (§8): the
+  client's queued game lines are dropped; then `SITE` and, for each board in ascending order whose current game is
+  unfinished, `WPLAYER`, `BPLAYER`, the board's **position steps** for its current position X, `level`, then each
+  board's latest clocks/PV/INFO as wrapped latest items. A board whose current game is finished is skipped: it shows
+  nothing until its next game starts; a result still queued for the client is dropped (that game is not saved).
+- **Position steps**: `FEN <startpos>`, `FMR 0`, `FEN X`, `FMR f`, `FEN X`, `xMOVE n. (setup)`, `FMR f` (the
+  single-game non-startpos new-game sequence; just `FEN X`/`FMR f` when X is the start position or the server runs
+  with `FENSETUPMOVE=0`). A client must treat the startpos `FEN` as a board reset and the `(setup)` move (which no
+  chess library accepts) as "load the last `FEN` with the last `FMR` and move number `n`". The game's PGN then starts
+  at X (`[SetUp "1"][FEN …]`).
+- **Lost line** (5 s without an ACK): the line is dropped, whatever it is (move, players, `GAMENO`, `result`) and the
+  next one follows under the next id. The next move of that board comes with its own post-move `FEN`, so the client
+  recovers on the first move that does not apply. Rarely, a move is legal on the stale board too: the board stays
+  wrong until a later move fails. A lost `result:` means the game is not saved; a client must therefore drop a pending
+  `GAMENO` when that board's next `WPLAYER` arrives, so it never names the next game with it.
+- **Falling behind** (more than 256 game lines queued; broadcast lines do not count): per board and game, the
+  queued move steps and the PV/clock lines before the newest step are replaced by the position steps of that newest
+  step, so each game still ends on its real final position ahead of its `result:`; players, `level`, `GAMENO`,
+  `result` and broadcast lines are kept, in order.
 
 ## 8. Server restart
 
-- Ids restart at 1 per process (as in single-game mode); `isIdRestart` rules apply unchanged.
-- With a state file the server restores each client and its opt-in. For a log with concurrent games a
-  restored opted-in client gets a full resync (§7) without re-LOGON; for a sequential log it gets the
-  usual numbered replay of missed games, wrapped as board 1. Board ids are recomputed from the log and match the previous
-  process for the games in progress. Games that finished while the server was down are not
-  replayed (they remain in `CT:`/`GL:`).
-- Without a state file the client gets the `MSG: … no longer connected` notice on its next `PING`,
-  re-LOGONs and re-sends `MULTIGAME: 1` (§3).
+- No client survives a restart: the server catches up silently to every board's game in progress and goes live.
+  The client gets the `MSG: … no longer connected` notice on its next `PING`, re-LOGONs, re-sends `MULTIGAME: 1` (§3)
+  and gets the §7 snapshot. Ids restart at 1 per process (`isIdRestart` rules apply unchanged).
+- Board ids are recomputed from the log and match the previous process for the games in progress. Games that
+  finished while the server was down are not sent (they remain in `CT:`/`GL:`).
 
 ## 9. Legacy clients (no opt-in)
 
@@ -147,7 +155,9 @@ The `CT:` game section lists every finished game of every board, newest first, a
 - The game number is the PGN entry matched by White/Black names, start FEN, PlyCount and (with
   `-pgnout notation=san`, the default) the SAN move list. With other notations two concurrent games
   with the same pairing, start and length can swap numbers.
-- Stop-and-wait delivery is shared by all boards: per client ~3 numbered items per move per board.
+- Stop-and-wait delivery is shared by all boards: per client ~3 numbered items per move per board. A slow or lossy
+  client therefore loses lines (§7) rather than falling further behind: 5 s per undeliverable line, and stale moves
+  are dropped once more than 256 game lines are queued.
 - Verified with fastchess 1.8.2 on Linux; the worker-thread id in the log identifies the game.
   Windows fastchess is unverified.
 
@@ -169,6 +179,11 @@ Where the single-game assumption lives today (node-tlcv @ `9e3e6ee`):
   board 1 keeps the existing routes for compatibility.
 - A `BOARD` line for a board not (yet) in `BOARDS:` creates that board (§4); log it, since a v1 server
   always sends `BOARDS:` first (it is never evicted from the queue).
+- Per board, keep today's `onMove` recovery (a move that does not apply → `resetFromFen()`) and `onFen` rules
+  (startpos while loaded → `reset()`): the §7 snapshots and lost-line recovery rely on them, there is no replay.
+- Clear a board's pending `GAMENO` on its `WPLAYER` (its `result:` may have been lost).
+- Request `RESULTTABLE` after every `LOGON SUCCESSFUL`, not only at start-up (today the server pushes a numbering
+  dump on every LOGON to cover this).
 
 ## 12. Test vectors
 
@@ -208,6 +223,36 @@ S->C  <1162>BOARD 2 GAMENO: 1
 S->C  <1163>BOARD 2 result: 1/2-1/2
 ```
 
+Opt-in snapshot after a bridge restart (the client re-LOGONed on the notice; its bare board-1 snapshot was still queued
+when `MULTIGAME: 1` arrived, so it was replaced by the wrapped one; boards 1-3 mid-game; 2026-11-15 run, PV lines cut):
+
+```
+S->C  <19>MULTIGAME: 1
+S->C  <20>BOARDS: 1 2 3
+S->C  <21>SITE: uci-to-tlcs
+S->C  <22>BOARD 1 WPLAYER: Berserk B
+S->C  <23>BOARD 1 BPLAYER: Berserk C
+S->C  <24>BOARD 1 FEN: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq
+S->C  <25>BOARD 1 FMR: 0
+S->C  <26>BOARD 1 FEN: 8/8/R5pk/5r1p/7P/5PK1/8/8 w -
+S->C  <27>BOARD 1 FMR: 74
+S->C  <28>BOARD 1 FEN: 8/8/R5pk/5r1p/7P/5PK1/8/8 w -
+S->C  <29>BOARD 1 WMOVE: 141. (setup)
+S->C  <30>BOARD 1 FMR: 74
+S->C  <31>BOARD 1 level 0 0:08 0.08
+S->C  BOARD 1 WTIME: 228 otim 265
+S->C  BOARD 1 BTIME: 265 otim 228
+S->C  BOARD 1 WPV: 34 0 2 103526 a6a4 f5b5 ...
+S->C  BOARD 1 BPV: 38 0 7 300097 g7h6 a6a7 ...
+S->C  BOARD 1 WINFO: depth 34 seldepth 22 score cp 0 ...
+S->C  BOARD 1 BINFO: depth 38 seldepth 38 score cp 0 ...
+S->C  <32>BOARD 2 WPLAYER: Berserk C
+S->C  <33>BOARD 2 BPLAYER: Berserk B
+S->C  <34>BOARD 2 FEN: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq
+S->C  ...                           (board 2, then board 3, the same way)
+```
+
 Reference setup to reproduce: `docs/e2e-testing.md` §8 (bridge + concurrent fastchess + mocks; check with
-`npm run e2e-check -- --fastchess games.pgn --transcript mg.jsonl`, which verifies every `GAMENO` game's names,
-result and full move list against fastchess).
+`npm run e2e-check -- --fastchess games.pgn --transcript mg.jsonl`, which verifies every `GAMENO` game's names and
+result, and its full move list, or for a game the client joined late or lost lines in, the moves since its last FEN
+reload and the final position, against fastchess).

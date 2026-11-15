@@ -32,8 +32,6 @@ export interface Config {
   /** PGN served for RESULTTABLE/GAMELIST (TOURNEYPGN= / --pgn). */
   tourneyPgn?: string;
   saveDebug: boolean;
-  /** Extension: persisted-state file. */
-  stateFile?: string;
   /** Extension: idle-client reap timeout, ms. */
   clientTimeoutMs: number;
   /** Extension: admin password. */

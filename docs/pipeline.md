@@ -81,7 +81,7 @@ or touching game boundaries / player-name binding in `pipeline.ts` and
   FEN, PlyCount and SANs (`ResultAuthority.lookup(n, hint)`, claimed on emit); the emitted number is the
   entry's (`emitResult(r, n, fromPgn)` → TLCS-MG `GAMENO`). Restart: `scanBoards` (`log-scan.ts`) replays
   the allocation over the log, `Demux.reserve` pins each board's current game to its channel, catch-up
-  starts at the oldest current game, and restored clients get a full resync (live position only).
+  starts at the oldest current game, and clients re-LOGON and get a snapshot (live position only).
 
 - **Multi-game segmentation lives in `pipeline.ts`.** One log can hold many games/
   matchups (per channel; see the demux above). A new game
@@ -101,20 +101,15 @@ or touching game boundaries / player-name binding in `pipeline.ts` and
 
 ## Startup and restart
 
-`src/app.ts` (`startApp`) runs: load `STATEFILE` -> `registry.refresh()` -> `scanBoards` (one pass: board allocation and
-the sequential game starts, as `scanGameStarts`) -> `planResume` (more than one board: the concurrent catch-up above instead)
-(start game `S` = min(current game, every restored client's `next`, clamped to the last 3) ) -> bind the socket ->
-in the `listening` turn, synchronously feed the log from `starts[S-1]` to EOF through `PacedSink` (not live) and
-`ResumeSink` -> `setLive()` -> start the tailer at the catch-up's end offset. `ResumeSink` attaches each restored
-client right before its `next` game's `setPlayers` and queues a numbering dump ahead of every replayed game; its
-per-client queue is therefore `dump(a), game a ... result a, dump(a+1), game a+1, ...` (the sender is FIFO and a coalesce
-re-inserts a game's replay at its first removed index, so a game never crosses its own dump). `next` per client is
-the oldest game it has not fully ACKed (game item of g -> g, `result` of g -> g+1), persisted by `StateStore` in the
-same JS turn as the ACK. Rotation re-runs the same session for the new file's current game.
+`src/app.ts` (`startApp`) runs: `registry.refresh()` -> `scanBoards` (one pass: board allocation and the sequential game
+starts, as `scanGameStarts`) -> `planStart` (`state/start.ts`: the game in progress, or the next one when the PGN already
+holds the last started game; more than one board: the oldest board's current game, above) -> bind the socket -> in the
+`listening` turn, synchronously feed the log from that offset to EOF through `PacedSink` (not live) -> `setLive()` ->
+start the tailer at the catch-up's end offset. No client state is kept: there is nobody to send the catch-up to, and a
+client of the previous process gets the "no longer connected" notice and re-LOGONs into the join snapshot (players,
+position, clocks, PV; `docs/tlcs-wire.md`). Rotation re-runs the same session for the new file's current game.
 
 - **Segmentation plus the PGN game count let a restart skip finished games.** `scanBoards`' `starts` (same as
   `scanGameStarts`) are the log's game boundaries with the same rules as the live segmenter, and the registry says how many games are
-  finished. `planResume` therefore starts the catch-up at the oldest game any restored client still needs
-  (default: the game in progress) and feeds only that part of the log; earlier games are never replayed.
-  Clients that were not restored (no `STATEFILE`, or a corrupt/stale one) receive nothing until they re-LOGON,
-  and then get the full history of the current game.
+  finished. `planStart` therefore feeds only the game in progress; games before it (including any that ended while
+  the server was down) are never sent.

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { ReliableSender, type Outbound, type SenderOptions } from '../src/tlcs/reliable-sender.js';
+import type { Position } from '../src/tlcs/protocol.js';
 import { logger } from '../src/util/logger.js';
 import { metrics } from '../src/metrics.js';
 
@@ -11,7 +12,6 @@ const BASE: Partial<SenderOptions> = {
   maxRtoMs: 40,
   backoffFactor: 2,
   giveUpMs: 150,
-  stallMs: 400,
 };
 
 const mg = (n: Parameters<typeof metrics.get>[0], l?: Record<string, string>) => metrics.get(n, l);
@@ -53,12 +53,11 @@ interface Rx {
 function harness(
   opts: Partial<SenderOptions> = {},
   policy: AckPolicy = () => 0,
-  replay: (e: number, wr: boolean) => Outbound[] | null = () => null,
-  onStalled?: (d: string) => void,
+  positionSteps: (board: number, pos: Position) => Outbound[] = (b, pos) => [{ body: `P${b}:${pos.fen}`, board: b, step: pos }],
 ) {
   const rx: Rx[] = [];
   const copies = new Map<string, number>();
-  const replays: Array<[number, boolean]> = [];
+  const collapses: Array<[number, string]> = [];
   const s: ReliableSender = new ReliableSender(
     {
       rawSend: (payload, dest) => {
@@ -75,11 +74,10 @@ function harness(
         const d = policy(dest, id, copy, m[2]);
         if (d !== null) setTimeout(() => s.ack(dest, id), d);
       },
-      replay: (e, wr) => {
-        replays.push([e, wr]);
-        return replay(e, wr);
+      positionSteps: (_d, b, pos) => {
+        collapses.push([b, pos.fen]);
+        return positionSteps(b, pos);
       },
-      onStalled,
     },
     { ...BASE, ...opts },
   );
@@ -94,10 +92,13 @@ function harness(
     }
     return out;
   };
-  return { s, rx, firstSeen, replays };
+  return { s, rx, firstSeen, collapses };
 }
 
-const game = (body: string, epoch: number, critical = false): Outbound => ({ body, epoch, critical: critical || undefined });
+/** A game line of `board` (not a move step). */
+const game = (body: string, board = 1): Outbound => ({ body, board });
+/** A move step of `board` that leaves the board at `fen`. */
+const step = (body: string, fen: string, board = 1): Outbound => ({ body, board, step: { fen, fmr: 0, fullmove: 1 } });
 const ctl = (body: string): Outbound => ({ body });
 
 test('sender: ids are per client, start at 1, framing has no space', async () => {
@@ -204,218 +205,128 @@ test('sender: one heavily retransmitted item does not blow up the next item\'s R
   h.s.close();
 });
 
-test('sender: game give-up replaces the epoch tail with a replay under new ids', async () => {
-  const r = [game('r1', 1), game('r2', 1)];
-  const h = harness({}, (_d, id) => (performance.now() > T0 + 200 || id > 1 ? 0 : null), (e) => (e === 1 ? r : null));
-  const T0 = performance.now();
-  const gu0 = mg('tlcs_giveups_total', { kind: 'game' });
-  const rs0 = mg('tlcs_resyncs_total', { kind: 'giveup' });
-  const log = captureLogs();
-  try {
-    h.s.addClient('A');
-    h.s.enqueue('A', game('g1', 1));
-    h.s.enqueue('A', game('g2', 1));
-    h.s.enqueue('A', game('g3', 1));
-    h.s.enqueue('A', ctl('c1'));
-    h.s.enqueue('A', game('h1', 2));
-    h.s.enqueue('A', game('h2', 2));
-    await waitFor(() => h.firstSeen('A').length >= 6);
-    await waitFor(() => h.s.depth('A') === 0);
-    assert.deepEqual(h.firstSeen('A').map((x) => x.body), ['g1', 'r1', 'r2', 'c1', 'h1', 'h2']);
-    assert.deepEqual(h.replays[0], [1, false]);
-    assert(log.count(/give-up .*resync game 1/) === 1);
-    assert.equal(mg('tlcs_giveups_total', { kind: 'game' }) - gu0, 1);
-    assert.equal(mg('tlcs_resyncs_total', { kind: 'giveup' }) - rs0, 1);
-  } finally {
-    log.done();
-    h.s.close();
-  }
-});
 
-test('sender: replay is asked withResult=true when a queued result is spliced', async () => {
-  const h = harness({}, (_d, id) => (performance.now() > T0 + 200 || id > 1 ? 0 : null), (e, wr) => [game(wr ? 'rr' : 'r', e)]);
-  const T0 = performance.now();
-  h.s.addClient('A');
-  h.s.enqueue('A', game('g1', 1));
-  h.s.enqueue('A', game('g2', 1));
-  h.s.enqueue('A', game('res', 1, true));
-  await waitFor(() => h.s.depth('A') === 0);
-  assert.deepEqual(h.replays[0], [1, true]);
-  assert.deepEqual(h.firstSeen('A').map((x) => x.body), ['g1', 'rr']);
-  h.s.close();
-});
-
-test('sender: control give-up drops the item, calls onGiveUp once, continues', async () => {
+test('sender: give-up drops a move, a result and a control line alike; the next id follows', async () => {
+  const gg0 = mg('tlcs_giveups_total', { kind: 'game' });
   const gc0 = mg('tlcs_giveups_total', { kind: 'control' });
-  const h = harness({}, (_d, id) => (id === 1 ? null : 0));
-  let gaveUp = 0;
-  h.s.addClient('A');
-  h.s.enqueue('A', { body: 'ctl', onGiveUp: () => void gaveUp++ });
-  h.s.enqueue('A', ctl('next'));
-  await waitFor(() => h.firstSeen('A').length === 2, 1000);
-  assert.equal(gaveUp, 1);
-  assert.equal(mg('tlcs_giveups_total', { kind: 'control' }) - gc0, 1);
-  assert.equal(h.replays.length, 0);
-  h.s.close();
-});
-
-test('sender: critical item survives giveUpMs and is dropped after stallMs with an error', async () => {
-  const gk0 = mg('tlcs_giveups_total', { kind: 'critical' });
+  const dr0 = mg('tlcs_dropped_total', { reason: 'giveup' });
   const log = captureLogs();
   try {
-    const h = harness({ giveUpMs: 60, stallMs: 250 }, (_d, id) => (id === 1 ? null : 0));
+    const h = harness({}, (_d, id) => (id <= 3 ? null : 0));
+    let gaveUp = 0;
     h.s.addClient('A');
-    h.s.enqueue('A', game('res', 1, true));
+    h.s.enqueue('A', step('WMOVE: 1. e4', 'x'));
+    h.s.enqueue('A', game('result: 1-0'));
+    h.s.enqueue('A', { body: 'CT: x', onGiveUp: () => void gaveUp++ });
     h.s.enqueue('A', ctl('next'));
-    await sleep(150);
-    assert.equal(h.firstSeen('A').length, 1, 'still retrying past giveUpMs');
-    await waitFor(() => h.firstSeen('A').length === 2, 1000);
-    assert(log.count(/error: give-up critical 1/) === 1);
-    assert.equal(mg('tlcs_giveups_total', { kind: 'critical' }) - gk0, 1);
-    h.s.close();
-
-    const h2 = harness({ giveUpMs: 60, stallMs: 250 }, (_d, id, copy) => (id === 1 && copy < 8 ? null : 0));
-    h2.s.addClient('A');
-    h2.s.enqueue('A', game('res', 1, true));
-    await waitFor(() => h2.s.depth('A') === 0, 1000);
-    assert(log.count(/give-up critical 1/) === 1, 'second run never gave up');
-    h2.s.close();
-  } finally {
-    log.done();
-  }
-});
-
-/** A tiny fake server: per-epoch streams, replay = first + last item (+ result). */
-function fakeRecords() {
-  const streams = new Map<number, Outbound[]>();
-  const replay = (e: number, wr: boolean): Outbound[] | null => {
-    const st = streams.get(e);
-    if (!st) return null;
-    const body = st.filter((i) => !i.critical);
-    const out = [body[0], body[body.length - 1]].map((i) => ({ ...i }));
-    const res = st.find((i) => i.critical);
-    if (wr && res) out.push({ ...res });
-    return out;
-  };
-  const add = (e: number, o: Outbound) => {
-    if (!streams.has(e)) streams.set(e, []);
-    streams.get(e)!.push(o);
-  };
-  return { streams, replay, add };
-}
-
-test('sender: a slow-but-ACKing client loses no result across coalesced epochs', async () => {
-  const log = captureLogs();
-  try {
-    const rec = fakeRecords();
-    const h = harness({ maxQueue: 8, stallMs: 60_000, giveUpMs: 5000 }, (_d, _id, copy) => (copy % 2 === 0 ? 0 : null), rec.replay);
-    h.s.addClient('A');
-    for (let e = 1; e <= 4; e++) {
-      for (let i = 0; i < 15; i++) {
-        const it = game(`e${e}m${i}`, e);
-        rec.add(e, it);
-        h.s.enqueue('A', it);
-      }
-      const res = game(`res${e}`, e, true);
-      rec.add(e, res);
-      h.s.enqueue('A', res);
-    }
-    await waitFor(() => h.s.depth('A') === 0, 8000);
-    const bodies = h.firstSeen('A').map((x) => x.body);
-    assert.deepEqual(bodies.filter((b) => b.startsWith('res')), ['res1', 'res2', 'res3', 'res4']);
-    assert.equal(bodies[bodies.length - 1], 'res4');
-    assert(bodies.includes('e4m14'));
-    assert(log.count(/coalesced/) > 0);
-    assert.equal(log.count(/stalled|give-up critical/), 0);
-    assert.equal(h.s.referencedEpochs().size, 0);
-    h.s.close();
-  } finally {
-    log.done();
-  }
-});
-
-test('sender: stalled client is bounded to the newest epoch, again for each new epoch, and unstalls on ACK', async () => {
-  const log = captureLogs();
-  try {
-    const st0 = mg('tlcs_stalls_total');
-    const rec = fakeRecords();
-    let stalled = 0;
-    let ackOn = false;
-    const h = harness({ stallMs: 200, giveUpMs: 1000, maxQueue: 8 }, () => (ackOn ? 0 : null), rec.replay, () => void stalled++);
-    h.s.addClient('A');
-    const push = (e: number, n: number) => {
-      for (let i = 0; i < n; i++) {
-        const it = game(`e${e}m${i}`, e);
-        rec.add(e, it);
-        h.s.enqueue('A', it);
-      }
-      const res = game(`res${e}`, e, true);
-      rec.add(e, res);
-      h.s.enqueue('A', res);
-    };
-    push(1, 6);
-    push(2, 6);
-    push(3, 6);
-    await waitFor(() => log.count(/error: stalled A/) >= 1, 1500);
-    assert.equal(stalled, 1);
-    assert.equal(mg('tlcs_stalls_total') - st0, 1);
-    assert.match(log.lines.find((l) => /error: stalled/.test(l))!, /\(\d+ results lost\)/);
-    assert.deepEqual([...h.s.referencedEpochs()].sort(), [3, 1].sort()); // 1 stays only as the in-flight item
-    // a new epoch while stalled drops the older queued one again
-    push(4, 6);
-    assert(!h.s.referencedEpochs().has(3));
-    assert.equal(stalled, 1, 'onStalled fires once per episode');
-    ackOn = true;
     await waitFor(() => h.s.depth('A') === 0, 2000);
-    assert.equal(log.count(/unstalled A/), 1);
+    assert.deepEqual(h.firstSeen('A'), [
+      { id: 1, body: 'WMOVE: 1. e4' },
+      { id: 2, body: 'result: 1-0' },
+      { id: 3, body: 'CT: x' },
+      { id: 4, body: 'next' },
+    ]);
+    assert.equal(gaveUp, 1);
+    assert.equal(mg('tlcs_giveups_total', { kind: 'game' }) - gg0, 2);
+    assert.equal(mg('tlcs_giveups_total', { kind: 'control' }) - gc0, 1);
+    assert.equal(mg('tlcs_dropped_total', { reason: 'giveup' }) - dr0, 3);
+    assert.deepEqual(h.collapses, [], 'a give-up never rebuilds anything');
     h.s.close();
   } finally {
     log.done();
   }
 });
 
-test('sender: a client idle longer than stallMs is not "stalled" by one lost first copy', async () => {
+test('sender: a line acked before giveUpMs is never dropped', async () => {
+  const h = harness({ giveUpMs: 150 }, (_d, id, copy) => (id === 1 && copy < 3 ? null : 0));
+  h.s.addClient('A');
+  h.s.enqueue('A', game('result: 1-0'));
+  h.s.enqueue('A', ctl('next'));
+  await waitFor(() => h.s.depth('A') === 0, 1000);
+  assert.deepEqual(h.firstSeen('A').map((x) => x.body), ['result: 1-0', 'next']);
+  h.s.close();
+});
+
+test('sender: over maxQueue, each game\'s queued move steps collapse to its position steps at its newest step', async () => {
+  const dr0 = mg('tlcs_dropped_total', { reason: 'stale' });
   const log = captureLogs();
   try {
-    let stalled = 0;
-    const h = harness({ stallMs: 200, giveUpMs: 1000 }, (_d, _id, copy) => (copy === 1 ? null : 0), () => null, () => void stalled++);
+    const h = harness({ maxQueue: 8 }, () => null);
     h.s.addClient('A');
-    await sleep(300);
-    h.s.enqueue('A', ctl('x'));
-    h.s.enqueue('A', ctl('y'));
-    await waitFor(() => h.s.depth('A') === 0, 1000);
-    assert.equal(stalled, 0);
-    assert.equal(log.count(/stalled/), 0);
+    h.s.enqueue('A', ctl('lead')); // in flight, never ACKed by the policy
+    h.s.enqueue('A', game('WPLAYER: a'));
+    h.s.enqueue('A', step('FEN: a', 'fa'));
+    h.s.enqueue('A', step('WMOVE: a', 'fb'));
+    h.s.enqueue('A', step('BOARD 2 FEN: x', 'fx', 2));
+    h.s.enqueue('A', game('result: 1-0'));
+    h.s.enqueue('A', game('WPLAYER: b'));
+    h.s.enqueue('A', step('FEN: c', 'fc'));
+    h.s.enqueue('A', step('BOARD 2 FEN: y', 'fy', 2));
+    assert.equal(h.s.depth('A'), 1 + 8, 'at the cap: nothing dropped');
+    h.s.enqueue('A', step('FEN: d', 'fd')); // 9 queued game lines > 8
+    assert.deepEqual(h.collapses.sort(), [[1, 'fb'], [1, 'fd'], [2, 'fy']]);
+    for (let id = 1; id <= 7; id++) h.s.ack('A', id);
+    // each game keeps its own final position ahead of its result
+    assert.deepEqual(h.firstSeen('A').map((x) => x.body), ['lead', 'WPLAYER: a', 'P1:fb', 'result: 1-0', 'WPLAYER: b', 'P2:fy', 'P1:fd']);
+    assert.equal(mg('tlcs_dropped_total', { reason: 'stale' }) - dr0, 6);
+    assert.equal(log.count(/info: stale: A dropped 6 queued game line/), 1);
     h.s.close();
   } finally {
     log.done();
   }
 });
 
-test('sender: coalescing collapses queued epochs only when the replay is shorter', async () => {
-  const co0 = mg('tlcs_coalesces_total');
-  const replays = new Map<number, Outbound[]>([
-    [1, [game('a1', 1), game('a2', 1), game('a3', 1)]],
-    [2, [game('b1', 2), game('b2', 2), game('b3', 2)]],
-  ]);
-  const h = harness({ maxQueue: 7 }, () => null, (e) => replays.get(e) ?? null);
+test('sender: a long control backlog (a crosstable dump) never collapses the moves queued behind it', async () => {
+  const h = harness({ maxQueue: 8 }, () => null);
   h.s.addClient('A');
-  h.s.enqueue('A', ctl('lead')); // in flight forever
-  for (let i = 0; i < 4; i++) h.s.enqueue('A', game(`x${i}`, 1));
-  for (let i = 0; i < 3; i++) h.s.enqueue('A', game(`y${i}`, 2));
-  assert.equal(h.s.depth('A'), 1 + 7, 'at the cap: nothing coalesced');
-  h.s.enqueue('A', game('y3', 2)); // 8 > 7: both epochs collapse to their 3-item replays in one pass
-  assert.equal(h.s.depth('A'), 1 + 3 + 3);
-  assert(mg('tlcs_coalesces_total') - co0 >= 1, 'coalesces counted');
-
-  const longer = new Map<number, Outbound[]>([[1, Array.from({ length: 20 }, (_, i) => game(`L${i}`, 1))]]);
-  const h2 = harness({ maxQueue: 5 }, () => null, (e) => longer.get(e) ?? null);
-  h2.s.addClient('A');
-  h2.s.enqueue('A', ctl('lead'));
-  for (let i = 0; i < 10; i++) h2.s.enqueue('A', game(`x${i}`, 1));
-  assert.equal(h2.s.depth('A'), 11, 'longer replay: nothing coalesced');
+  h.s.enqueue('A', ctl('lead'));
+  for (let i = 0; i < 20; i++) h.s.enqueue('A', ctl(`CT:${i}`));
+  h.s.enqueue('A', step('FEN: a', 'fa'));
+  h.s.enqueue('A', step('WMOVE: a', 'fa'));
+  h.s.enqueue('A', step('FMR: 0', 'fa'));
+  assert.deepEqual(h.collapses, [], 'only queued move steps count towards maxQueue');
+  assert.equal(h.s.depth('A'), 1 + 20 + 3);
   h.s.close();
-  h2.s.close();
+});
+
+test('sender: a board collapses only when its queued steps outnumber the position steps replacing them', async () => {
+  const h = harness({ maxQueue: 4 }, () => null, (b, pos) => Array.from({ length: 3 }, (_, i) => ({ body: `P${b}:${pos.fen}:${i}`, board: b, step: pos })));
+  h.s.addClient('A');
+  h.s.enqueue('A', ctl('lead'));
+  h.s.enqueue('A', step('BOARD 2 FEN: x', 'fx', 2)); // board 2: 1 step, never worth collapsing
+  for (const f of ['a', 'b', 'c', 'd']) h.s.enqueue('A', step(`FEN: ${f}`, `f${f}`)); // 5 steps > 4
+  for (let id = 1; id <= 5; id++) h.s.ack('A', id);
+  assert.deepEqual(h.firstSeen('A').map((x) => x.body), ['lead', 'BOARD 2 FEN: x', 'P1:fd:0', 'P1:fd:1', 'P1:fd:2']);
+  h.s.close();
+});
+
+test('sender: a collapse drops the stale PV/clock lines of the dropped moves, keeps later ones and control lines', async () => {
+  const h = harness({ maxQueue: 5 }, () => null);
+  h.s.addClient('A');
+  h.s.enqueue('A', ctl('lead'));
+  h.s.enqueue('A', step('FEN: a', 'fa'));
+  h.s.enqueue('A', { body: 'WPV: 1', latest: 'WPV', board: 1 });
+  h.s.enqueue('A', ctl('CHAT: hi'));
+  h.s.enqueue('A', { body: 'WTIME: 1', latest: 'WTIME', board: 1 });
+  h.s.enqueue('A', step('FEN: b', 'fb'));
+  h.s.enqueue('A', { body: 'BPV: 2', latest: 'BPV', board: 1 });
+  h.s.enqueue('A', step('FEN: c', 'fc')); // 6 game lines > 5
+  h.s.enqueue('A', { body: 'WPV: 3', latest: 'WPV', board: 1 }); // after the newest step: kept
+  for (let id = 1; id <= 3; id++) h.s.ack('A', id);
+  assert.deepEqual(h.rx.map((r) => r.body), ['lead', 'CHAT: hi', 'P1:fc', 'WPV: 3']);
+  h.s.close();
+});
+
+test('sender: PV/clock lines count towards maxQueue (they cannot pile up to the hard cap)', async () => {
+  const h = harness({ maxQueue: 6, hardCap: 12 }, () => null);
+  h.s.addClient('A');
+  h.s.enqueue('A', ctl('lead'));
+  for (let i = 0; i < 40; i++) {
+    h.s.enqueue('A', { body: `WPV: ${i}`, latest: 'WPV', board: 1 });
+    h.s.enqueue('A', step(`FEN: ${i}`, `f${i}`));
+  }
+  assert.ok(h.s.depth('A') <= 1 + 6 + 1, `depth ${h.s.depth('A')}`);
+  h.s.close();
 });
 
 test('sender: latest items - idle gets raw at once; busy keeps only the newest, in queue order', async () => {
@@ -469,65 +380,38 @@ test('sender: ids never reset across remove/re-add; unknown dest is a no-op', as
   h.s.close();
 });
 
-test('sender: resync on an idle client appends cur replay; a finished cur with nothing queued appends nothing', async () => {
-  const rf0 = mg('tlcs_resyncs_total', { kind: 'full' });
-  const h = harness({}, () => 0, (e) => [game(`r${e}`, e)]);
-  h.s.addClient('A');
-  h.s.resync('A', 2, false);
-  assert.equal(mg('tlcs_resyncs_total', { kind: 'full' }) - rf0, 1);
-  await waitFor(() => h.firstSeen('A').length === 1);
-  assert.deepEqual(h.replays, [[2, false]]);
-  h.s.resync('A', 2, true);
-  await sleep(30);
-  assert.equal(h.firstSeen('A').length, 1);
-  h.s.close();
-});
 
-test('sender: resync splices pending moves + result without duplicating the in-flight item', async () => {
-  const h = harness({}, () => null, (e, wr) => [game(`R${e}${wr ? '+res' : ''}`, e)]);
+test('sender: resync removes queued game and latest items (not control, not in flight) and appends the snapshot', async () => {
+  const rf0 = mg('tlcs_resyncs_total', { kind: 'full' });
+  const h = harness({}, () => null);
   h.s.addClient('A');
-  h.s.enqueue('A', game('m1', 1)); // in flight, id 1
-  h.s.enqueue('A', game('m2', 1));
-  h.s.enqueue('A', game('res1', 1, true));
-  h.s.enqueue('A', game('n1', 2));
-  h.s.resync('A', 2, false);
+  h.s.enqueue('A', step('FEN: a', 'fa')); // in flight, id 1
+  h.s.enqueue('A', step('WMOVE: b', 'fb'));
+  h.s.enqueue('A', game('result: 1-0'));
+  h.s.enqueue('A', { body: 'WPV: old', latest: 'WPV', board: 1 });
+  h.s.enqueue('A', ctl('CHAT: hi'));
+  h.s.resync('A', [game('WPLAYER: s'), { body: 'WPV: new', latest: 'WPV', board: 1 }]);
+  assert.equal(mg('tlcs_resyncs_total', { kind: 'full' }) - rf0, 1);
   h.s.ack('A', 1);
   h.s.ack('A', 2);
   h.s.ack('A', 3);
-  assert.deepEqual(h.firstSeen('A').map((x) => [x.id, x.body]), [[1, 'm1'], [2, 'R1+res'], [3, 'R2']]);
+  assert.deepEqual(h.rx.map((r) => [r.id, r.body]), [[1, 'FEN: a'], [2, 'CHAT: hi'], [3, 'WPLAYER: s'], [null, 'WPV: new']]);
   h.s.close();
 });
 
-test('sender: resync while the result is in flight does not replay the finished game', async () => {
-  const h = harness({}, () => null, (e) => [game(`R${e}`, e)]);
+test('sender: resync on an idle client sends the snapshot at once', async () => {
+  const h = harness({}, () => 0);
   h.s.addClient('A');
-  h.s.enqueue('A', game('res2', 2, true)); // in flight
-  h.s.resync('A', 2, true);
-  await sleep(40);
-  assert.deepEqual([...new Set(h.rx.filter((r) => r.id !== null).map((r) => `${r.id}:${r.body}`))], ['1:res2']);
-  assert.equal(h.replays.length, 0);
-  h.s.close();
-});
-
-test('sender: referencedEpochs reflects queued and in-flight items and empties when drained', async () => {
-  const h = harness({}, () => null);
-  h.s.addClient('A');
-  h.s.addClient('B');
-  h.s.enqueue('A', game('a', 1));
-  h.s.enqueue('A', game('b', 2));
-  h.s.enqueue('B', game('c', 3));
-  assert.deepEqual([...h.s.referencedEpochs()].sort(), [1, 2, 3]);
-  h.s.ack('A', 1);
-  h.s.ack('A', 2);
-  h.s.ack('B', 1);
-  assert.equal(h.s.referencedEpochs().size, 0);
+  h.s.resync('A', [game('WPLAYER: s'), game('BPLAYER: t')]);
+  await waitFor(() => h.s.depth('A') === 0);
+  assert.deepEqual(h.firstSeen('A').map((x) => x.body), ['WPLAYER: s', 'BPLAYER: t']);
   h.s.close();
 });
 
 test('sender: resync for an unknown dest does not count', () => {
   const rf0 = mg('tlcs_resyncs_total', { kind: 'full' });
   const h = harness();
-  h.s.resync('nobody', 1, false);
+  h.s.resync('nobody', [game('x')]);
   assert.equal(mg('tlcs_resyncs_total', { kind: 'full' }) - rf0, 0);
   h.s.close();
 });
