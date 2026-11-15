@@ -5,15 +5,17 @@ editing a `.ts` file and hitting an import-extension build break.
 
 ## Architecture seam
 
-`tail → LogSource → parser → Pipeline → GameState (chess.js) → TlcsServer → UDP`.
+`tail → LogSource → Demux → (per board) Pipeline → GameState (chess.js) → TlcsServer board → UDP`.
 Three concerns, kept separate on purpose:
 - **`source/` (LogSource adapter)** normalizes one producer line into
-  `{ uci, engineId?, direction? }` and nothing more — no chess, no segmentation.
+  `{ uci, engineId?, direction?, channel? }` and nothing more — no chess, no segmentation.
   `RawUciSource` (untagged) and `FastchessSource` (engine-tagged) ship;
   `--format` / `makeSource` pick one (`auto` sniffs the first decisive line, tagged
   matchers before the loose `looksLikeRawUci`). Add a producer = add an adapter, don't
   touch the pipeline. An adapter MAY be stateful for *identity* only (e.g. remapping a
   producer's engine tag to the real display name) — never for chess or segmentation.
+- **`demux.ts`** splits concurrent games (one `channel` each) into boards, one `Pipeline` per
+  board (slot reuse keeps sequential play on board 1). `TlcsServer.board(id)` is each board's sink.
 - **`pipeline.ts` / `game/game-state.ts`** own all unit/perspective conversion **and**
   game segmentation. The `BroadcastSink` interface (`pipeline.ts`) is the test seam —
   `encoder.test.ts` / `multigame.test.ts` drive the pipeline through a fake sink with
@@ -21,7 +23,8 @@ Three concerns, kept separate on purpose:
 - **`tlcs/`** only transports and answers clients. Keep conversion/segmentation out of it.
   `server.ts` is the socket and the two send channels; `reliable-sender.ts` the per-client
   stop-and-wait queues (RTO, give-up, resync); `inbound.ts` numbered-datagram dedupe;
-  `commands.ts` the session commands (logon burst, names, chat, PING/reap); `admin.ts`
+  board state (one current game record + clocks/PV snapshot per board) and the TLCS-MG opt-in
+  (`MULTIGAME:`; wrapped `BOARD <n>` lines per client mode) live in `server.ts`; `commands.ts` the session commands (logon burst, names, chat, PING/reap); `admin.ts`
   `ADMIN`/`SECURITY`/`BOOT`, ban list and the per-IP rate limit; `protocol.ts` the wire formats.
 - **`results/`** is the stateful side of results: a streaming reader of the tournament PGN
   (`GameRegistry`), the authority the pipeline asks for a game's `Result`, and the

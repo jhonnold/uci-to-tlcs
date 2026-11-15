@@ -115,6 +115,28 @@ export function gl(line: string): string {
   return `GL:${line}`;
 }
 
+// ---- TLCS-MG (docs/tlcs-multigame-spec.md)
+
+/** Protocol version this server speaks; also the body of the opt-in reply. */
+export const MULTIGAME_VERSION = 1;
+
+export function multigame(version: number): string {
+  return `MULTIGAME: ${version}`;
+}
+
+export function boards(ids: number[]): string {
+  return `BOARDS: ${ids.join(' ')}`;
+}
+
+/** A board's game line, wrapped. */
+export function board(id: number, body: string): string {
+  return `BOARD ${id} ${body}`;
+}
+
+export function gameno(n: number): string {
+  return `GAMENO: ${n}`;
+}
+
 export const CTRESET = 'CTRESET';
 export const PONG = 'PONG';
 export const LOGON_SUCCESSFUL = 'LOGON SUCCESSFUL';

@@ -65,8 +65,9 @@ npm ci && npm run build
 node dist/src/main.js --ini server.ini          # or: npm start -- --ini server.ini
 ```
 
-Run the tournament from the same directory with **`-concurrency 1`**, a fresh `-pgnout` file, and the engine log
-enabled (`TOURNEYPGN` makes every result exact, including resign/adjudication/forfeit):
+Run the tournament from the same directory with a fresh `-pgnout` file and the engine log enabled (`TOURNEYPGN`
+makes every result exact, including resign/adjudication/forfeit). `-concurrency N > 1` is supported: each concurrent
+game is a board (TLCS-MG, `docs/tlcs-multigame-spec.md`); clients that do not opt in see board 1 only:
 
 ```bash
 fastchess -engine cmd=berserk name=A -engine cmd=berserk name=B -each tc=60+0.6 option.Hash=16 option.Threads=1 \
@@ -200,7 +201,7 @@ npm run mock-client -- --server 127.0.0.1 --port 16066 --ephemeral
 **Faithful end-to-end with real node-tlcv and fastchess** (single host, no Docker): see the Quick start above and
 `docs/e2e-testing.md`, which also holds the restart/churn acceptance scenario and the checkers
 (`npm run e2e-check`, `scripts/standings-check.ts`). Use a real `tc=` (not `st=`/`movetime`) so the clocks tick,
-`-concurrency 1` so games don't interleave in one log, and `TOURNEYPGN`/`--pgn` so every result is exact (any
+`-concurrency 1` for today's node-tlcv (it shows board 1 only), and `TOURNEYPGN`/`--pgn` so every result is exact (any
 adjudication or forfeit included); without it a non-board ending emits `result: *`. Needs node-tlcv checked out at
 `../node-tlcv`.
 
@@ -208,13 +209,16 @@ adjudication or forfeit included); without it a non-board ending emits `result: 
 
 In scope:
 
-- Sequential multi-game / multi-matchup tournaments on one port (`-concurrency 1`), from a fastchess log
+- Sequential multi-game / multi-matchup tournaments on one port, from a fastchess log
   (`--format fastchess`) or a pre-stripped UCI transcript (`--format raw`, CLI names).
+- Concurrent games (`-concurrency N`) as boards on the same port: the opt-in TLCS-MG extension
+  (`MULTIGAME: 1`, `BOARDS:`, `BOARD <n> <line>`, `GAMENO:`), spec in `docs/tlcs-multigame-spec.md`; board 1 stays the
+  plain single-game stream for clients that do not opt in. `mock-client --multigame` speaks it.
 - The TLCS session, result and admin protocol as node-tlcv and the desktop TLCV use it: logon burst and user list,
   chat/alias, `MENU`, `RESULTTABLE`/`GAMELIST` from the tournament PGN, admin (`ADMINPASS`), ban list, `MAXCLIENTS`,
   per-IP rate limit, a Prometheus endpoint.
 - Restart persistence (`STATEFILE`): kill and restart mid-tournament without losing clients, games or numbering.
 
-Out of scope: concurrent games (`-concurrency > 1`), a WinBoard/myracle adapter, `ICSMODE` and e-mail, several
+Out of scope: a TLCS-MG client in node-tlcv (spec only), a WinBoard/myracle adapter, `ICSMODE` and e-mail, several
 broadcasts per process, and the reference server's strict `clientIP:<broadcast port>` addressing mode.
 See `docs/gaps.md` for the status table, known limitations and node-tlcv follow-ups.

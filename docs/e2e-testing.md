@@ -219,3 +219,36 @@ per-IP rate-limit bucket), then fastchess.
 A `rate limit: dropping datagrams from 127.0.0.1` warning means the harness itself tripped the per-IP bucket (all clients are on
 one IP): stagger the launches. A failure under host load (1-min load > 6, fastchess `time forfeit`) is rerun, not debugged.
 Kill every process group at the end (`setsid` + pgid files, never `pkill -f`).
+
+## 8. Concurrent games (TLCS-MG)
+
+Same stack as §3 with `-concurrency 3` (any N), plus TLCS-MG mocks. Every process via `run-logged`.
+
+```bash
+npm start -- --log fc.log --format fastchess --pgn games.pgn --bind 127.0.0.1 --port 16100
+npx tsx scripts/mock-client.ts --port 16100 --ephemeral --user mg --multigame --transcript mg.jsonl --quiet
+npx tsx scripts/mock-client.ts --port 16100 --ephemeral --user mglossy --multigame --drop 0.2 --seed 7 --transcript mglossy.jsonl --quiet
+npx tsx scripts/mock-client.ts --port 16100 --ephemeral --user legacy --transcript legacy.jsonl --quiet
+npx tsx scripts/mock-client.ts --port 16100 --ephemeral --user desk --mode desktop --transcript desk.jsonl --quiet
+fastchess -engine name="Berserk A" cmd=berserk ... -engine name="Berserk D" cmd=berserk \
+  -each tc=8+0.08 option.Hash=16 option.Threads=1 -rounds 1 -games 2 -concurrency 3 \
+  -log file=fc.log engine=true realtime=true -pgnout file=games.pgn
+```
+
+Gates:
+
+1. `npm run e2e-check -- --fastchess games.pgn --transcript mg.jsonl` (and `mglossy.jsonl`) PASS with one
+   `BOARD n GAMENO: k` per fastchess game (`grep -c GAMENO`): the checker verifies names, result and every SAN of
+   game k, that no board line precedes the `MULTIGAME:` reply and no bare game line follows it.
+2. `--legacy` on `legacy.jsonl`/`desk.jsonl` PASS: no TLCS-MG token ever reached them.
+3. Un-upgraded node-tlcv on the same port: zero `Unable to process` warnings; its PGNs are exactly the board-1 games
+   (compare against those fastchess games; their numbers can drift, see `docs/gaps.md`).
+4. Rerun §3 (`-concurrency 1`) with a `--multigame` mock added: board 1 only, all gates of §5 unchanged.
+
+Measured (2026-11-15, coder, fastchess 1.8.2, 12 games, 3 boards): gates 1-3 passed. The 20 %-loss TLCS-MG mock ended
+about 4 min behind live (stop-and-wait over 3 boards, ~3 numbered items per move per board) and then held all 12 games
+correctly, with no stall or lost result. The `-concurrency 1` rerun (fresh node-tlcv, bridge first, `--multigame` mock attached) passed
+`--strict-numbers` for all 6 games; the mock saw board 1 only, with 6 `GAMENO`s. Run each scenario on a fresh node-tlcv:
+node-tlcv's `SITE` handler does not reset `currentGameNumber`, so a reused instance can number a new tournament's first
+game after the previous tournament's last.
+

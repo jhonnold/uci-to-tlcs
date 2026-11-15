@@ -126,3 +126,72 @@ test('checkTranscript results against fastchess', () => {
   const bad = [...ok.slice(0, 4), inn('result: 0-1', 4)];
   assert.equal(checkTranscript(bad, { fc }).length, 1);
 });
+
+// ------------------------------------------------------------------ TLCS-MG transcripts
+
+const FC1 = parsePgn(FC);
+const START = 'FEN: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq';
+/** Board `b`'s full game 2 of FC (Berserk B vs Berserk A, 1. d4 d5 2. c4 e6, 1/2-1/2), wrapped. */
+const boardGame = (b: number, ids: () => number, gameno = 2, sans = ['1. d4', '1... d5', '2. c4', '2... e6']) => [
+  inn(`BOARD ${b} WPLAYER: Berserk B`, ids()),
+  inn(`BOARD ${b} BPLAYER: Berserk A`, ids()),
+  inn(`BOARD ${b} ${START}`, ids()),
+  ...sans.map((s) => inn(`BOARD ${b} ${s.includes('...') ? 'BMOVE' : 'WMOVE'}: ${s}`, ids())),
+  inn(`BOARD ${b} GAMENO: ${gameno}`, ids()),
+  inn(`BOARD ${b} result: 1/2-1/2`, ids()),
+];
+const counter = () => {
+  let i = 0;
+  return () => ++i;
+};
+
+test('checkTranscript multigame: per-board moves and GAMENO checked against fastchess', () => {
+  const id = counter();
+  const ok = [ev('logon'), inn('MULTIGAME: 1', id()), inn('BOARDS: 1 2', id()), ...boardGame(2, id)];
+  assert.deepEqual(checkTranscript(ok, { fc: FC1 }), []);
+
+  const id2 = counter();
+  const wrongNo = [ev('logon'), inn('MULTIGAME: 1', id2()), ...boardGame(2, id2, 1)];
+  assert.equal(checkTranscript(wrongNo, { fc: FC1 }).length, 1, 'GAMENO 1 is the other game');
+
+  const id3 = counter();
+  const wrongMoves = [ev('logon'), inn('MULTIGAME: 1', id3()), ...boardGame(2, id3, 2, ['1. d4', '1... d5', '2. c4', '2... c6'])];
+  assert.match(checkTranscript(wrongMoves, { fc: FC1 })[0].msg, /moves/);
+});
+
+test('checkTranscript multigame: boards interleave without tripping the FEN-before-move rule', () => {
+  const id = counter();
+  const a = boardGame(1, id);
+  const b = boardGame(2, id);
+  const mixed = [ev('logon'), inn('MULTIGAME: 1', 0)];
+  for (let i = 0; i < a.length; i++) mixed.push(a[i], b[i]);
+  mixed.forEach((r, i) => (r.id = i === 0 ? undefined : i)); // ids in arrival order
+  const out = checkTranscript(mixed, { fc: FC1 });
+  // both boards report game 2: the second is a duplicate claim
+  assert.equal(out.length, 1);
+  assert.match(out[0].msg, /GAMENO 2/);
+  assert.ok(!out.some((f) => /before any FEN/.test(f.msg)));
+});
+
+test('checkTranscript multigame: a bare game line after the opt-in reply is a finding', () => {
+  const id = counter();
+  const recs = [ev('logon'), inn('MULTIGAME: 1', id()), inn('WMOVE: 1. e4', id())];
+  assert.match(checkTranscript(recs)[0].msg, /bare game line/);
+  // also the extension lines node-tlcv's command table lacks (WINFO/BINFO)
+  const info = [ev('logon'), inn('MULTIGAME: 1', id()), inn('WINFO: depth 1 score cp 0 nodes 1 time 1 pv e2e4', undefined, 'unnumbered')];
+  assert.match(checkTranscript(info)[0].msg, /bare game line/);
+});
+
+test('checkTranscript legacy purity: a TLCS-MG token without opting in is a finding', () => {
+  const id = counter();
+  for (const body of ['BOARD 2 WMOVE: 1. e4', 'BOARDS: 1 2', 'MULTIGAME: 1']) {
+    const recs = [ev('logon'), inn(START, id()), inn(body, id())];
+    assert.equal(checkTranscript(recs, { legacy: true }).length, 1, body);
+  }
+});
+
+test('checkTranscript multigame: wrapped lines in flight across a re-LOGON are not findings', () => {
+  const id = counter();
+  const recs = [ev('logon'), inn('MULTIGAME: 1', id()), inn('BOARD 2 FMR: 0', id()), ev('relogon'), inn('BOARD 2 FMR: 1', id())];
+  assert.deepEqual(checkTranscript(recs), []);
+});

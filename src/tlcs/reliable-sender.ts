@@ -7,6 +7,8 @@ export interface Outbound {
   body: string;
   /** Set => game item (replayable / coalescable); unset => control item. */
   epoch?: number;
+  /** Game items: the board the epoch belongs to (a stalled client keeps the newest epoch per board). */
+  board?: number;
   /** A `result`: retried until stallMs, never replayed on its own. */
   critical?: boolean;
   /** 'WPV'|'BPV'|'WINFO'|'BINFO'|'WTIME'|'BTIME': unnumbered, latest-only per key, never retransmitted. */
@@ -15,12 +17,14 @@ export interface Outbound {
   onGiveUp?: (dest: string) => void;
   /** Control items only: after this item's ACK, send nothing numbered to this client for holdMs. */
   holdMs?: number;
+  /** Control items only: never evicted by the hard cap (TLCS-MG `BOARDS:` must precede its boards' lines). */
+  pinned?: boolean;
 }
 
 export interface SenderHooks {
   rawSend(payload: string, dest: string): void;
-  /** Full replay of game `epoch` (result included iff withResult), or null if no record. */
-  replay(epoch: number, withResult: boolean): Outbound[] | null;
+  /** Full replay of game `epoch` (result included iff withResult) as `dest` must see it, or null if no record. */
+  replay(epoch: number, withResult: boolean, dest?: string): Outbound[] | null;
   /** Called once per stall episode (no ACK progress for stallMs while busy). */
   onStalled?(dest: string): void;
   /** Called in ack() once the in-flight item clears, before the next one is pumped. */
@@ -156,6 +160,16 @@ export class ReliableSender {
     return out;
   }
 
+  /**
+   * Queue numbered items for one client as a unit: nothing (coalesce, hard cap) runs between
+   * them, so a replay can never split them (TLCS-MG `GAMENO` + `result`).
+   */
+  enqueueAll(dest: string, items: Outbound[]): void {
+    if (items.length === 1) return this.enqueue(dest, items[0]);
+    const c = this.clientsMap.get(dest);
+    if (c && items.length) this.pushNumbered(dest, c, items);
+  }
+
   /** Queue `item` for `dest`, or for every registered client when `dest` is null. */
   enqueue(dest: string | null, item: Outbound): void {
     const targets = dest === null ? this.clients() : [dest];
@@ -182,15 +196,19 @@ export class ReliableSender {
         c.queue.push(item);
         continue;
       }
-      if (!c.inFlight && c.queue.length === 0) c.busySince = now();
-      c.queue.push(item);
-      if (item.epoch !== undefined) {
-        if (c.stalled) this.dropStalled(d, c);
-        this.maybeCoalesce(d, c);
-      }
-      this.enforceHardCap(d, c);
-      this.pump(d, c);
+      this.pushNumbered(d, c, [item]);
     }
+  }
+
+  private pushNumbered(dest: string, c: ClientState, items: Outbound[]): void {
+    if (!c.inFlight && c.queue.length === 0) c.busySince = now();
+    c.queue.push(...items);
+    if (items.some((it) => it.epoch !== undefined)) {
+      if (c.stalled) this.dropStalled(dest, c);
+      this.maybeCoalesce(dest, c);
+    }
+    this.enforceHardCap(dest, c);
+    this.pump(dest, c);
   }
 
   ack(dest: string, id: number): void {
@@ -236,26 +254,58 @@ export class ReliableSender {
    * keeps its id).
    */
   resync(dest: string, curEpoch: number, curFinished: boolean): void {
+    this.resyncAll(dest, [{ epoch: curEpoch, finished: curFinished }]);
+  }
+
+  /** {@link resync} for several current games (one per board), appended in the given order. */
+  resyncAll(dest: string, curs: Array<{ epoch: number; finished: boolean }>): void {
     const c = this.clientsMap.get(dest);
     if (!c) return;
     const epochs = this.queuedEpochs(c);
     for (const e of epochs) this.splice(dest, c, e);
     let note = `epochs [${epochs.join(',')}]`;
-    if (!epochs.includes(curEpoch)) {
-      if (curFinished) {
-        note += ' (cur finished, skipped)';
+    for (const cur of curs) {
+      if (epochs.includes(cur.epoch)) continue;
+      const tag = curs.length > 1 ? ` ${cur.epoch}` : '';
+      if (cur.finished) {
+        note += ` (cur${tag} finished, skipped)`;
       } else {
-        const r = this.hooks.replay(curEpoch, false);
+        const r = this.hooks.replay(cur.epoch, false, dest);
         if (r) {
           if (!c.inFlight && c.queue.length === 0) c.busySince = now();
           c.queue.push(...r);
-          note += ' (+cur)';
+          note += ` (+cur${tag})`;
         }
       }
     }
     metrics.inc('tlcs_resyncs_total', { kind: 'full' });
     logger.info(`resync ${dest}: ${note}`);
     this.pump(dest, c);
+  }
+
+  /**
+   * Take `dest`'s queued game items and latest items out of its queue (not the in-flight one)
+   * because the client switches how it is sent games (TLCS-MG opt-in). Returns each removed game
+   * epoch, in queue order, with whether its result was among them, so the caller can queue the
+   * replays again in the new form: nothing still owed to the client is lost.
+   */
+  takeGameItems(dest: string): Array<{ epoch: number; withResult: boolean }> {
+    const c = this.clientsMap.get(dest);
+    if (!c) return [];
+    const owed = new Map<number, boolean>();
+    c.queue = c.queue.filter((it) => {
+      if (it.latest) return false;
+      if (it.epoch === undefined) return true;
+      owed.set(it.epoch, (owed.get(it.epoch) ?? false) || !!it.critical);
+      return false;
+    });
+    return [...owed].map(([epoch, withResult]) => ({ epoch, withResult }));
+  }
+
+  /** Drop `dest`'s queued latest-only items (they are encoded for the client's previous mode). */
+  dropLatest(dest: string): void {
+    const c = this.clientsMap.get(dest);
+    if (c) c.queue = c.queue.filter((it) => !it.latest);
   }
 
   close(): void {
@@ -391,7 +441,7 @@ export class ReliableSender {
       if (it.critical) withResult = true;
       return false;
     });
-    const r = replayed ?? this.hooks.replay(e, withResult);
+    const r = replayed ?? this.hooks.replay(e, withResult, dest);
     if (!r) {
       logger.error(`give-up/coalesce ${dest}: no record for game ${e}`);
       return 0;
@@ -412,7 +462,7 @@ export class ReliableSender {
         n++;
         if (it.critical) hasCritical = true;
       }
-      const r = this.hooks.replay(e, hasCritical);
+      const r = this.hooks.replay(e, hasCritical, dest);
       if (!r || r.length >= n) continue;
       this.splice(dest, c, e, r); // same withResult as hasCritical, so r is reusable
       metrics.inc('tlcs_coalesces_total');
@@ -427,7 +477,7 @@ export class ReliableSender {
 
   private enforceHardCap(dest: string, c: ClientState): void {
     while (c.queue.length > this.opts.hardCap) {
-      const i = c.queue.findIndex((it) => !it.latest && it.epoch === undefined);
+      const i = c.queue.findIndex((it) => !it.latest && it.epoch === undefined && !it.pinned);
       if (i < 0) return;
       const [it] = c.queue.splice(i, 1);
       logger.warn(`hard cap: evicted control item for ${dest}: ${it.body}`);
@@ -445,19 +495,25 @@ export class ReliableSender {
     const epochs = this.queuedEpochs(c);
     let dropped = 0;
     let lostResults = 0;
-    if (epochs.length > 1) {
-      const newest = epochs[epochs.length - 1];
+    // Newest queued epoch per board (items without a board form one group, as before boards).
+    const newest = new Map<number | undefined, number>();
+    for (const it of c.queue) {
+      if (it.latest || it.epoch === undefined) continue;
+      newest.set(it.board, Math.max(newest.get(it.board) ?? -Infinity, it.epoch));
+    }
+    if (epochs.length > newest.size) {
       c.queue = c.queue.filter((it) => {
-        if (it.latest || it.epoch === undefined || it.epoch >= newest) return true;
+        if (it.latest || it.epoch === undefined || it.epoch >= newest.get(it.board)!) return true;
         dropped++;
         if (it.critical) lostResults++;
         return false;
       });
     }
+    const kept = new Set(newest.values());
     if (announce || dropped > 0) {
       logger.error(
         `stalled ${dest}: no ACK progress for ${(this.opts.stallMs / 1000).toFixed(0)}s; ` +
-          `dropped ${dropped} msgs of games [${epochs.slice(0, -1).join(',')}] (${lostResults} results lost)`,
+          `dropped ${dropped} msgs of games [${epochs.filter((e) => !kept.has(e)).join(',')}] (${lostResults} results lost)`,
       );
     }
     this.maybeCoalesce(dest, c);

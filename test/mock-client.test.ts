@@ -173,3 +173,57 @@ test('integration: desktop session against TlcsServer', async () => {
   assert.equal(code, 0);
   server.close();
 });
+
+test('MultigameHandshake: opt-in after LOGON SUCCESSFUL, 5 s retry, 3 tries, ack switches it on', async () => {
+  const { MultigameHandshake } = await import('../scripts/lib/mock-core.js');
+  const off = new MultigameHandshake(false);
+  assert.equal(off.onLogonOk(0), null);
+
+  const h = new MultigameHandshake(true);
+  assert.equal(h.onLogonOk(0), 'MULTIGAME: 1');
+  assert.equal(h.tick(4999), null);
+  assert.equal(h.tick(5000), 'MULTIGAME: 1');
+  assert.equal(h.tick(10_000), 'MULTIGAME: 1');
+  assert.equal(h.tick(15_000), null);
+  assert.equal(h.state, 'off', 'gave up after 3 tries: single-game server');
+
+  const g = new MultigameHandshake(true);
+  g.onLogonOk(0);
+  assert.deepEqual(g.onBody('WMOVE: 1. e4'), { kind: 'game' });
+  assert.deepEqual(g.onBody('MULTIGAME: 1'), { kind: 'ack' });
+  assert.equal(g.state, 'on');
+  assert.deepEqual(g.onBody('BOARDS: 1 2 3'), { kind: 'boards', boards: [1, 2, 3] });
+  assert.deepEqual(g.onBody('BOARD 12 WMOVE: 3. Nf3'), { kind: 'wrapped', board: 12, line: 'WMOVE: 3. Nf3' });
+  assert.deepEqual(g.onBody('WMOVE: 1. e4'), { kind: 'stray' });
+  assert.deepEqual(g.onBody('CHAT: hi'), { kind: 'other' });
+  assert.equal(g.tick(60_000), null);
+  g.onRelogon();
+  assert.equal(g.state, 'off');
+});
+
+test('integration: --multigame node-tlcv session gets wrapped boards from TlcsServer', async () => {
+  const { mkdtempSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { readTranscript } = await import('../scripts/lib/transcript.js');
+  const server = new TlcsServer({ port: 0, bindAddr: '127.0.0.1' });
+  await new Promise<void>((r) => server.start(() => r()));
+  server.setPlayers('X', 'Y');
+  server.board(2).setPlayers('A', 'B');
+  const transcript = join(mkdtempSync(join(tmpdir(), 'mg-')), 't.jsonl');
+  let code: number | undefined;
+  const s = new MockSession({
+    server: '127.0.0.1', port: server.address().port, bind: '', ephemeral: true, user: 'mg', mode: 'node-tlcv', drop: 0, reorder: 0,
+    seed: 1, quiet: true, reloginMin: 60, dataTimeout: 600, forcePing: false, noDisconnect: true, exitAfter: 1, multigame: true,
+    transcript, onExit: (c) => (code = c),
+  });
+  s.start();
+  await new Promise((r) => setTimeout(r, 1500));
+  assert.equal(code, 0);
+  const recs = readTranscript(transcript);
+  assert.ok(recs.some((r) => r.dir === 'event' && r.event === 'multigame-on'));
+  const w = recs.find((r) => r.body === 'BOARD 2 WPLAYER: A');
+  assert.equal(w?.board, 2);
+  assert.equal(w?.line, 'WPLAYER: A');
+  server.close();
+});

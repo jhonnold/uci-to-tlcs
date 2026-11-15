@@ -6,6 +6,8 @@ import {
   DesktopReceiver,
   DesktopSender,
   LossInjector,
+  MultigameHandshake,
+  isAccepted,
   NodeTlcvReceiver,
   ReloginLimiter,
   SilenceMonitor,
@@ -40,6 +42,8 @@ export interface SessionOpts {
   chat?: string;
   /** File polled for appended lines; each is sent as-is (a `#` prefix sends it numbered; desktop mode only). */
   control?: string;
+  /** Opt in to TLCS-MG (MULTIGAME: 1) after every LOGON SUCCESSFUL. */
+  multigame?: boolean;
   /** Called once with the exit code; the CLI maps it to process.exit. */
   onExit: (code: number) => void;
 }
@@ -63,12 +67,14 @@ export class MockSession {
   private logonTries = 0;
   private exited = false;
   private chatSent = false;
+  private mg: MultigameHandshake;
 
   constructor(private readonly o: SessionOpts) {
     this.tx = new TranscriptWriter(o.transcript);
     this.loss = new LossInjector(o.drop, o.reorder, o.seed);
     this.limiter = new ReloginLimiter(() => performance.now(), o.reloginMin * 1000, o.dataTimeout * 1000);
     this.silence = new SilenceMonitor(Date.now());
+    this.mg = new MultigameHandshake(!!o.multigame);
   }
 
   private log(s: string): void {
@@ -122,6 +128,16 @@ export class MockSession {
       if (this.o.forcePing) this.enablePing();
     }
     if (this.o.control) this.watchControl(this.o.control);
+    if (this.o.multigame) {
+      this.intervals.push(
+        setInterval(() => {
+          const was = this.mg.state;
+          const m = this.mg.tick(Date.now());
+          if (m) this.send(m);
+          if (was === 'pending' && this.mg.state === 'off') this.event('multigame-giveup');
+        }, 500),
+      );
+    }
     const at = (s: number | undefined, f: () => void) => {
       if (s !== undefined) this.timers.push(setTimeout(f, s * 1000));
     };
@@ -183,6 +199,7 @@ export class MockSession {
 
   private relogon(reason: string): void {
     this.session++;
+    this.mg.onRelogon();
     if (this.o.mode === 'desktop') {
       this.desk.resetGate();
       this.logonTries = 0;
@@ -286,11 +303,20 @@ export class MockSession {
       this.o.mode === 'desktop' ? this.desk.receive(raw) : this.nt.receive(raw);
     if (r.live) this.limiter.noteData(receivedAt);
     if (r.ack) this.send(r.ack);
-    this.rec({ dir: 'in', raw: raw.replace(/\r?\n$/, ''), id: r.id, body: r.body, verdict: r.verdict });
+    const ok = isAccepted(r.verdict);
+    const mg = this.o.multigame && ok ? this.mg.onBody(r.body) : undefined;
+    const wrapped = mg?.kind === 'wrapped' ? { board: mg.board, line: mg.line } : {};
+    this.rec({ dir: 'in', raw: raw.replace(/\r?\n$/, ''), id: r.id, body: r.body, verdict: r.verdict, ...wrapped });
     this.print(r);
+    if (mg?.kind === 'ack') this.event('multigame-on');
+    if (mg?.kind === 'stray') this.log(`[mock] WARN bare game line after MULTIGAME: ${r.body}`);
 
-    if (r.verdict === 'accepted' || r.verdict === 'restart' || r.verdict === 'unnumbered') {
-      if (r.body === 'LOGON SUCCESSFUL') this.event('logon-ok');
+    if (ok) {
+      if (r.body === 'LOGON SUCCESSFUL') {
+        this.event('logon-ok');
+        const m = this.mg.onLogonOk(Date.now());
+        if (m) this.send(m);
+      }
       if (r.ackedId !== undefined) this.sender.ack(r.ackedId);
       if (r.featurePing) this.enablePing();
       if (r.gateOpened && this.o.chat && !this.chatSent) {

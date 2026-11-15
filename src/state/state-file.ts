@@ -7,6 +7,8 @@ export interface PersistedClient {
   user: string;
   /** Number of the oldest game this client has not fully ACKed (resume point). */
   next?: number;
+  /** Opted in to TLCS-MG (restored without a new handshake). */
+  multi?: true;
 }
 
 export interface PersistedState {
@@ -72,7 +74,13 @@ export function loadState(
       x && typeof x.ip === 'string' && x.ip && Number.isInteger(x.port) && x.port! >= 1 && x.port! <= 65535 &&
       typeof x.user === 'string' && (x.next === undefined || (Number.isInteger(x.next) && x.next > 0))
     ) {
-      clients.push({ ip: x.ip, port: x.port!, user: x.user, ...(x.next !== undefined ? { next: x.next } : {}) });
+      clients.push({
+        ip: x.ip,
+        port: x.port!,
+        user: x.user,
+        ...(x.next !== undefined ? { next: x.next } : {}),
+        ...(x.multi === true ? { multi: true as const } : {}),
+      });
     } else {
       logger.warn(`state: skipping invalid client entry ${JSON.stringify(c)}`);
     }

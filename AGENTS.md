@@ -9,7 +9,7 @@ the data flow, and scope.
 ## Commands
 
 ```bash
-npm test          # unit tests (test/*.test.ts: parser, encoder, pipeline, server, restart, results, admin, mock client...) via node:test
+npm test          # unit tests (test/*.test.ts: parser, encoder, pipeline, demux, server, TLCS-MG, restart, results, admin, mock client...) via node:test
 npm run typecheck # tsc --noEmit
 npm run build     # tsc → dist/
 npm start -- --log <path> [opts]   # run from source via tsx
@@ -39,6 +39,9 @@ Details live in `docs/`, loaded only when relevant:
   (configure, run, wait, check logs & PGNs), the mock-client local path, the LOGON-race, and
   the restart/churn acceptance scenario with its pass/fail gates. Reach for it before shipping a
   protocol/transport change, or to verify a move/result/name/clock bug end-to-end.
+- **`docs/tlcs-multigame-spec.md`** — TLCS-MG v1: several concurrent games (boards) on one port, the opt-in
+  handshake, wrapped `BOARD <n>` lines, `GAMENO`, resync/restart rules and node-tlcv implementation notes. The
+  hand-off spec for the node-tlcv client side; reach for it before touching boards, the demux or the opt-in.
 - **`docs/gaps.md`** — status of every known gap vs. the node-tlcv/desktop contract, the known
   limitations and the node-tlcv follow-ups. Reach for it before claiming parity or picking next work.
 - **`docs/tlcs-server-spec.md`** — rebuild spec reverse-engineered from the original

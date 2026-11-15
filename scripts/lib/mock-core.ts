@@ -1,7 +1,7 @@
 // Pure (socket-free) building blocks for the mock client. Everything that needs a
 // clock takes an injected `now()` so it can be unit-tested with a fake one.
 
-import { isIdRestart, isLive, mid, parseDesktop, parseNodeTlcv, vbVal } from './tlcs-frame.js';
+import { BOARD_LINE, MULTIGAME_LINE, isGameLine, isIdRestart, isLive, mid, parseDesktop, parseNodeTlcv, vbVal } from './tlcs-frame.js';
 
 export type Verdict =
   | 'accepted'
@@ -10,6 +10,9 @@ export type Verdict =
   | 'unnumbered'
   | 'gated'
   | 'duplicate';
+
+/** Verdicts of a datagram the client model processed (not dropped, gated or deduped). */
+export const isAccepted = (v: string | undefined): boolean => v === 'accepted' || v === 'restart' || v === 'unnumbered';
 
 export interface RecvResult {
   ack: string | null;
@@ -269,4 +272,64 @@ export function resolveBind(o: BindOpts): { address: string; port: number } {
   if (o.localPort !== undefined) return { address: o.bind || '127.0.0.1', port: o.localPort };
   if (o.ephemeral) return { address: o.bind || '127.0.0.1', port: 0 };
   return { address: o.bind || '127.0.0.2', port: o.port };
+}
+
+export type MgBody =
+  | { kind: 'ack' }
+  | { kind: 'boards'; boards: number[] }
+  | { kind: 'wrapped'; board: number; line: string }
+  | { kind: 'stray' }
+  | { kind: 'game' }
+  | { kind: 'other' };
+
+
+/** TLCS-MG client side (docs/tlcs-multigame-spec.md §3): opt-in after LOGON SUCCESSFUL, 5 s retry, 3 tries. */
+export class MultigameHandshake {
+  state: 'off' | 'pending' | 'on' = 'off';
+  private tries = 0;
+  private lastSent = -Infinity;
+  static readonly REQUEST = 'MULTIGAME: 1';
+  static readonly RETRY_MS = 5000;
+  static readonly TRIES = 3;
+
+  constructor(private readonly enabled: boolean) {}
+
+  /** The opt-in to send now, or null. */
+  onLogonOk(now: number): string | null {
+    if (!this.enabled) return null;
+    this.state = 'pending';
+    this.tries = 1;
+    this.lastSent = now;
+    return MultigameHandshake.REQUEST;
+  }
+
+  tick(now: number): string | null {
+    if (this.state !== 'pending' || now - this.lastSent < MultigameHandshake.RETRY_MS) return null;
+    if (this.tries >= MultigameHandshake.TRIES) {
+      this.state = 'off';
+      return null;
+    }
+    this.tries++;
+    this.lastSent = now;
+    return MultigameHandshake.REQUEST;
+  }
+
+  /** A re-LOGON makes the server forget the opt-in. */
+  onRelogon(): void {
+    this.state = 'off';
+  }
+
+  onBody(body: string): MgBody {
+    const v = MULTIGAME_LINE.exec(body);
+    if (v) {
+      if (Number(v[1]) !== 1) return { kind: 'other' };
+      this.state = 'on';
+      return { kind: 'ack' };
+    }
+    if (body.startsWith('BOARDS:')) return { kind: 'boards', boards: body.slice(7).trim().split(/\s+/).filter(Boolean).map(Number) };
+    const w = BOARD_LINE.exec(body);
+    if (w) return { kind: 'wrapped', board: Number(w[1]), line: w[2] };
+    if (isGameLine(body)) return { kind: this.state === 'on' ? 'stray' : 'game' };
+    return { kind: 'other' };
+  }
 }
