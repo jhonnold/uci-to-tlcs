@@ -114,6 +114,17 @@ test('PGN without SANs (other notation): names + FEN + PlyCount decide', () => {
   assert.equal(a.lookup(1, hint({ sans: ['e4', 'e5'] }))?.number, 3);
 });
 
+test('claimBelow: entries of games before the catch-up never match the live game', () => {
+  const r = new FakeReg();
+  r.add({ plyCount: 2, moves: ['e4', 'e5'] }); // game 1, finished before the restart
+  const a = new ClaimingAuthority(r);
+  a.claimBelow(2);
+  // live game 2 repeats game 1's moves; its own entry is not in the PGN yet
+  assert.equal(a.lookup(2, hint({ sans: ['e4', 'e5'] })), undefined);
+  r.add({ plyCount: 2, moves: ['e4', 'e5'] });
+  assert.equal(a.lookup(2, hint({ sans: ['e4', 'e5'] }))?.number, 2);
+});
+
 test('a reset PGN (truncated) clears the claims', () => {
   const r = new FakeReg();
   const g = r.add({ plyCount: 2, moves: ['e4', 'e5'] });

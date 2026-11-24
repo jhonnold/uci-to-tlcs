@@ -114,6 +114,14 @@ export async function startApp(cfg: Config): Promise<App> {
       ? { offset: Math.min(...boards.boards.map((b) => b.start)) }
       : planStart({ starts: scan.starts, end: scan.end, finished: registry?.finishedCount(), fromEnd, size });
     cur.demux?.close();
+    if (!first) {
+      // A new log: the old boards' games are over; the new Demux re-signals concurrency.
+      server.endGames();
+      authority?.setConcurrent(false);
+      results.setConcurrent(false);
+    }
+    // Sequential: PGN entries of games before the caught-up one must not match it (restart, --from-end).
+    if (authority && !concurrent) authority.claimBelow(plan.firstGame ?? registry!.finishedCount() + 1);
     const lazyFirst = () => (registry!.refresh(), registry!.finishedCount() + 1);
     const makePipeline = (id: number) =>
       new Pipeline(

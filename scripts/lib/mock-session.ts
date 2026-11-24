@@ -316,7 +316,7 @@ export class MockSession {
 
     if (ok) {
       // LOGON SUCCESSFUL is unnumbered and can be lost: the first numbered line after the LOGON stands in for it.
-      if (r.body === 'LOGON SUCCESSFUL' || (!this.logonOkSeen && r.id !== undefined)) {
+      if (!this.logonOkSeen && (r.body === 'LOGON SUCCESSFUL' || r.id !== undefined)) {
         if (r.body === 'LOGON SUCCESSFUL') this.event('logon-ok');
         this.logonOkSeen = true;
         const m = this.mg.onLogonOk(Date.now());

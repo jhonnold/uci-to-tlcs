@@ -277,6 +277,14 @@ export class TlcsServer {
     return this.boards[id - 1].sink;
   }
 
+  /** The log was replaced: every board's game is over (join snapshots skip them until a new game opens). */
+  endGames(): void {
+    for (const b of this.boards) {
+      b.cur = { finished: true };
+      b.snap.clear();
+    }
+  }
+
   /** Does `dest` receive TLCS-MG (wrapped) game lines? */
   isMulti(dest: string): boolean {
     return this.multi.has(dest);
@@ -363,6 +371,7 @@ export class TlcsServer {
 
   private setPlayersOn(b: Board, white: string, black: string): void {
     b.cur = { white, black, finished: false };
+    b.snap.clear(); // the previous game's clocks/PV
     this.game(b, { body: P.wplayer(white) });
     this.game(b, { body: P.bplayer(black) });
   }

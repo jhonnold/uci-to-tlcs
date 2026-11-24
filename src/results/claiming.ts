@@ -31,9 +31,14 @@ export class ClaimingAuthority implements ResultAuthority {
 
   constructor(private readonly reg: ClaimSource) {}
 
-  /** A second board exists: stop handing out entry n on position alone. */
-  setConcurrent(): void {
-    this.concurrent = true;
+  /** A second board exists: stop handing out entry n on position alone (false: a new log, one board again). */
+  setConcurrent(on = true): void {
+    this.concurrent = on;
+  }
+
+  /** Entries numbered below `n` belong to games finished before this catch-up: never hand them out. */
+  claimBelow(n: number): void {
+    for (const g of this.reg.games) if (g.number < n) this.claimed.add(g.number);
   }
 
   refresh(): void {

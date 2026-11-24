@@ -49,9 +49,9 @@ export class ResultService {
     }
   }
 
-  /** A second board exists (see onResultEmitted). */
-  setConcurrent(): void {
-    this.concurrent = true;
+  /** A second board exists (see onResultEmitted); false: a new log, one board again. */
+  setConcurrent(on = true): void {
+    this.concurrent = on;
   }
 
   /**

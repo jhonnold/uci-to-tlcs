@@ -494,6 +494,36 @@ test('server: a fresh client after a finished game gets no stale WPLAYER/result'
   }
 });
 
+test('server: a join snapshot of a new game carries no clocks of the previous game; endGames() leaves nothing to snapshot', async () => {
+  const { server, port } = await startServer();
+  const c = await TestClient.create(port, 'late');
+  try {
+    server.setPlayers('W', 'B');
+    server.emitInitialPosition(FEN_START, 0);
+    server.emitClocks(12345, 23456);
+    server.emitResult('1-0');
+    server.setPlayers('W2', 'B2');
+    server.emitInitialPosition(FEN_START, 0);
+    c.logon();
+    await waitFor(() => c.received.includes('BPLAYER: B2'));
+    await sleep(80);
+    assert(!c.received.some((m) => m.startsWith('WTIME') || m.startsWith('BTIME')), 'old clocks in the snapshot');
+    server.endGames();
+    const d = await TestClient.create(port, 'later');
+    try {
+      d.logon();
+      await waitFor(() => d.received.includes('LOGON SUCCESSFUL'));
+      await sleep(80);
+      assert(!d.received.some((m) => m.startsWith('WPLAYER') || m.startsWith('FEN')), 'a replaced log leaves no game to snapshot');
+    } finally {
+      d.close();
+    }
+  } finally {
+    c.close();
+    server.close();
+  }
+});
+
 test('server: a client that falls behind gets its stale moves collapsed to the newest position, then live moves', async () => {
   const st0 = metrics.get('tlcs_dropped_total', { reason: 'stale' });
   const log = mock.method(logger, 'info', () => {});
