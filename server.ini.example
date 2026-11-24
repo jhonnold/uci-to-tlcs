@@ -18,8 +18,6 @@ SAVEDEBUG=0
 ' Keep NAME free of spaces: node-tlcv splits the line on spaces and mangles "Two Words".
 ' Extensions (not in the reference server):
 'BIND=127.0.0.1
-' Restart recovery: connected clients + resume points (atomic JSON, ignored if older than 10 min).
-STATEFILE=state.json
 'CLIENTTIMEOUT=70
 'MAXCLIENTS=0
 'ADMINPASS=change-me

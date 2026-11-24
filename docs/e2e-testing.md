@@ -71,7 +71,8 @@ remain; games are matched by content, and `--strict-numbers` also requires node-
 to equal the fastchess game index. It prints `PASS` or `FAIL n finding(s)` then one line per game (`DIFF [moves]
 ... first divergence at ply 10: exp X got Y`, `MISSING`, `EXTRA`, `COUNT`, `STAR`).
 Exit 0 pass, 1 mismatch, 2 usage/IO error (including an empty `--pgns` dir). Other flags:
-`--allow-star`, `--strict-numbers` (filename `N_` prefix must equal the fastchess game
+`--allow-star`, `--allow-partial` (a node-tlcv game whose `[FEN]` is mid-game passes when it is the fastchess game's
+tail from that position: a late join, a restart or lost lines), `--strict-numbers` (filename `N_` prefix must equal the fastchess game
 index), `--expect-contiguous`, `--json`, and `--transcript <f.jsonl>` (repeatable) to check
 mock transcripts (see below).
 
@@ -81,9 +82,10 @@ Then eyeball the logs:
   colours = side-to-move at start; stable across rounds.
 - **Registration** — exactly one client in `/tmp/uci-to-tlcs.log` (`LOGONv15`); 0 =
   node-tlcv can't reach the bridge (check host/port), >1 = node-tlcv restarted.
-- **Reliability** — `grep -E 'stalled|give-up|hard cap'` in the bridge log, or the `tlcs_giveups_total`,
-  `tlcs_stalls_total` and `tlcs_resyncs_total` metrics (`METRICSPORT`): 0 = clean; a few `give-up … resync game` under injected
-  loss are expected; a `stalled …` or `give-up critical` means a client stopped ACKing for 60 s (dead or starved).
+- **Reliability** — `grep -E 'give-up|stale:|hard cap'` in the bridge log, or the `tlcs_giveups_total`,
+  `tlcs_dropped_total` and `tlcs_resyncs_total` metrics (`METRICSPORT`): 0 = clean; a few `give-up` and `stale:` lines under
+  injected loss or for a dead client are expected (best effort: the line is dropped; the client's next move reloads its FEN).
+  A node-tlcv game it lost lines in is saved from the reload (`[SetUp][FEN]`): check those with `e2e-check --allow-partial`.
 - **Clocks** — `WTIME`/`BTIME` present and decreasing.
 - **Errors** — `grep -iE 'error|warn|uncaught|unhandled' /tmp/uci-to-tlcs.log /tmp/node-tlcv.log /tmp/fastchess.log`.
 
@@ -97,7 +99,7 @@ Kill the background jobs; `rm /tmp/{fc,uci-to-tlcs,node-tlcv,fastchess}.log`.
 ## DMZ / WAN run (2026-10-20)
 
 The same stack across a real network: a `tlcs-dmz` VM (homelab DMZ VLAN) ran fastchess + 4x Berserk and the
-bridge on UDP 16001 (`server.ini` only, `STATEFILE` on). **Prod node-tlcv** on EC2 (ccrl.live) logged on through
+bridge on UDP 16001 (`server.ini` only, `STATEFILE` on; since retired). **Prod node-tlcv** on EC2 (ccrl.live) logged on through
 a pfSense WAN forward locked to the node-tlcv source IP, non-ephemeral (its source port is 16001). The homelab host doc
 (`docs/hosts/tlcs-dmz.md`) has the setup.
 
@@ -184,38 +186,85 @@ per-IP rate-limit bucket), then fastchess.
 | first game boundary | admin script: `<who>`, `CHANGE`, `ADMIN:`, `SECURITY`, `GAMELIST`, `RESULTTABLE` | session/admin/result protocol |
 | +30 s | node-tlcv `kill -9`, relaunch 10 s later | new ephemeral dest, old one reaped at ~70 s, crash game exact |
 | mock timers | silent for 110 s -> reaped -> `MSG` -> re-LOGON; node-tlcv-mode LOGOFF -> LOGON | churn |
-| game K1, +20 s | server `kill -9`, restart after 15 s **with** `STATEFILE` | clients restored, numbered replay, no re-LOGON |
-| game K1+1, +20 s | server `kill -9`, `state.json` deleted, restart | notice -> re-LOGON of node-tlcv-type clients, silent catch-up, operator re-opens the desktop (`desk2`) |
-| a game later | late node-tlcv and late desktop join | full move history of the game in progress |
+| game K1, +20 s | server `kill -9`, restart after 15 s | notice -> re-LOGON of node-tlcv-type clients, silent catch-up, live position, operator re-opens the desktop (`desk2`) |
+| a game later | late node-tlcv and late desktop join | snapshot of the game in progress (position, not history) |
 | end | `gl-probe` (plain and 20 % loss) | `GAMELIST`/`RESULTTABLE` dumps vs `fastchess` standings |
 
 **Gates** (all must pass; evaluated offline by a script over the run directory):
 
 1. Server command line is exactly the `--ini` form; the desktop got `SITE` and both `MENU` lines; fastchess exit 0, 12 games, no `Result "*"`.
-2. `npm run e2e-check -- --fastchess games.pgn --pgns <node-tlcv pgns> --strict-numbers` passes. With `P2` = PGN count at the
-   no-state kill and `P3` = PGN count when node-tlcv re-LOGONs, a game that ended in between is unrecoverable, so only these
-   findings are allowed: `MISSING` for games `P2+1..P3`, `DIFF [number]` for game `P3+1`, and the matching `COUNT`.
+2. `npm run e2e-check -- --fastchess games.pgn --pgns <node-tlcv pgns> --strict-numbers --allow-partial` passes. A game that
+   ended between the kill and node-tlcv's re-LOGON is never sent, so only these findings are allowed: `MISSING` for those
+   games and the matching `COUNT`; the game in progress at the re-LOGON (and any game node-tlcv lost lines in) is `partial OK`.
 3. Crosstable: `scripts/standings-check.ts` (`--fastchess-out`, `--pgn`, node-tlcv's `/<port>/result-table/json` and
    `/<port>/games/json`, and a raw `GL:`/`CT:` probe) agrees with fastchess's standings, also under 20 % loss.
 4. `e2e-check --transcript` passes for every mock.
 5. Crash and churn: the dead node-tlcv dest is reaped 60-95 s after the kill and its replacement LOGONs; the silent mock is reaped
    65-95 s after going quiet, then gets `MSG` and re-LOGONs; the desktop saw `DELUSER` for both.
-6. Kill with `STATEFILE`: `state: restored n client(s)` with n = clients in the saved file, a `resume: … caught up games` line, a
-   numbering dump per node-tlcv-type client; node-tlcv logs `Message ids restarting` and **no** `Re-sending LOGON`; mocks see a
-   `restart` verdict without a re-LOGON; the desktop keeps receiving moves.
-7. Kill without state: `state: no state file`, no resume dumps; each node-tlcv-type client gets the `MSG` notice and a `LOGON (new)`
-   within 180 s, and nothing is sent to it before that; the desktop gets `MSG` and receives no game data until reopened.
-8. Late join: both late clients receive `ADDUSER` for every connected user, both `MENU` lines and the full move list of the game in
-   progress (`late-join-check`).
+6. (retired: the `STATEFILE` restore no longer exists.)
+7. Kill: a `start: caught up …` line; each node-tlcv-type client gets the `MSG` notice and a `LOGON (new)` within 180 s, and
+   nothing is sent to it before that; then a numbering dump and the position steps of the live position (real node-tlcv:
+   its `/broadcasts/<port>/pgn` `[FEN]` is the live position within a second of the LOGON); the desktop gets `MSG` and receives no
+   game data until reopened.
+8. Late join: both late clients receive `ADDUSER` for every connected user, both `MENU` lines and the snapshot (players, position
+   steps, clocks, PV) of the game in progress.
 9. Protocol coverage (`<who>` `Users=`, alias, admin granted, `SECUSER`s, `GL`, `CT`, numbered PING ACK, chat echo, `FEATURE: PING`).
-10. Reliability per destination: `stalled`, `give-up`, `hard cap` and `RESULTTABLE … lost` log lines are allowed only for a
-    destination that is dead on purpose and only before it is reaped (silent mock, killed node-tlcv), plus `give-up … resync
-    game` for the lossy clients. The Prometheus counters (`tlcs_giveups_total`, `tlcs_stalls_total`, `tlcs_resyncs_total`)
-    must match the allowed log lines (`critical`/`control` give-ups equal; `1 <= tlcs_stalls_total <= stalled lines`, since one episode logs at start and again per new epoch). Any other `warn`/`error` is unclassified and fails the run.
-11. `SAVEDEBUG`: exactly one `Debug-<white>_vs_<black>-<n>.log` per game (names sanitized `[^A-Za-z0-9._-]+ -> _`), no `.tmp`;
-    the final `state.json` lists exactly the live clients.
+10. Reliability per destination: `give-up`, `stale:`, `hard cap` and `RESULTTABLE … lost` log lines are allowed only for a
+    destination that is dead on purpose and only before it is reaped (silent mock, killed node-tlcv), and for the lossy
+    clients. The Prometheus counters (`tlcs_giveups_total`, `tlcs_dropped_total`) must match the allowed log lines
+    (`tlcs_dropped_total{reason="giveup"}` = give-up lines). Any other `warn`/`error` is unclassified and fails the run.
+11. `SAVEDEBUG`: exactly one `Debug-<white>_vs_<black>-<n>.log` per game (names sanitized `[^A-Za-z0-9._-]+ -> _`), no `.tmp`.
 12. `npm test`, `npm run typecheck`, `npm run build && node dist/src/main.js --help` are green; no leftover ports.
 
 A `rate limit: dropping datagrams from 127.0.0.1` warning means the harness itself tripped the per-IP bucket (all clients are on
 one IP): stagger the launches. A failure under host load (1-min load > 6, fastchess `time forfeit`) is rerun, not debugged.
 Kill every process group at the end (`setsid` + pgid files, never `pkill -f`).
+
+## 8. Concurrent games (TLCS-MG)
+
+Same stack as §3 with `-concurrency 3` (any N), plus TLCS-MG mocks. Every process via `run-logged`.
+
+```bash
+npm start -- --log fc.log --format fastchess --pgn games.pgn --bind 127.0.0.1 --port 16100
+npx tsx scripts/mock-client.ts --port 16100 --ephemeral --user mg --multigame --transcript mg.jsonl --quiet
+npx tsx scripts/mock-client.ts --port 16100 --ephemeral --user mglossy --multigame --drop 0.2 --seed 7 --transcript mglossy.jsonl --quiet
+npx tsx scripts/mock-client.ts --port 16100 --ephemeral --user legacy --transcript legacy.jsonl --quiet
+npx tsx scripts/mock-client.ts --port 16100 --ephemeral --user desk --mode desktop --transcript desk.jsonl --quiet
+fastchess -engine name="Berserk A" cmd=berserk ... -engine name="Berserk D" cmd=berserk \
+  -each tc=8+0.08 option.Hash=16 option.Threads=1 -rounds 1 -games 2 -concurrency 3 \
+  -log file=fc.log engine=true realtime=true -pgnout file=games.pgn
+```
+
+Gates:
+
+1. `npm run e2e-check -- --fastchess games.pgn --transcript mg.jsonl` (and `mglossy.jsonl`) PASS: for every `BOARD n GAMENO: k`
+   the checker verifies names and result, and every SAN of game k, or, where the client joined late or lost lines (it models
+   node-tlcv's FEN reload), the SANs since the reload and the final board; no board line precedes the `MULTIGAME:` reply and no
+   bare game line follows it. A loss-free mock that opted in before the first game has one `GAMENO` per fastchess game.
+2. `--legacy` on `legacy.jsonl`/`desk.jsonl` PASS: no TLCS-MG token ever reached them.
+3. Un-upgraded node-tlcv on the same port: zero `Unable to process` warnings; its PGNs are the board-1 games
+   (`e2e-check --allow-partial` against those fastchess games; their numbers can drift, see `docs/gaps.md`).
+4. Kill the bridge mid-run and restart it: every node-tlcv-mode client re-LOGONs, and node-tlcv's live `[FEN]`
+   (`curl :<web port>/broadcasts/<port>/pgn`) is the live position right after; its PGN for that game is `partial OK`.
+5. Rerun §3 (`-concurrency 1`) the same way: `--strict-numbers --allow-partial` passes.
+
+Measured (2026-11-15, coder, fastchess 1.8.2, 4 engines, EPD book, tc 8+0.08, 12 games; `.tasks/T13-lighter-delivery/`):
+
+- `-concurrency 3` (run4), bridge killed at +75 s and restarted 3 s later (1.8 s silent catch-up of 3 boards): gates 1-4
+  passed. Re-LOGON after the restart: all node-tlcv-mode clients within +5 s; node-tlcv's board-1 game in progress was
+  saved from the reload (exact tail, `partial OK`). The two games that ended during the outage were sent to nobody (by
+  design). The desktop mock never re-LOGONs (the desktop TLCV waits for its operator). The 20 %-loss TLCS-MG mock got
+  every result the loss-free one got, 0.8-13 s later (before best-effort delivery: about 4 min behind); 4 give-ups, 72
+  stale collapses (all for the lossy mock), no hard-cap eviction.
+- Per client, loss-free, during play (run1, run4): 3 boards 12-15 KB/s, 140-170 datagrams/s (52-63 numbered/s); 1 board
+  3.6-5.3 KB/s, 46-66 datagrams/s (17-26 numbered/s); largest datagram 391 B (a long PV), median 44-48 B.
+- `-concurrency 1` (run2), same restart at +150 s: `--strict-numbers --allow-partial` PASS for all 12 games (the game in
+  progress at the restart saved from ply 125), 0 node-tlcv warnings; the 20 %-loss mock got all 12 results, 0.1-9 s after the
+  loss-free one. (run2 predates the per-game stale drop; run1/run3 exposed the two collapse bugs fixed since: a control backlog
+  triggering collapses, and a collapse across a game boundary leaving the old game on a stale board.)
+- Found on the way: a TLCS-MG client whose `LOGON SUCCESSFUL` is lost never opted in (mock fixed: the first numbered line
+  stands in for it; spec §3 updated).
+
+Run each scenario on a fresh node-tlcv: node-tlcv's `SITE` handler does not reset `currentGameNumber`, so a reused instance can
+number a new tournament's first game after the previous tournament's last.
+

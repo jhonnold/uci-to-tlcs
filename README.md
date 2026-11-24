@@ -41,11 +41,12 @@ It live-tails the log and, for each event, emits the matching TLCS message(s):
 | game over (board) | `result:` | mate/stalemate/draw |
 | new game (boundary) | `result:` (prev, if none) → `WPLAYER`/`BPLAYER` → startpos `FEN` | resets node-tlcv's board for the next game |
 
-Reliability matches node-tlcv's transport: state-critical messages are ID-wrapped
-(`<N>MSG`) and resent until `ACK: N`, in strict order, per client (a slow client never stalls another);
-`WPV`/`BPV`/`WINFO`/`BINFO`/`WTIME`/`BTIME` are sent unwrapped. A client that logs on mid-game gets the **full
-move history** of the current game replayed, and the results table (`RESULTTABLE`/`GAMELIST`) is rendered from the
-tournament PGN.
+Delivery matches node-tlcv's transport, best effort: game and session messages are ID-wrapped (`<N>MSG`) and resent
+until `ACK: N`, in strict order, per client (a slow client never stalls another), and dropped after 5 s;
+`WPV`/`BPV`/`WINFO`/`BINFO`/`WTIME`/`BTIME` are sent unwrapped. Every move carries its post-move `FEN`, so a client that
+loses a line recovers its board on the next move (node-tlcv reloads the FEN; that game's PGN then starts there). A
+client that logs on mid-game, or falls far behind, gets a **snapshot** of the current position (no move history). The
+results table (`RESULTTABLE`/`GAMELIST`) is rendered from the tournament PGN.
 
 Each client is tracked by its source `ip:port`, and the server replies to that
 source port — not the fixed broadcast port that strict TLCS assumes. Compliant
@@ -65,8 +66,9 @@ npm ci && npm run build
 node dist/src/main.js --ini server.ini          # or: npm start -- --ini server.ini
 ```
 
-Run the tournament from the same directory with **`-concurrency 1`**, a fresh `-pgnout` file, and the engine log
-enabled (`TOURNEYPGN` makes every result exact, including resign/adjudication/forfeit):
+Run the tournament from the same directory with a fresh `-pgnout` file and the engine log enabled (`TOURNEYPGN`
+makes every result exact, including resign/adjudication/forfeit). `-concurrency N > 1` is supported: each concurrent
+game is a board (TLCS-MG, `docs/tlcs-multigame-spec.md`); clients that do not opt in see board 1 only:
 
 ```bash
 fastchess -engine cmd=berserk name=A -engine cmd=berserk name=B -each tc=60+0.6 option.Hash=16 option.Threads=1 \
@@ -77,7 +79,7 @@ fastchess -engine cmd=berserk name=A -engine cmd=berserk name=B -each tc=60+0.6 
 node-tlcv runs on the same host with one **ephemeral** connection (`config/config.json`):
 `{ "connections": [ { "connection": "127.0.0.1:<PORT>", "ephemeral": true } ] }`. Start order does not matter
 (a node-tlcv that boots first re-LOGONs on the server's notice). The server survives a `kill -9` and restart
-mid-tournament, see "Restart and persistence". `docs/e2e-testing.md` has the full acceptance runbook.
+mid-tournament, see "Restart". `docs/e2e-testing.md` has the full acceptance runbook.
 
 ## Usage
 
@@ -89,7 +91,7 @@ npm start -- --log path/to/game.uci --port 16066 --white "Engine A" --black "Eng
 
 Options: `--log <path>` (required), `--format auto|raw|fastchess` (auto),
 `--port` (16066), `--bind` (0.0.0.0), `--white`/`--black`/`--site`, `--from-end` (skip
-existing content; default is to resume at the current game, see "Restart and persistence"), `--ini <path>` (reference-style `server.ini`, see below),
+existing content; default is to catch up to the current game, see "Restart"), `--ini <path>` (reference-style `server.ini`, see below),
 `--pgn <path>`, `--delay-after-move <ms>`, `--delay-after-game <ms>`,
 `--pv-interval <ms>` (default 200: min gap between PV updates; the mover's final PV is always sent before its move; 0 = every engine info),
 `--metrics-port <n>` (Prometheus `/metrics`, default off), `--log-format human|json` (default human),
@@ -133,7 +135,7 @@ against the ini's directory.
 | `ICSMODE`, `MAILSERVER`, `RETURNADD` | — | — | Accepted, warned, ignored |
 | `FORMAT`* | — | auto | `auto`, `raw`, `fastchess` (`--format`) |
 | `BIND`* | — | 0.0.0.0 | `--bind` |
-| `STATEFILE`* | — | off | Connected clients + resume point, atomic JSON; a restart resumes without re-LOGON (see "Restart and persistence") |
+| `STATEFILE`* | — | — | No longer used (warns): a restart catches up to the live position and clients re-LOGON (see "Restart") |
 | `CLIENTTIMEOUT`* | — | 70 | Idle-client reap timeout, seconds |
 | `ADMINPASS`*, `MAXCLIENTS`* (0 = unlimited), `BANNED`* (IPs, comma/space separated, repeatable) | — | — / 0 / none | Admin commands (disabled without ADMINPASS; use a long random value), logon cap, silent source-IP drop. See `docs/tlcs-wire.md` "Admin & abuse" |
 | `METRICSPORT`* | — | off | Prometheus `/metrics` HTTP port, bound to `BIND` (`--metrics-port`) |
@@ -152,31 +154,29 @@ against the ini's directory.
 | `tlcs_clients` | gauge | — |
 | `tlcs_client_queue_depth` | gauge | `dest` (live clients) |
 | `tlcs_retransmits_total` | counter | — |
-| `tlcs_giveups_total` | counter | `kind` = game / control / critical |
-| `tlcs_resyncs_total` | counter | `kind` = full (every logon) / giveup (game replay after a give-up) |
-| `tlcs_coalesces_total`, `tlcs_stalls_total` | counter | — |
+| `tlcs_giveups_total` | counter | `kind` = game / control (numbered lines dropped after the 5 s give-up) |
+| `tlcs_dropped_total` | counter | `reason` = giveup / stale (move steps dropped for a client that fell behind) |
+| `tlcs_resyncs_total` | counter | `kind` = full (logon, re-logon, TLCS-MG opt-in snapshot) |
 | `tlcs_messages_sent_total`, `tlcs_messages_received_total` | counter | `type` |
 
 Point node-tlcv at it via `config/config.json`:
 `{ "connections": ["<host>:16066"] }`.
 
-## Restart and persistence
+## Restart
 
 uci-to-tlcs can be killed (even `kill -9`) and restarted mid-tournament while the engine log keeps growing.
 On startup it loads the PGN registry, scans the log for game starts, and catches up **silently and
-synchronously** from the oldest game any restored client still needs (default: the current game); only then does it
+synchronously** from the start of the game in progress (each board's, with concurrent games); only then does it
 go live. Game numbers are the 1-based index of game starts in the log, so use a fresh `-pgnout` file per log.
 
-- **With `STATEFILE`** (written atomically on every client change and every ACKed game boundary; ignored when
-  older than 10 min): connected clients are re-attached without a re-LOGON. Each gets exactly the games it has not
-  fully ACKed, as coalesced replays with message ids restarting at 1 (node-tlcv accepts id 1 as a restart),
-  preceded by a numbering dump (`CTRESET` + a one-row `CT:` table, then a 300 ms quiet period) so node-tlcv saves
-  each replayed result under the right game number. A client that missed more than the last 3 games gets the last 3.
-- **Without it** (missing, corrupt, stale): clients get the `MSG ... no longer connected` notice on their next PING
-  and re-LOGON; a game that ended during the outage is lost for them. The desktop TLCV never re-logs on by itself: the operator reconnects it.
+- No client state is kept. A client of the previous process gets the `MSG ... no longer connected` notice on its next
+  PING and re-LOGONs (node-tlcv within ~10 s), then gets the live position like any late joiner, after a numbering dump
+  (`CTRESET` + a one-row `CT:` table, then a 300 ms quiet period) so node-tlcv saves the next result under the right
+  number. Games that ended during the outage are not sent (node-tlcv does not save them). The desktop TLCV never
+  re-logs on by itself: the operator reconnects it. `STATEFILE` in an old `server.ini` is ignored with a warning.
 - **Truncation / rotation / replacement** of the log (smaller size, new inode, or vanish + reappear) re-scans and
   catches up the new file's current game; clients stay attached.
-- **`--from-end`** skips all existing content: no catch-up, restored clients just see the next game.
+- **`--from-end`** skips all existing content: no catch-up, clients just see the next game.
 - **`SAVEDEBUG=1`** copies each finished game's log segment to `Debug-<white>_vs_<black>-<n>.log` next to the ini
   (or next to the log without `--ini`); existing numbers are never rewritten.
 
@@ -200,7 +200,7 @@ npm run mock-client -- --server 127.0.0.1 --port 16066 --ephemeral
 **Faithful end-to-end with real node-tlcv and fastchess** (single host, no Docker): see the Quick start above and
 `docs/e2e-testing.md`, which also holds the restart/churn acceptance scenario and the checkers
 (`npm run e2e-check`, `scripts/standings-check.ts`). Use a real `tc=` (not `st=`/`movetime`) so the clocks tick,
-`-concurrency 1` so games don't interleave in one log, and `TOURNEYPGN`/`--pgn` so every result is exact (any
+`-concurrency 1` for today's node-tlcv (it shows board 1 only), and `TOURNEYPGN`/`--pgn` so every result is exact (any
 adjudication or forfeit included); without it a non-board ending emits `result: *`. Needs node-tlcv checked out at
 `../node-tlcv`.
 
@@ -208,13 +208,16 @@ adjudication or forfeit included); without it a non-board ending emits `result: 
 
 In scope:
 
-- Sequential multi-game / multi-matchup tournaments on one port (`-concurrency 1`), from a fastchess log
+- Sequential multi-game / multi-matchup tournaments on one port, from a fastchess log
   (`--format fastchess`) or a pre-stripped UCI transcript (`--format raw`, CLI names).
+- Concurrent games (`-concurrency N`) as boards on the same port: the opt-in TLCS-MG extension
+  (`MULTIGAME: 1`, `BOARDS:`, `BOARD <n> <line>`, `GAMENO:`), spec in `docs/tlcs-multigame-spec.md`; board 1 stays the
+  plain single-game stream for clients that do not opt in. `mock-client --multigame` speaks it.
 - The TLCS session, result and admin protocol as node-tlcv and the desktop TLCV use it: logon burst and user list,
   chat/alias, `MENU`, `RESULTTABLE`/`GAMELIST` from the tournament PGN, admin (`ADMINPASS`), ban list, `MAXCLIENTS`,
   per-IP rate limit, a Prometheus endpoint.
-- Restart persistence (`STATEFILE`): kill and restart mid-tournament without losing clients, games or numbering.
+- Restart: kill and restart mid-tournament; clients re-LOGON into the live position with node-tlcv's numbering intact.
 
-Out of scope: concurrent games (`-concurrency > 1`), a WinBoard/myracle adapter, `ICSMODE` and e-mail, several
+Out of scope: a TLCS-MG client in node-tlcv (spec only), a WinBoard/myracle adapter, `ICSMODE` and e-mail, several
 broadcasts per process, and the reference server's strict `clientIP:<broadcast port>` addressing mode.
 See `docs/gaps.md` for the status table, known limitations and node-tlcv follow-ups.

@@ -275,7 +275,7 @@ real comment syntax: unmatched lines, including those starting with `'`, are ign
 | `FORMAT=` | auto | Log producer: `auto`, `raw`, `fastchess` (`winboard`, `myracle`, `uci` are possible future values) | Rebuild extension |
 | `FENSETUPMOVE=` | 1 | — | Non-startpos games: synthetic `(setup)` move so node-tlcv loads the FEN (`--fen-setup-move`) | Rebuild extension |
 | `BIND=` | 0.0.0.0 | Local bind address | Rebuild extension |
-| `STATEFILE=` | — | Persisted state file | Rebuild extension |
+| `STATEFILE=` | — | Ignored with a warning (was: persisted client state) | Rebuild extension, retired |
 | `CLIENTTIMEOUT=` | 70 | Idle-client reap timeout, seconds | Rebuild extension |
 | `ADMINPASS=` | — | Admin password | Rebuild extension |
 | `MAXCLIENTS=` | 0 | Max clients, 0 = unlimited | Rebuild extension |
@@ -367,8 +367,8 @@ Each item is compatible with both clients unless stated.
 - Persist the id high-water mark and finished-games store across restarts. After a restart, start above the last
   persisted id so existing clients don't mistake new messages for duplicates.
 - **Rebuild (shipped):** ids are not persisted. Each process restarts per-client ids at 1 (node-tlcv accepts that via
-  `isIdRestart`; the desktop client is safe once it has seen more than 100 ids). Results come from `TOURNEYPGN`, and
-  `STATEFILE` persists the connected clients plus their resume game.
+  `isIdRestart`; the desktop client is safe once it has seen more than 100 ids). Results come from `TOURNEYPGN`; no
+  client state is persisted (`STATEFILE` was dropped: clients re-LOGON on the notice and get the live position).
 
 ### 9.3 Per-client ordered delivery and flow control (replaces overload fallback)
 
@@ -390,6 +390,10 @@ Each item is compatible with both clients unless stated.
 - On give-up: discard that client's pending game-state messages and send a resync snapshot under new, higher
   ids. Never skip ahead and leave the client missing a move. Remove the client only if it is also past
   `CLIENT_TIMEOUT`.
+- **Rebuild (shipped, deliberately lighter):** a given-up line is just dropped (5 s), since every move carries its
+  post-move `FEN` and node-tlcv reloads it when a move does not apply; only a client that falls behind (queue cap)
+  gets its stale `FEN`/`xMOVE`/`FMR` replaced by a forced-reload position snapshot. The client's PGN history for that
+  game is the cost.
 - No 100-character truncation; no `CHAT` special case.
 
 ### 9.5 Format fixes
@@ -434,7 +438,7 @@ Where uci-to-tlcs stands against this spec (as of `8dc7903`).
   `SITE: ` with a space (§9.5); both clocks on every `go`.
 - **Shipped since:** the full session protocol (names, chat, `CHANGE`, `MENU`, `FEATURE: PING`, 70 s reaper), admin / ban /
   `MAXCLIENTS` / rate limit, structured logs and Prometheus metrics, the PGN-backed `RESULTTABLE`/`GAMELIST`, and restart
-  recovery with persisted clients, silent catch-up and numbered replay.
+  recovery by silent catch-up to the live position (clients re-LOGON).
 - **Extension:** `WINFO`/`BINFO` extended search info (seldepth, wdl, nps, hashfull, tbhits) beside `WPV`/`BPV`
   (`docs/tlcs-wire.md`).
 
@@ -445,13 +449,13 @@ Where uci-to-tlcs stands against this spec (as of `8dc7903`).
 | §4.1 addressing | Replies to the source `ip:port`; no `clientIP:PORT` mode | Out of scope |
 | §4.2 framing | Sends `<N>` without the space; accepts both on input (deliberate deviation) | Done (#14) |
 | §4.3 numbered client messages | Strips `< id>`, ACKs every copy, dedupes per source | Done (#14) |
-| §4.4 numbering | Per-client stop-and-wait queues, adaptive RTO, 30 s give-up with replay resync (fixes gap **J**). Deviations: give-up 30 s not 10 s; ambiguous-ACK RTO bump capped at 2x | Done (#14) |
+| §4.4 numbering | Per-client stop-and-wait queues, adaptive RTO, best-effort 5 s give-up (drop), stale-move collapse to a position snapshot over the queue cap (gap **J**: by design). Deviation: ambiguous-ACK RTO bump capped at 2x | Done (#14) |
 | §5.1 commands | `LOGONv15`, `LOGON:` refusal, `LOGOFF`, `CHANGE:`, `PING`, `CHAT` + `<who>`… queries, `VOTE`, `EMAIL`/`SEND`, `RESULTTABLE`, `GAMELIST`, `ACK`; admin `ADMIN`/`SECURITY`/`BOOT`/`SRBOOT` | Done (session #15, admin #16) |
-| §5.2 logon | Reference order: `LOGON SUCCESSFUL`, `FEATURE: PING`, replay of the current game, full user list, `MENU` | Done (#15) |
+| §5.2 logon | Reference order: `LOGON SUCCESSFUL`, `FEATURE: PING`, snapshot of the current game, full user list, `MENU` | Done (#15) |
 | §5.3 keepalive | 70 s idle reap (`CLIENTTIMEOUT`); `FEATURE: PING` keeps the desktop client alive | Done (#15) |
 | §6 `MENU`, `level` | `MENU` from the ini, `level` from the time-control metadata | Done (`MENU` #15, `level` #10) |
 | §6 formats | `CHAT: [<user>] - <text>`, `CT:<line>`; `result: <r>` (no reason text; `protocol.ts`) | Done, with the `result` deviation |
-| §7.1 restart | `STATEFILE` resume: silent, synchronous catch-up, then live; numbered replay per client | Done (#19) |
+| §7.1 restart | Silent, synchronous catch-up to the game in progress, then live; clients re-LOGON (no state file) | Done (#19, simplified) |
 | §7.2 adapters | fastchess and raw UCI only | WinBoard/xboard adapter: out of scope |
 | §9.1 | Unknown `PING` gets the `MSG` notice instead of `PONG` | Done (#15) |
 | §9.6 | `RESULTTABLE`/`GAMELIST` rendered from the `TOURNEYPGN` registry | Done (#18) |

@@ -1,15 +1,15 @@
-// In-process restart scenarios: startApp -> "kill" (close without a state flush) -> startApp again,
-// with a real UDP client that ACKs everything (optionally modelling node-tlcv's CT numbering).
+// In-process restart scenarios: startApp -> kill -> startApp again, with a real UDP client that
+// ACKs everything (optionally modelling node-tlcv's CT numbering). No client state survives:
+// the restarted server catches up to the live position and the client re-LOGONs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createSocket, type Socket } from 'node:dgram';
-import { appendFileSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { startApp, type App } from '../src/app.js';
 import type { Config } from '../src/config.js';
 import { scanGameStarts } from '../src/results/log-scan.js';
-import { setNumberingHoldMs } from '../src/state/resume.js';
 import { logger } from '../src/util/logger.js';
 
 const HOST = '127.0.0.1';
@@ -104,13 +104,26 @@ function mkCfg(dir: string, port: number, over: Partial<Config> = {}): Config {
   return {
     logPath: path.join(dir, 'fc.log'), format: 'fastchess', port, bindAddr: HOST, white: 'White', black: 'Black', site: 'T',
     fromStart: true, delayMs: 100, delayAfterMoveMs: 0, delayAfterGameMs: 0, fenSetupMove: true, menus: [],
-    tourneyPgn: path.join(dir, 'games.pgn'), saveDebug: false, stateFile: path.join(dir, 'state.json'),
+    tourneyPgn: path.join(dir, 'games.pgn'), saveDebug: false,
     clientTimeoutMs: 70000, maxClients: 0, bannedIps: [], pvIntervalMs: 0, logFormat: 'human', ...over,
   };
 }
 
 const isMove = (b: string) => b.startsWith('WMOVE:') || b.startsWith('BMOVE:');
-const readState = (dir: string) => JSON.parse(readFileSync(path.join(dir, 'state.json'), 'utf8'));
+/** Wait until `c` has received nothing new for `quietMs`. */
+async function settle(c: Client, quietMs = 300, ms = 10_000): Promise<void> {
+  const t0 = Date.now();
+  let n = -1;
+  let since = Date.now();
+  while (Date.now() - since < quietMs) {
+    if (Date.now() - t0 > ms) throw new Error('never settled');
+    if (c.rx.length !== n) {
+      n = c.rx.length;
+      since = Date.now();
+    }
+    await sleep(10);
+  }
+}
 
 /** Shared set-up: app1 on `log` bytes [0, cut) with `pgn`, one client logged on and receiving moves. */
 async function phase1(dir: string, cut: number, pgn: string, clientModel = false) {
@@ -122,177 +135,71 @@ async function phase1(dir: string, cut: number, pgn: string, clientModel = false
   client.model = clientModel;
   client.send('LOGONv15:tester');
   await waitFor(() => client.rx.some((r) => r.body === 'LOGON SUCCESSFUL'));
-  await waitFor(() => client.bodies().filter(isMove).length >= 3);
+  // the log is caught up before the LOGON, so the client gets a snapshot: its position steps end with a move
+  await waitFor(() => client.bodies().some(isMove));
   return { app1, client, port };
 }
 
-test('7a: a game that ended during the outage is replayed to the restored client, numbering first', async () => {
+test('restart mid-game: nothing is sent until the client speaks; PING gets the notice; re-LOGON gets numbering then the live position', async () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'restart-'));
+  const { app1, client, port } = await phase1(dir, lineAfter(fixLog, STARTS[1] + 20000), fixEntries[0]);
+  await settle(client);
+  const liveFen = client.bodies().filter((b) => b.startsWith('FEN:')).at(-1);
+  app1.close();
+  await sleep(150);
+  client.resetSeen();
   const cap = capture();
+  const mark = client.rx.length;
+  const app2 = await startApp(mkCfg(dir, port));
   try {
-    const { app1, client, port } = await phase1(dir, lineAfter(fixLog, STARTS[1] + 20000), fixEntries[0]);
-    await waitFor(() => readState(dir).clients[0]?.next === 2);
-    app1.close({ flush: false });
-    await sleep(150); // let in-flight datagrams land before marking
-    client.resetSeen();
-    appendFileSync(path.join(dir, 'fc.log'), fixLog.subarray(lineAfter(fixLog, STARTS[1] + 20000)));
-    appendFileSync(path.join(dir, 'games.pgn'), fixEntries[1]);
-    const mark = client.rx.length;
-    const app2 = await startApp(mkCfg(dir, port));
-    try {
-      try {
-        await waitFor(() => client.bodies(mark).some((b) => b.startsWith('result:')), 8000);
-      } catch (e) {
-        console.log('DEBUG', cap.lines.slice(-40).join('\n'), '\nRX', client.bodies(mark).slice(0, 40).map((b) => b.slice(0, 60)).join('\n'));
-        throw e;
-      }
-      await sleep(300);
-      const rx = client.rx.slice(mark);
-      assert.equal(rx[0].body, 'CTRESET');
-      assert.equal(rx[0].id, 1, 'ids restart at 1');
-      const ct = rx.filter((r) => r.body.startsWith('CT:')).map((r) => r.body);
-      const gh = ct.findIndex((l) => l.startsWith('CT:Game No.'));
-      const rows = ct.slice(gh + 1).filter((l) => /^CT:\d+\s/.test(l));
-      assert.equal(rows.length, 1);
-      assert.match(rows[0], /^CT:1\s/);
-      // the hold: >= 250 ms between the ACK of the last CT line and the next numbered datagram
-      let lastCt = -1;
-      rx.forEach((r, i) => { if (r.body.startsWith('CT:')) lastCt = i; });
-      assert.match(rx[lastCt + 1].body, /^(SITE|WPLAYER)/);
-      assert.ok(rx[lastCt + 1].t - rx[lastCt].t >= 250, `gap ${rx[lastCt + 1].t - rx[lastCt].t}`);
-      assert.ok(!rx.some((r) => r.body === 'LOGON SUCCESSFUL'));
-      assert.equal(rx.filter((r) => r.body.startsWith('result:')).length, 1);
-      assert.equal(rx.filter((r) => r.body.startsWith('WPLAYER')).length, 1);
-      await waitFor(() => readState(dir).clients[0]?.next === 3);
-      assert.ok(cap.lines.some((l) => /resume: numbering dump -> .* before game 2 \(newest 1/.test(l)));
-    } finally {
-      app2.close({ flush: false });
-    }
-    client.close();
+    await sleep(400);
+    assert.equal(client.rx.length, mark, 'nothing sent before the client speaks');
+    client.send('PING');
+    await waitFor(() => client.bodies(mark).some((b) => /no longer connected/.test(b)));
+    client.send('LOGONv15:tester');
+    await waitFor(() => client.bodies(mark).some((b) => /^[WB]MOVE: \d+\.+ \(setup\)$/.test(b)));
+    await settle(client);
+    const bb = client.bodies(mark);
+    assert.ok(bb.includes('LOGON SUCCESSFUL'));
+    const w = bb.findIndex((b) => b.startsWith('WPLAYER'));
+    assert.ok(bb.indexOf('CTRESET') > bb.indexOf('LOGON SUCCESSFUL') && bb.indexOf('CTRESET') < w, 'numbering dump precedes the snapshot');
+    assert.ok(bb.some((b) => /^CT:1\s/.test(b)), 'newest finished game row is 1');
+    assert.equal(bb.filter((b) => b.startsWith('FEN:')).at(-1), liveFen, 'the snapshot is the live position');
+    assert.ok(!bb.some((b) => b.startsWith('result:')));
+    assert.ok(cap.lines.some((l) => /start: caught up game 2 from offset/.test(l)), cap.lines.filter((l) => /start:/.test(l)).join('\n'));
   } finally {
     cap.done();
-  }
-});
-
-test('7b: between games the restored client gets the numbering dump and game 2 only', async () => {
-  const dir = mkdtempSync(path.join(tmpdir(), 'restart-'));
-  try {
-    const { app1, client, port } = await phase1(dir, lineAfter(fixLog, STARTS[0] + 30000), '');
-    // finish game 1 (log up to game 2's start + PGN entry 1)
-    appendFileSync(path.join(dir, 'fc.log'), fixLog.subarray(lineAfter(fixLog, STARTS[0] + 30000), STARTS[1]));
-    appendFileSync(path.join(dir, 'games.pgn'), fixEntries[0]);
-    await waitFor(() => client.bodies().some((b) => b.startsWith('result:')), 8000);
-    await waitFor(() => readState(dir).clients[0]?.next === 2);
-    app1.close({ flush: false });
-    await sleep(150); // let in-flight datagrams land before marking
-    client.resetSeen();
-    appendFileSync(path.join(dir, 'fc.log'), fixLog.subarray(STARTS[1], lineAfter(fixLog, STARTS[1] + 15000)));
-    const mark = client.rx.length;
-    const app2 = await startApp(mkCfg(dir, port));
-    try {
-      await waitFor(() => client.bodies(mark).filter(isMove).length >= 3, 8000);
-      await sleep(200);
-      const b = client.bodies(mark);
-      assert.equal(b[0], 'CTRESET');
-      assert.equal(b.filter((x) => x.startsWith('WPLAYER')).length, 1);
-      assert.ok(!b.some((x) => x.startsWith('result:')), 'game 1 is not replayed');
-    } finally {
-      app2.close({ flush: false });
-    }
+    app2.close();
     client.close();
-  } finally {
-    /* tmp dir left for the OS */
   }
 });
 
-test('7c/7d/7e: no or corrupt state -> silent catch-up, PING gets the notice, re-LOGON resyncs', async () => {
-  for (const corrupt of [false, true]) {
-    const dir = mkdtempSync(path.join(tmpdir(), 'restart-'));
-    const { app1, client, port } = await phase1(dir, lineAfter(fixLog, STARTS[1] + 20000), fixEntries[0]);
-    app1.close({ flush: false });
-    await sleep(150); // let in-flight datagrams land before marking
-    client.resetSeen();
-    if (corrupt) writeFileSync(path.join(dir, 'state.json'), '{not json');
-    else writeFileSync(path.join(dir, 'state.json'), '{}'); // wrong shape == no usable state
-    const cap = capture();
-    const mark = client.rx.length;
-    const app2 = await startApp(mkCfg(dir, port));
-    cap.done();
-    try {
-      await sleep(400);
-      assert.equal(client.rx.length, mark, 'silent catch-up: nothing sent before the client speaks');
-      assert.ok(cap.lines.some((l) => /state: ignoring/.test(l)));
-      client.send('PING');
-      await waitFor(() => client.bodies(mark).some((b) => /no longer connected/.test(b)));
-      client.send('LOGONv15:tester');
-      await waitFor(() => client.bodies(mark).some((b) => b.startsWith('WPLAYER')));
-      assert.ok(client.bodies(mark).includes('LOGON SUCCESSFUL'));
-      const bb = client.bodies(mark);
-      assert.ok(bb.indexOf('CTRESET') > bb.indexOf('LOGON SUCCESSFUL') && bb.indexOf('CTRESET') < bb.findIndex((b) => b.startsWith('WPLAYER')), 'logon numbering dump precedes the resync');
-      assert.ok(bb.some((b) => /^CT:1\s/.test(b)), 'newest finished game row is 1');
-    } finally {
-      app2.close({ flush: false });
-      client.close();
-    }
-  }
-});
-
-/** 4-game fixture: the 2-game log and PGN concatenated with themselves. */
-function fourGames(dir: string) {
-  const log = Buffer.concat([fixLog, fixLog]);
-  const pgn = [...fixEntries, ...fixEntries];
-  writeFileSync(path.join(dir, 'probe.log'), log);
-  const st = scanGameStarts(path.join(dir, 'probe.log'), 'fastchess').starts;
-  assert.equal(st.length, 4, 'concatenated fixture must scan as 4 games');
-  return { log, pgn, starts: st };
-}
-
-async function scenario7f(holdMs: number): Promise<{ saved: number[]; cur: number; dumps: number }> {
-  setNumberingHoldMs(holdMs);
+test('restart: a game that ended during the outage is not replayed; the re-LOGON numbering keeps node-tlcv\'s numbers right', async () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'restart-'));
-  const { log, pgn, starts } = fourGames(dir);
-  const cut1 = lineAfter(log, starts[1] + 20000);
-  writeFileSync(path.join(dir, 'fc.log'), log.subarray(0, cut1));
-  writeFileSync(path.join(dir, 'games.pgn'), pgn[0]);
-  const app1 = await startApp(mkCfg(dir, 0));
-  const port = app1.server.address().port;
-  const client = await new Client(() => port).open();
-  client.send('LOGONv15:tester');
-  await waitFor(() => client.bodies().filter(isMove).length >= 3);
-  await waitFor(() => readState(dir).clients[0]?.next === 2);
-  app1.close({ flush: false });
-    await sleep(150); // let in-flight datagrams land before marking
-    client.resetSeen();
-  const cut2 = lineAfter(log, starts[3] + 5000);
-  appendFileSync(path.join(dir, 'fc.log'), log.subarray(cut1, cut2));
-  appendFileSync(path.join(dir, 'games.pgn'), pgn[1] + pgn[2]);
-  client.model = true;
-  client.cur = 2; // what node-tlcv had after game 1's table
-  client.saved = [];
+  const cut = lineAfter(fixLog, STARTS[1] + 20000);
+  const { app1, client, port } = await phase1(dir, cut, fixEntries[0], true);
+  await settle(client);
+  const cur1 = client.cur; // game 2 in progress: node-tlcv numbers it 2 (logon numbering)
+  app1.close();
+  await sleep(150);
+  client.resetSeen();
+  appendFileSync(path.join(dir, 'fc.log'), fixLog.subarray(cut));
+  appendFileSync(path.join(dir, 'games.pgn'), fixEntries[1]);
+  const mark = client.rx.length;
   const cap = capture();
   const app2 = await startApp(mkCfg(dir, port));
-  cap.done();
   try {
-    await waitFor(() => client.saved.length >= 2, 10000);
-    await sleep(2000);
-    return { saved: client.saved.slice(), cur: client.cur, dumps: cap.lines.filter((l) => /resume: numbering dump/.test(l)).length };
+    client.send('LOGONv15:tester');
+    await waitFor(() => client.bodies(mark).includes('LOGON SUCCESSFUL'));
+    await settle(client);
+    assert.equal(cur1, 2);
+    await waitFor(() => client.cur === 3, 2000);
+    assert.deepEqual(client.saved, [], 'game 2 was never sent again');
+    assert.ok(!client.bodies(mark).some((b) => b.startsWith('result:') || b.startsWith('WPLAYER')));
   } finally {
-    app2.close({ flush: false });
+    cap.done();
+    app2.close();
     client.close();
-    setNumberingHoldMs(300);
-  }
-}
-
-test('7f: two games end during the outage -> node-tlcv model saves them as 2 and 3 (negative control without the hold)', async () => {
-  const r = await scenario7f(300);
-  assert.deepEqual(r.saved, [2, 3]);
-  assert.equal(r.cur, 4);
-  assert.equal(r.dumps, 3);
-  const control = await scenario7f(0);
-  if (JSON.stringify(control.saved) === JSON.stringify([2, 3])) {
-    console.log('7f negative control did not reproduce the debounce race on this host (loopback too slow); control skipped');
-  } else {
-    assert.notDeepEqual(control.saved, [2, 3]);
   }
 });
 
@@ -303,6 +210,6 @@ test('SAVEDEBUG interplay and close() are idempotent-safe', async () => {
   const app: App = await startApp(mkCfg(dir, 0, { saveDebug: true, iniPath: path.join(dir, 'server.ini') }));
   await sleep(1300);
   app.close();
-  const files = (await import('node:fs')).readdirSync(dir).filter((f) => f.startsWith('Debug-'));
+  const files = readdirSync(dir).filter((f) => f.startsWith('Debug-'));
   assert.equal(files.length, 2);
 });

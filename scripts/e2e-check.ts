@@ -2,7 +2,8 @@
 // Exit 0 pass, 1 mismatch, 2 usage/IO error.
 //
 //   tsx scripts/e2e-check.ts --fastchess games.pgn [--pgns dir] [--transcript f.jsonl ...]
-//     [--allow-star] [--strict-numbers] [--expect-contiguous] [--json]
+//     [--allow-star] [--allow-partial] [--strict-numbers] [--expect-contiguous] [--legacy] [--json]
+//   --legacy: the transcript's client never opted in to TLCS-MG (any BOARD/BOARDS/MULTIGAME line fails)
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -29,15 +30,17 @@ const a = process.argv.slice(2);
 let fastchess = '';
 let pgns = '';
 const transcripts: string[] = [];
-const flags = { allowStar: false, strictNumbers: false, expectContiguous: false, json: false };
+const flags = { allowStar: false, allowPartial: false, strictNumbers: false, expectContiguous: false, legacy: false, json: false };
 for (let i = 0; i < a.length; i++) {
   switch (a[i]) {
     case '--fastchess': fastchess = a[++i] ?? ''; break;
     case '--pgns': pgns = a[++i] ?? ''; break;
     case '--transcript': transcripts.push(a[++i] ?? ''); break;
     case '--allow-star': flags.allowStar = true; break;
+    case '--allow-partial': flags.allowPartial = true; break;
     case '--strict-numbers': flags.strictNumbers = true; break;
     case '--expect-contiguous': flags.expectContiguous = true; break;
+    case '--legacy': flags.legacy = true; break;
     case '--json': flags.json = true; break;
     default: die(`unknown option ${a[i]}`);
   }
@@ -72,7 +75,7 @@ for (const t of transcripts) {
   } catch (e) {
     die(`cannot read ${t}: ${(e as Error).message}`);
   }
-  findings.push(...checkTranscript(recs, { fc, expectContiguous: flags.expectContiguous }));
+  findings.push(...checkTranscript(recs, { fc, expectContiguous: flags.expectContiguous, legacy: flags.legacy }));
 }
 
 const bad = findings.filter(isFailure);

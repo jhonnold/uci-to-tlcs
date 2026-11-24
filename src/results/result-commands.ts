@@ -26,6 +26,7 @@ export class ResultService {
   private gen = new Map<string, number>();
   private resends = new Map<string, number>();
   private subscribed = new Set<string>();
+  private concurrent = false;
 
   /** `emitted`: number of the last game whose result has been broadcast (Infinity = unknown/uncapped). */
   constructor(
@@ -36,7 +37,8 @@ export class ResultService {
 
   /** The server just enqueued `result` for game `n` to every client: follow it with a capped table. */
   onResultEmitted(n: number): void {
-    this.emitted = n;
+    // Concurrent boards finish out of PGN order: cap at the highest emitted number.
+    this.emitted = this.concurrent ? Math.max(this.emitted, n) : n;
     for (const dest of [...this.subscribed]) {
       if (!this.t.getClient(dest)) {
         this.forget(dest);
@@ -45,6 +47,11 @@ export class ResultService {
       this.resends.set(dest, 0);
       this.sendCt(dest, n, PUSH_RECENT);
     }
+  }
+
+  /** A second board exists (see onResultEmitted); false: a new log, one board again. */
+  setConcurrent(on = true): void {
+    this.concurrent = on;
   }
 
   /**

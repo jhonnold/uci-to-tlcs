@@ -80,6 +80,10 @@ export class FastchessSource implements LogSource {
     if (!name) return null;
 
     const uci = s.slice(start + FastchessSource.MARKER_SKIP).trim();
-    return { uci: uci || null, engineId: name, direction };
+    // The `<threadid>` field is the fastchess worker thread playing this game (blank on
+    // tournament-level lines): two concurrent games differ by it, not by engine name.
+    const lt = s.indexOf('<');
+    const channel = lt >= 0 && lt < gt ? s.slice(lt + 1, gt).trim() : '';
+    return channel ? { uci: uci || null, engineId: name, direction, channel } : { uci: uci || null, engineId: name, direction };
   }
 }

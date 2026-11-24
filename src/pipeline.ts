@@ -1,9 +1,9 @@
 import { parseLine, type GoEvent, type PositionEvent } from './uci/parser.js';
 import { scoreToCentipawns, type UciInfo } from './uci/info.js';
 import { GameState, STARTPOS_TRUNC } from './game/game-state.js';
-import { msToCs, type ColorCode } from './tlcs/protocol.js';
+import { msToCs, SETUP_SAN, type ColorCode } from './tlcs/protocol.js';
 import type { NormalizedLine } from './source/log-source.js';
-import type { FinishedGame } from './results/registry.js';
+import { targetPlies, type FinishedGame } from './results/registry.js';
 import { logger } from './util/logger.js';
 
 /**
@@ -25,15 +25,30 @@ export interface BroadcastSink {
   emitClocks(whiteCs: number, blackCs: number): void;
   /** `info` (optional): the full search line, also sent as WINFO/BINFO with the same legal `pv`. */
   emitPv(color: ColorCode, depth: number, scoreCp: number, timeCs: number, nodes: number, pv: string[], info: UciInfo): void;
-  emitResult(result: string, gameNumber?: number): void;
+  /** `fromPgn`: `gameNumber` is the matched PGN entry's number (not the pipeline's own count). */
+  emitResult(result: string, gameNumber?: number, fromPgn?: boolean): void;
   /** WinBoard-format `level <mps> <base> <inc>` text. Optional: absent until the server supports it. */
   emitLevel?(text: string): void;
 }
 
+/** What the pipeline knows about its game, so an authority can match it to a PGN entry. */
+export interface GameHint {
+  white: string;
+  black: string;
+  /** Start FEN, null for the standard start. */
+  startFen: string | null;
+  plies: number;
+  /** SAN of every ply so far. */
+  sans(): readonly string[];
+}
+
 /** Source of authoritative results (the tournament PGN), keyed by 1-based game number. */
 export interface ResultAuthority {
-  lookup(n: number): FinishedGame | undefined;
+  /** `hint` (tagged games): lets an authority pick the entry describing this game instead of entry n. */
+  lookup(n: number, hint?: GameHint): FinishedGame | undefined;
   refresh(): unknown;
+  /** The entry's result was emitted for this game. */
+  claim?(e: FinishedGame): void;
 }
 
 export interface PipelineOpts {
@@ -63,14 +78,6 @@ export interface PipelineMeta {
   /** Non-startpos games: precede the base FEN with a synthetic `(setup)` move so node-tlcv loads it. Default true. */
   fenSetupMove?: boolean;
 }
-
-/**
- * Synthetic SAN for the setup move. node-tlcv's `onMove` fails to apply it in chess.js and
- * its catch runs `resetFromFen()`, which loads the preceding `FEN` header onto a board that
- * is already loaded (a bare non-startpos FEN is otherwise only stored as a backup). Desktop
- * TLCV appends move text unvalidated, so it shows `1. (setup)` once; its board is correct.
- */
-const SETUP_SAN = '(setup)';
 
 /** PGN result token for an unfinished/adjudicated game (no board-terminal result). */
 const RESULT_UNKNOWN = '*';
@@ -506,11 +513,29 @@ export class Pipeline {
   private emitResultOnce(r: string): void {
     if (this.resultEmitted) return;
     this.resultEmitted = true;
-    this.sink.emitResult(r, this.opts.authority ? this.gameNumber : undefined);
+    const auth = this.opts.authority;
+    const e = this.emittedEntry;
+    if (auth && e) {
+      auth.claim?.(e);
+      this.sink.emitResult(r, e.number, true);
+      return;
+    }
+    this.sink.emitResult(r, auth ? this.gameNumber : undefined);
+  }
+
+  private hint(): GameHint | undefined {
+    if (!this.boundNames) return undefined;
+    const [white, black] = this.boundNames;
+    return { white, black, startFen: this.game.startFen, plies: this.currentMoves.length, sans: () => this.game.sans() };
   }
 
   currentGameNumber(): number {
     return this.gameNumber;
+  }
+
+  /** A game is open here (participants being collected, or playing) and has no result yet. */
+  busy(): boolean {
+    return (this.collectingParticipants || this.gameActive) && !this.resultEmitted;
   }
 
   private openGameNumber(): void {
@@ -525,11 +550,6 @@ export class Pipeline {
     this.numbered = true;
   }
 
-  /** Plies the entry's PlyCount implies were played on the board (illegal move: not applied). */
-  private targetPlies(e: FinishedGame): number | undefined {
-    if (e.plyCount === undefined) return undefined;
-    return e.termination === 'illegal move' ? e.plyCount - 1 : e.plyCount;
-  }
 
   /** PGN names equal the bound names as an unordered set (true when names are not bound). */
   private namesMatchLoosely(e: FinishedGame): boolean {
@@ -546,9 +566,9 @@ export class Pipeline {
       this.warnOverrun();
       return;
     }
-    const e = auth.lookup(this.gameNumber);
+    const e = auth.lookup(this.gameNumber, this.hint());
     if (!e || !this.namesMatchLoosely(e)) return;
-    const target = this.targetPlies(e);
+    const target = targetPlies(e);
     if (target === undefined || this.currentMoves.length < target) return;
     this.checkEntry(e, false);
     this.emittedEntry = e;
@@ -558,7 +578,7 @@ export class Pipeline {
   private warnOverrun(): void {
     const e = this.emittedEntry;
     if (!e || this.overrunWarned) return;
-    const target = this.targetPlies(e);
+    const target = targetPlies(e);
     if (target !== undefined && this.currentMoves.length > target) {
       this.overrunWarned = true;
       logger.warn(`game ${this.gameNumber}: ${this.currentMoves.length} plies exceed PGN PlyCount ${e.plyCount} (misaligned PGN?)`);
@@ -570,7 +590,7 @@ export class Pipeline {
       const [w, b] = this.boundNames;
       logger.warn(`game ${this.gameNumber}: PGN names "${e.white}" vs "${e.black}" differ from log "${w}" vs "${b}"`);
     }
-    const target = this.targetPlies(e);
+    const target = targetPlies(e);
     const plies = this.currentMoves.length;
     if (target !== undefined && plies > target) {
       logger.warn(`game ${this.gameNumber}: ${plies} plies exceed PGN PlyCount ${e.plyCount} (misaligned PGN?)`);
@@ -593,7 +613,7 @@ export class Pipeline {
       return;
     }
     auth.refresh();
-    const e = auth.lookup(this.gameNumber);
+    const e = auth.lookup(this.gameNumber, this.hint());
     if (e) {
       this.checkEntry(e, true);
       this.emittedEntry = e;

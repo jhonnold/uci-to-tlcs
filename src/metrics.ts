@@ -10,21 +10,23 @@ interface Def {
 export const DEFS = {
   tlcs_retransmits_total: { help: 'Datagram retransmissions to clients.' },
   tlcs_giveups_total: {
-    help: 'Items given up on after the give-up timeout, by kind.',
-    seed: [{ kind: 'game' }, { kind: 'control' }, { kind: 'critical' }],
+    help: 'Numbered lines dropped after the give-up timeout, by kind (game line or control line).',
+    seed: [{ kind: 'game' }, { kind: 'control' }],
+  },
+  tlcs_dropped_total: {
+    help: 'Numbered lines a client never got: given up (giveup) or stale move steps of a client that fell behind (stale).',
+    seed: [{ reason: 'giveup' }, { reason: 'stale' }],
   },
   tlcs_resyncs_total: {
-    help: 'Replay resyncs: full (logon/restore) or giveup (game replay after a give-up).',
-    seed: [{ kind: 'full' }, { kind: 'giveup' }],
+    help: 'Snapshot resyncs (logon, re-logon, TLCS-MG opt-in).',
+    seed: [{ kind: 'full' }],
   },
-  tlcs_coalesces_total: { help: 'Queued game epochs coalesced to a shorter replay.' },
-  tlcs_stalls_total: { help: 'Client stall episodes (no ACK progress).' },
   tlcs_messages_sent_total: { help: 'Datagrams sent, by message type.' },
   tlcs_messages_received_total: { help: 'Datagrams received, by message type.' },
 } satisfies Record<string, Def>;
 
 /** Counters whose only series is the unlabelled one start at 0. */
-const UNLABELLED = new Set<string>(['tlcs_retransmits_total', 'tlcs_coalesces_total', 'tlcs_stalls_total']);
+const UNLABELLED = new Set<string>(['tlcs_retransmits_total']);
 
 export type MetricsSource = { clientList(): { dest: string }[]; queueDepth(dest: string): number };
 type Gauge = { name: string; help: string; samples: Array<[Labels, number]> };

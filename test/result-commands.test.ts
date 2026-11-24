@@ -158,3 +158,21 @@ test('a fourth consecutive give-up stops re-sending', async () => {
   }
   assert.equal(dumps, 4, 'original + 3 re-sends');
 });
+
+test('concurrent boards: results arrive out of PGN order, the table cap is the highest emitted', () => {
+  const rows = (f: ReturnType<typeof fake>) => f.rec.filter((x) => /^CT:Total games = /.test(x.body)).map((x) => x.body);
+  const seq = fake(true);
+  const s1 = new ResultService(seq.t, reg(3), 0);
+  s1.onResultEmitted(3);
+  s1.onResultEmitted(2);
+  s1.onResultTable(D);
+  assert.deepEqual(rows(seq), ['CT:Total games = 2'], 'sequential: the last emitted caps (restart replay numbering)');
+
+  const con = fake(true);
+  const s2 = new ResultService(con.t, reg(3), 0);
+  s2.setConcurrent();
+  s2.onResultEmitted(3);
+  s2.onResultEmitted(2);
+  s2.onResultTable(D);
+  assert.deepEqual(rows(con), ['CT:Total games = 3']);
+});

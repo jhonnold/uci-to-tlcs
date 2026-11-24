@@ -45,6 +45,19 @@ export function fmr(halfmoveClock: number): string {
   return `FMR: ${halfmoveClock}`;
 }
 
+/**
+ * The SAN of the synthetic setup move: chess.js rejects it, so node-tlcv's `onMove` catch runs
+ * `resetFromFen()` and loads the FEN just sent (desktop TLCV shows `n. (setup)` once).
+ */
+export const SETUP_SAN = '(setup)';
+
+/** A board position as the move steps leave it: truncated FEN, halfmove clock, fullmove number. */
+export interface Position {
+  fen: string;
+  fmr: number;
+  fullmove: number;
+}
+
 export function move(color: ColorCode, fullMoveNumber: number, san: string): string {
   const cmd = color === 'w' ? 'WMOVE' : 'BMOVE';
   const sep = color === 'w' ? '.' : '...';
@@ -113,6 +126,28 @@ export function ct(line: string): string {
 
 export function gl(line: string): string {
   return `GL:${line}`;
+}
+
+// ---- TLCS-MG (docs/tlcs-multigame-spec.md)
+
+/** Protocol version this server speaks; also the body of the opt-in reply. */
+export const MULTIGAME_VERSION = 1;
+
+export function multigame(version: number): string {
+  return `MULTIGAME: ${version}`;
+}
+
+export function boards(ids: number[]): string {
+  return `BOARDS: ${ids.join(' ')}`;
+}
+
+/** A board's game line, wrapped. */
+export function board(id: number, body: string): string {
+  return `BOARD ${id} ${body}`;
+}
+
+export function gameno(n: number): string {
+  return `GAMENO: ${n}`;
 }
 
 export const CTRESET = 'CTRESET';
