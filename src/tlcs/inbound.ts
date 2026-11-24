@@ -15,6 +15,12 @@ export function parseAck(body: string): number | null {
   return m ? Number(m[1]) : null;
 }
 
+/** TLCS-MG opt-in `MULTIGAME: 1` → 1. */
+export function parseMultigame(body: string): number | null {
+  const m = /^MULTIGAME:\s*(\d+)\s*$/.exec(body);
+  return m ? Number(m[1]) : null;
+}
+
 /** Per-source ring of the last N inbound ids, to drop retransmitted duplicates. */
 export class InboundDeduper {
   private seen = new Map<string, { set: Set<number>; order: number[]; logonId?: number }>();

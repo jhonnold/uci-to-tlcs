@@ -25,7 +25,7 @@ export interface SenderHooks {
    * The lines that put `dest`'s view of `board` straight onto `pos` (forcing a reload on a client
    * whose board is already loaded); they replace a stale run of move steps.
    */
-  positionSteps?(dest: string, board: number, pos: Position): Outbound[];
+  positionSteps(dest: string, board: number, pos: Position): Outbound[];
 }
 
 export interface SenderOptions {
@@ -163,12 +163,12 @@ export class ReliableSender {
         this.maybeDropStale(d, c);
         continue;
       }
-      this.pushNumbered(d, c, [item]);
+      this.pushNumbered(d, c, item);
     }
   }
 
-  private pushNumbered(dest: string, c: ClientState, items: Outbound[]): void {
-    c.queue.push(...items);
+  private pushNumbered(dest: string, c: ClientState, item: Outbound): void {
+    c.queue.push(item);
     this.maybeDropStale(dest, c);
     this.enforceHardCap(dest, c);
     this.pump(dest, c);
@@ -328,7 +328,6 @@ export class ReliableSender {
    * Players, level, GAMENO, result, later PV/clock and control lines are kept, in order.
    */
   private dropStale(dest: string, c: ClientState): void {
-    if (!this.hooks.positionSteps) return;
     interface Seg { board: number; members: number[]; newest: number }
     const open = new Map<number, Seg>();
     const segs: Seg[] = [];

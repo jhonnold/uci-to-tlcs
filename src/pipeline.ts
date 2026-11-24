@@ -38,8 +38,8 @@ export interface GameHint {
   /** Start FEN, null for the standard start. */
   startFen: string | null;
   plies: number;
-  /** SAN of every ply so far (built on demand: O(plies)). */
-  sans(): string[];
+  /** SAN of every ply so far. */
+  sans(): readonly string[];
 }
 
 /** Source of authoritative results (the tournament PGN), keyed by 1-based game number. */

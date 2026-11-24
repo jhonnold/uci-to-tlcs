@@ -7,7 +7,7 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 function mk() {
   const sent: Array<{ t: number; payload: string }> = [];
   const s = new ReliableSender(
-    { rawSend: (payload) => void sent.push({ t: performance.now(), payload }) },
+    { rawSend: (payload) => void sent.push({ t: performance.now(), payload }), positionSteps: () => [] },
     { initialRtoMs: 200, minRtoMs: 100, maxRtoMs: 400 },
   );
   s.addClient('c');

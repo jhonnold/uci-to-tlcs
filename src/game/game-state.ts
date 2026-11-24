@@ -27,11 +27,14 @@ export class GameState {
   private probe = new Chess();
   /** The FEN the current game started from, or null for the standard start. */
   startFen: string | null = null;
+  /** SAN of every move since the start position (kept as moves apply: `history()` replays the game). */
+  private sanList: string[] = [];
 
   /** Clear the board back to the standard start, for a fresh game in a multi-game stream. */
   reset(): void {
     this.chess = new Chess();
     this.startFen = null;
+    this.sanList = [];
   }
 
   /** Resync the board to a `position` command. Returns false if it can't be built. */
@@ -45,14 +48,18 @@ export class GameState {
       return false;
     }
 
+    const sans: string[] = [];
     for (const m of moves) {
-      if (!tryCoordMove(chess, m)) {
+      const mv = tryCoordMove(chess, m);
+      if (!mv) {
         logger.warn(`Could not apply move ${m} from position command; aborting resync.`);
         return false;
       }
+      sans.push(mv.san);
     }
 
     this.chess = chess;
+    this.sanList = sans;
     this.startFen = startpos || !fen ? null : fen;
     return true;
   }
@@ -66,6 +73,7 @@ export class GameState {
       logger.warn(`Could not apply bestmove ${coord} at ${this.chess.fen()}`);
       return null;
     }
+    this.sanList.push(mv.san);
     return { color, fullMoveNumber, san: mv.san };
   }
 
@@ -75,8 +83,8 @@ export class GameState {
   }
 
   /** SAN of every move since the start position. */
-  sans(): string[] {
-    return this.chess.history();
+  sans(): readonly string[] {
+    return this.sanList;
   }
 
   turn(): ColorCode {

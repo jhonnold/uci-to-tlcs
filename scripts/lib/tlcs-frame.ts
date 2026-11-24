@@ -132,6 +132,8 @@ export function parseResultBody(body: string): string | null {
 
 /** `BOARD <n> <game line>`: groups 1 = board, 2 = the wrapped line. */
 export const BOARD_LINE = /^BOARD (\d+) ([\s\S]*)$/;
+/** `BOARDS: <id> <id> ...`: group 1 = the ids. */
+export const BOARDS_LINE = /^BOARDS:\s*(.*)$/;
 /** `MULTIGAME: <v>`: group 1 = version. */
 export const MULTIGAME_LINE = /^MULTIGAME:\s*(\d+)$/;
 /** Any TLCS-MG token (what a single-game client must never receive). */

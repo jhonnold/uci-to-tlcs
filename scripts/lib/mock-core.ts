@@ -1,7 +1,7 @@
 // Pure (socket-free) building blocks for the mock client. Everything that needs a
 // clock takes an injected `now()` so it can be unit-tested with a fake one.
 
-import { BOARD_LINE, MULTIGAME_LINE, isGameLine, isIdRestart, isLive, mid, parseDesktop, parseNodeTlcv, vbVal } from './tlcs-frame.js';
+import { BOARD_LINE, BOARDS_LINE, MULTIGAME_LINE, isGameLine, isIdRestart, isLive, mid, parseDesktop, parseNodeTlcv, vbVal } from './tlcs-frame.js';
 
 export type Verdict =
   | 'accepted'
@@ -326,7 +326,8 @@ export class MultigameHandshake {
       this.state = 'on';
       return { kind: 'ack' };
     }
-    if (body.startsWith('BOARDS:')) return { kind: 'boards', boards: body.slice(7).trim().split(/\s+/).filter(Boolean).map(Number) };
+    const bl = BOARDS_LINE.exec(body);
+    if (bl) return { kind: 'boards', boards: bl[1].trim().split(/\s+/).filter(Boolean).map(Number) };
     const w = BOARD_LINE.exec(body);
     if (w) return { kind: 'wrapped', board: Number(w[1]), line: w[2] };
     if (isGameLine(body)) return { kind: this.state === 'on' ? 'stray' : 'game' };

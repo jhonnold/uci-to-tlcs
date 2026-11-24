@@ -25,6 +25,7 @@ function harness() {
   let ack = false;
   const s: ReliableSender = new ReliableSender(
     {
+      positionSteps: () => [],
       rawSend: (p, d) => {
         sent.push(p);
         const m = /^<(\d+)>/.exec(p);
@@ -54,7 +55,7 @@ test('latest items of different boards do not replace each other', () =>
 test('hard cap never evicts a pinned control item (BOARDS:)', () =>
   quiet(async () => {
     const sent: string[] = [];
-    const s = new ReliableSender({ rawSend: (p) => void sent.push(p) }, { hardCap: 3, maxQueue: 1000, initialRtoMs: 1000 });
+    const s = new ReliableSender({ rawSend: (p) => void sent.push(p), positionSteps: () => [] }, { hardCap: 3, maxQueue: 1000, initialRtoMs: 1000 });
     s.addClient('A');
     s.enqueue('A', { body: 'inflight' });
     s.enqueue('A', { body: 'BOARDS: 1 2', pinned: true });

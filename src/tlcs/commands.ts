@@ -21,7 +21,7 @@ export interface SessionOptions {
   clientTimeoutMs: number;
   /** MAXCLIENTS gate: return false to refuse the LOGON before the client is registered. */
   admit?: (dest: string, isNew: boolean) => boolean;
-  /** Called on every accepted LOGON, right before the resync replay (numbering dump for node-tlcv). */
+  /** Called on every accepted LOGON, right before the resync snapshot (numbering dump for node-tlcv). */
   beforeResync?: (dest: string) => void;
   now?: () => number;
 }

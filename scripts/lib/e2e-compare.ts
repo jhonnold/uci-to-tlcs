@@ -38,7 +38,9 @@ function headAfter(g: PgnGame, k: number): string | null {
   }
 }
 
-const players = (g: PgnGame): string => `${(g.headers.White ?? '').trim()} vs ${(g.headers.Black ?? '').trim()}`;
+const players = (g: PgnGame): string => `${hdr(g)[0]} vs ${hdr(g)[1]}`;
+/** Position (3-field head) fastchess game `g` starts from. */
+const startHead = (g: PgnGame): string => (g.headers.FEN ? fenHead(g.headers.FEN) : STARTPOS_HEAD);
 const label = (g: PgnGame): string => `game ${g.index} (${players(g)})`;
 const sameSans = (a: string[], b: string[]): boolean => a.length === b.length && a.every((s, i) => s === b[i]);
 
@@ -118,7 +120,7 @@ export function compareGames(fc: PgnGame[], nt: PgnGame[], opts: CompareOpts = {
       ok = false;
       out.push({ kind: 'DIFF', field: 'result', game: label(f), msg: `${label(f)}: result: exp ${er} got ${gr}` });
     }
-    const start = f.headers.FEN ? fenHead(f.headers.FEN) : STARTPOS_HEAD;
+    const start = startHead(f);
     if (opts.allowPartial && n.headers.FEN !== undefined && fenHead(n.headers.FEN) !== start) {
       const k = f.sans.length - n.sans.length;
       if (k < 0 || !sameSans(f.sans.slice(k), n.sans) || headAfter(f, k) !== fenHead(n.headers.FEN)) {
@@ -199,17 +201,6 @@ function loadFen(fen: string, fmr: number, moveNo: number): Chess | null {
   }
   try {
     return new Chess([...t.slice(0, 3), '-', fmr, Math.max(1, moveNo)].join(' '));
-  } catch {
-    return null;
-  }
-}
-
-/** The final position of a fastchess game (3-field head), or null if its moves do not replay. */
-function finalHead(g: PgnGame): string | null {
-  try {
-    const c = new Chess(g.headers.FEN?.trim() || undefined);
-    for (const san of g.sans) c.move(san, { strict: false });
-    return fenHead(c.fen());
   } catch {
     return null;
   }
@@ -318,7 +309,7 @@ export function checkTranscript(records: TranscriptRecord[], opts: TranscriptOpt
       if (gw !== v.wp || gb !== v.bp || gr !== res) {
         return void fail(`${label}: ${v.wp} vs ${v.bp} ${res}, fastchess has ${gw} vs ${gb} ${gr}`);
       }
-      const start = g.headers.FEN ? fenHead(g.headers.FEN) : STARTPOS_HEAD;
+      const start = startHead(g);
       if (!v.chess || v.from === start) {
         if (v.sans.length !== g.sans.length || v.sans.some((x, k) => x !== g.sans[k])) {
           const k = lcp(v.sans, g.sans);
@@ -331,7 +322,7 @@ export function checkTranscript(records: TranscriptRecord[], opts: TranscriptOpt
       if (v.sans.length > g.sans.length || v.sans.some((x, k) => x !== tail[k])) {
         fail(`${label}: moves after the reload are not the game's last ${v.sans.length} ply`);
       }
-      const want = finalHead(g);
+      const want = headAfter(g, g.sans.length);
       const got = fenHead(v.chess.fen());
       if (want !== null && got !== want) fail(`${label}: final board ${got}, fastchess ends at ${want}`);
       return;

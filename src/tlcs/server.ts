@@ -3,7 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { logger } from '../util/logger.js';
 import { metrics, sentType, receivedType } from '../metrics.js';
 import { ReliableSender, type Outbound, type SenderOptions } from './reliable-sender.js';
-import { InboundDeduper, parseAck, parseNumbered } from './inbound.js';
+import { InboundDeduper, parseAck, parseMultigame, parseNumbered } from './inbound.js';
 import { SessionCommands, redactSecrets } from './commands.js';
 import { AdminCommands, RATE_DEFAULT, type RateLimit } from './admin.js';
 import * as P from './protocol.js';
@@ -50,16 +50,6 @@ export interface ClientInfo {
   lastSeen: number;
 }
 
-/** Latest-value fields of one board that feed a resync's clocks/PV. */
-interface Snapshot {
-  whiteTimeCs?: number;
-  blackTimeCs?: number;
-  lastWpv?: string;
-  lastBpv?: string;
-  lastWinfo?: string;
-  lastBinfo?: string;
-}
-
 /** What a join snapshot needs of a board's current game (no history is kept). */
 interface CurrentGame {
   white?: string;
@@ -76,7 +66,8 @@ interface CurrentGame {
 interface Board {
   id: number;
   cur: CurrentGame;
-  snap: Snapshot;
+  /** Last body of each latest-only line (WTIME, WPV, ...), for a resync's clocks/PV. */
+  snap: Map<string, string>;
   /** The board's BroadcastSink (board 1: the server itself). */
   sink: BroadcastSink;
 }
@@ -88,8 +79,6 @@ interface GameLine {
   latest?: string;
   result?: boolean;
 }
-
-const MULTIGAME_RE = /^MULTIGAME:\s*(\d+)\s*$/;
 
 /**
  * The UDP broadcast server node-tlcv connects to. Owns the socket, the client
@@ -231,15 +220,7 @@ export class TlcsServer {
       if (g.black !== undefined) show({ body: P.bplayer(g.black) });
       if (g.pos) out.push(...this.positionSteps(wrap, b, g.pos));
       if (g.level !== undefined) show({ body: P.level(g.level) });
-      const s = b.snap;
-      if (s.whiteTimeCs !== undefined && s.blackTimeCs !== undefined) {
-        show({ body: P.time('w', s.whiteTimeCs, s.blackTimeCs), latest: 'WTIME' });
-        show({ body: P.time('b', s.blackTimeCs, s.whiteTimeCs), latest: 'BTIME' });
-      }
-      if (s.lastWpv) show({ body: s.lastWpv, latest: 'WPV' });
-      if (s.lastBpv) show({ body: s.lastBpv, latest: 'BPV' });
-      if (s.lastWinfo) show({ body: s.lastWinfo, latest: 'WINFO' });
-      if (s.lastBinfo) show({ body: s.lastBinfo, latest: 'BINFO' });
+      for (const [latest, body] of b.snap) show({ body, latest });
     }
     this.sender.resync(dest, out);
   }
@@ -321,7 +302,7 @@ export class TlcsServer {
   }
 
   private newBoard(id: number): Board {
-    const b: Board = { id, cur: { finished: false }, snap: {}, sink: this };
+    const b: Board = { id, cur: { finished: false }, snap: new Map(), sink: this };
     if (id > 1) {
       b.sink = {
         setSite: () => {}, // broadcast-wide: board 1 only
@@ -409,21 +390,13 @@ export class TlcsServer {
   }
 
   private clocksOn(b: Board, whiteCs: number, blackCs: number): void {
-    b.snap.whiteTimeCs = whiteCs;
-    b.snap.blackTimeCs = blackCs;
     this.game(b, { body: P.time('w', whiteCs, blackCs), latest: 'WTIME' });
     this.game(b, { body: P.time('b', blackCs, whiteCs), latest: 'BTIME' });
   }
 
   private pvOn(b: Board, color: ColorCode, depth: number, scoreCp: number, timeCs: number, nodes: number, pv: string[], info: UciInfo): void {
-    const msg = P.pv(color, depth, scoreCp, timeCs, nodes, pv);
-    if (color === 'w') b.snap.lastWpv = msg;
-    else b.snap.lastBpv = msg;
-    this.game(b, { body: msg, latest: color === 'w' ? 'WPV' : 'BPV' });
-    const infoMsg = P.info(color, info, pv);
-    if (color === 'w') b.snap.lastWinfo = infoMsg;
-    else b.snap.lastBinfo = infoMsg;
-    this.game(b, { body: infoMsg, latest: color === 'w' ? 'WINFO' : 'BINFO' });
+    this.game(b, { body: P.pv(color, depth, scoreCp, timeCs, nodes, pv), latest: color === 'w' ? 'WPV' : 'BPV' });
+    this.game(b, { body: P.info(color, info, pv), latest: color === 'w' ? 'WINFO' : 'BINFO' });
   }
 
   private resultOn(b: Board, result: string, gameNumber?: number, fromPgn?: boolean): void {
@@ -444,9 +417,18 @@ export class TlcsServer {
     return l.result && b.cur.gameNo !== undefined ? [{ body: P.board(b.id, P.gameno(b.cur.gameNo)), board: b.id }, out] : [out];
   }
 
-  /** Single path for every game-channel line: queue it for every client that sees the board. */
+  /**
+   * Single path for every game-channel line: queue it for every client that sees the board.
+   * Each presentation is built once per line and shared (queued items are never mutated).
+   */
   private game(b: Board, l: GameLine): void {
-    for (const d of this.sender.clients()) for (const it of this.present(this.multi.has(d), b, l)) this.sender.enqueue(d, it);
+    if (l.latest) b.snap.set(l.latest, l.body);
+    let bare: Outbound[] | undefined;
+    let wrapped: Outbound[] | undefined;
+    for (const d of this.sender.clients()) {
+      const items = this.multi.has(d) ? (wrapped ??= this.present(true, b, l)) : (bare ??= this.present(false, b, l));
+      for (const it of items) this.sender.enqueue(d, it);
+    }
   }
 
   /** `BOARDS:` to one TLCS-MG client: never evicted, re-sent (current list) if given up. */
@@ -511,14 +493,15 @@ export class TlcsServer {
     if (this.admin.handle(msg, ip, port)) return;
     if (this.commands.handle(msg, ip, port, numbered)) return;
     const dest = destKey(ip, port);
+    let mg: number | null;
     if (msg === 'RESULTTABLE') {
       if (this.results) this.results.onResultTable(dest);
       else logger.debug(`RESULTTABLE from ${dest}: no result service`);
     } else if (msg === 'GAMELIST') {
       if (this.results) this.results.onGameList(dest);
       else logger.debug(`GAMELIST from ${dest}: no result service`);
-    } else if (MULTIGAME_RE.test(msg)) {
-      this.onMultigame(dest, Number(MULTIGAME_RE.exec(msg)![1]));
+    } else if ((mg = parseMultigame(msg)) !== null) {
+      this.onMultigame(dest, mg);
     } else {
       logger.debug(`Unhandled client message from ${destKey(ip, port)}: ${redactSecrets(msg)}`);
     }
